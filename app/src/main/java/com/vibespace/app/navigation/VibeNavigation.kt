@@ -180,8 +180,17 @@ fun VibeNavigation(
                         }
                     }
                 },
-                currentTheme = settingsState.settings.themeMode,
-                onSelectTheme = { themeMode ->
+                currentTheme = when (settingsState.settings.themeMode) {
+                    com.vibespace.feature.settings.repository.ThemeMode.LIGHT -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.LIGHT
+                    com.vibespace.feature.settings.repository.ThemeMode.SYSTEM -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.SYSTEM
+                    else -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.DARK
+                },
+                onSelectTheme = { onboardingMode ->
+                    val themeMode = when (onboardingMode) {
+                        com.vibespace.feature.home.onboarding.OnboardingThemeMode.LIGHT -> com.vibespace.feature.settings.repository.ThemeMode.LIGHT
+                        com.vibespace.feature.home.onboarding.OnboardingThemeMode.SYSTEM -> com.vibespace.feature.settings.repository.ThemeMode.SYSTEM
+                        else -> com.vibespace.feature.settings.repository.ThemeMode.DARK
+                    }
                     settingsViewModel.setThemeMode(themeMode)
                 },
                 onConfigureAi = { provider, key, model ->

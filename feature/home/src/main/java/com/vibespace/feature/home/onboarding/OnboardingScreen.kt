@@ -46,7 +46,16 @@ import com.vibespace.core.designsystem.components.VibeCard
 import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
-import com.vibespace.feature.settings.repository.ThemeMode
+
+/**
+ * Visual theme mode selection options for onboarding.
+ * Self-contained to preserve feature isolation.
+ */
+enum class OnboardingThemeMode {
+    DARK,
+    LIGHT,
+    SYSTEM
+}
 
 /**
  * Professional, native first-launch onboarding flow for VibeSpace.
@@ -62,8 +71,8 @@ fun OnboardingScreen(
     onOpenSafPicker: () -> Unit,
     onCreateNewProject: (String) -> Unit,
     onTrySampleProject: () -> Unit,
-    onSelectTheme: (ThemeMode) -> Unit,
-    currentTheme: ThemeMode,
+    onSelectTheme: (OnboardingThemeMode) -> Unit,
+    currentTheme: OnboardingThemeMode,
     onConfigureAi: ((provider: String, key: String, model: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -423,8 +432,8 @@ private fun StepIdeTour(
 
 @Composable
 private fun StepPreferencesAndFinish(
-    currentTheme: ThemeMode,
-    onSelectTheme: (ThemeMode) -> Unit,
+    currentTheme: OnboardingThemeMode,
+    onSelectTheme: (OnboardingThemeMode) -> Unit,
     onConfigureAi: ((provider: String, key: String, model: String) -> Unit)?,
     onFinish: () -> Unit
 ) {
@@ -467,20 +476,20 @@ private fun StepPreferencesAndFinish(
             ) {
                 ThemeOptionPill(
                     title = "Dark (Default)",
-                    isSelected = currentTheme == ThemeMode.DARK,
-                    onClick = { onSelectTheme(ThemeMode.DARK) },
+                    isSelected = currentTheme == OnboardingThemeMode.DARK,
+                    onClick = { onSelectTheme(OnboardingThemeMode.DARK) },
                     modifier = Modifier.weight(1f)
                 )
                 ThemeOptionPill(
                     title = "Light",
-                    isSelected = currentTheme == ThemeMode.LIGHT,
-                    onClick = { onSelectTheme(ThemeMode.LIGHT) },
+                    isSelected = currentTheme == OnboardingThemeMode.LIGHT,
+                    onClick = { onSelectTheme(OnboardingThemeMode.LIGHT) },
                     modifier = Modifier.weight(1f)
                 )
                 ThemeOptionPill(
                     title = "System",
-                    isSelected = currentTheme == ThemeMode.SYSTEM,
-                    onClick = { onSelectTheme(ThemeMode.SYSTEM) },
+                    isSelected = currentTheme == OnboardingThemeMode.SYSTEM,
+                    onClick = { onSelectTheme(OnboardingThemeMode.SYSTEM) },
                     modifier = Modifier.weight(1f)
                 )
             }
