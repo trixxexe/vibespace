@@ -16,7 +16,7 @@
 
 Clone the repository:
 ```bash
-git clone https://github.com/vibespace/vibespace.git
+git clone https://github.com/trixxexe/vibespace.git
 cd vibespace
 ```
 

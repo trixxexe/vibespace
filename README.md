@@ -3,8 +3,8 @@
 > **Professional Native Android Coding IDE & Mobile Developer Environment**  
 > *Inspired by VS Code — Built natively with Jetpack Compose & Kotlin*
 
-[![Android CI](https://github.com/vibespace/vibespace/actions/workflows/android-ci.yml/badge.svg)](https://github.com/vibespace/vibespace/actions/workflows/android-ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha-cyan.svg)](https://github.com/vibespace/vibespace/releases)
+[![Android CI](https://github.com/trixxexe/vibespace/actions/workflows/android-ci.yml/badge.svg)](https://github.com/trixxexe/vibespace/actions/workflows/android-ci.yml)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha-cyan.svg)](https://github.com/trixxexe/vibespace/releases)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple.svg)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.10.01-green.svg)](https://developer.android.com/jetpack/compose)
 [![Material 3](https://img.shields.io/badge/Material%203-1.3.1-blue.svg)](https://m3.material.io)
@@ -69,7 +69,7 @@ VibeSpace/
 ### Building with Gradle
 ```bash
 # Clone the repository
-git clone https://github.com/vibespace/vibespace.git
+git clone https://github.com/trixxexe/vibespace.git
 cd vibespace
 
 # Run unit tests
