@@ -31,6 +31,7 @@ android {
 dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:designsystem"))
+    implementation(project(":core:workspace"))
     implementation(project(":core:editor"))
     implementation(project(":core:language"))
 

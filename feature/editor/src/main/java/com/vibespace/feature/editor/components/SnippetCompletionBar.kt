@@ -140,10 +140,11 @@ private fun CompletionPill(
                     color = VibeTheme.colors.textPrimary
                 )
             )
-            if (item.detail != null && item.detail.length <= 15) {
+            val detail = item.detail
+            if (detail != null && detail.length <= 15) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = item.detail,
+                    text = detail,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     color = VibeTheme.colors.textMuted
                 )

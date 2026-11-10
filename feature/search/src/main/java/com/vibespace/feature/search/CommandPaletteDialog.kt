@@ -109,12 +109,12 @@ fun CommandPaletteDialog(
         )
     )
 
-    val matchingFiles = remember(query, files) {
+    val matchingFiles: List<VirtualFile> = remember(query, files) {
         val cleanQuery = query.trim().lowercase()
         if (cleanQuery.isEmpty()) {
-            files.filter { it.isFile }
+            files.filter { !it.isDirectory }
         } else {
-            files.filter { it.isFile && it.name.lowercase().contains(cleanQuery) }
+            files.filter { !it.isDirectory && it.name.lowercase().contains(cleanQuery) }
         }
     }
 

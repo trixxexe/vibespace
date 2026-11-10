@@ -99,9 +99,10 @@ fun TemplateBottomSheet(
                                         color = VibeTheme.colors.accentPrimary
                                     )
                                 )
-                                if (item.detail != null) {
+                                val detail = item.detail
+                                if (detail != null) {
                                     Text(
-                                        text = item.detail,
+                                        text = detail,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = VibeTheme.colors.textMuted
                                     )
