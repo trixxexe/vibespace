@@ -61,4 +61,19 @@ class TerminalViewModelTest {
         assertEquals(RunnerMode.TERMUX, viewModel.uiState.value.activeRunnerMode)
         assertEquals(RunnerMode.TERMUX, runnerManager.activeRunnerMode.value)
     }
+
+    @Test
+    fun runActiveDocument_dispatches_command_to_runner() = runTest {
+        val runnerManager = DefaultRunnerManager(dispatchers = TestDispatcherProvider())
+        val viewModel = TerminalViewModel(
+            terminalService = terminalService,
+            runnerManager = runnerManager,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        viewModel.runActiveDocument("script.py", "python")
+        val active = viewModel.uiState.value.activeSession
+        assertNotNull(active)
+        assertTrue(active!!.lines.any { it.text.contains("$ python script.py") })
+    }
 }

@@ -71,4 +71,21 @@ class EditorViewModelTest {
         assertEquals("const a = 2;", active!!.content)
         assertTrue(active.isDirty)
     }
+
+    @Test
+    fun workspace_project_open_auto_opens_main_py() = runTest {
+        val project = com.vibespace.core.workspace.model.Project("proj-auto", "AutoApp", "vibe://projects/auto")
+        workspaceManager.openProject(project)
+
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val active = viewModel.uiState.value.activeDocument
+        assertNotNull(active)
+        assertEquals("main.py", active!!.fileName)
+    }
 }

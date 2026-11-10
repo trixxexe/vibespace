@@ -72,4 +72,23 @@ class DefaultRunnerManagerTest {
         val updated = runnerManager.activeExecutions.value.first { it.executionId == execId }
         assertEquals(ExecutionState.CANCELLED, updated.state)
     }
+
+    @Test
+    fun embeddedRunner_executes_python_file_from_workspace() = runTest {
+        val workspace = com.vibespace.core.workspace.manager.DefaultWorkspaceManager(dispatchers = TestDispatcherProvider())
+        val project = com.vibespace.core.workspace.model.Project("p1", "TestPy", "vibe://projects/p1")
+        workspace.openProject(project)
+
+        val managerWithWorkspace = DefaultRunnerManager(
+            workspaceManager = workspace,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val runResult = managerWithWorkspace.runCommand("python main.py", "vibe://projects/p1")
+        assertTrue(runResult.isSuccess)
+        val exec = runResult.getOrNull()
+        assertNotNull(exec)
+        assertEquals(ExecutionState.SUCCEEDED, exec!!.state)
+        assertTrue(exec.outputs.any { it.line.contains("Welcome to VibeSpace Mobile!") })
+    }
 }

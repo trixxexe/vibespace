@@ -10,6 +10,7 @@ import com.vibespace.core.runner.model.ProcessExecution
 import com.vibespace.core.runner.model.ProcessOutput
 import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.runner.termux.TermuxBridgeRunner
+import com.vibespace.core.workspace.manager.WorkspaceManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class DefaultRunnerManager(
+    private val workspaceManager: WorkspaceManager? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : RunnerManager {
 
@@ -34,7 +36,7 @@ class DefaultRunnerManager(
 
     init {
         // Register out-of-the-box Tri-Mode Runners
-        registerRunner(EmbeddedInstantRunner())
+        registerRunner(EmbeddedInstantRunner(workspaceManager = workspaceManager))
         registerRunner(AlpineLinuxRunner())
         registerRunner(TermuxBridgeRunner())
     }

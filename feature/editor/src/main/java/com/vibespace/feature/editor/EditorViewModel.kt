@@ -29,6 +29,7 @@ class EditorViewModel(
 
     init {
         observeEditorEngine()
+        observeWorkspace()
     }
 
     private fun observeEditorEngine() {
@@ -44,6 +45,25 @@ class EditorViewModel(
                         activeDocument = activeDoc,
                         cursorPosition = activeDoc?.cursorPosition ?: CursorPosition(1, 1, 0)
                     )
+                }
+            }
+        }
+    }
+
+    private fun observeWorkspace() {
+        viewModelScope.launch(dispatchers.default) {
+            workspaceManager.currentProject.collect { project ->
+                if (project != null && editorEngine.documents.value.isEmpty()) {
+                    val mainPyUri = "${project.rootUri}/main.py"
+                    val readResult = workspaceManager.readFile(mainPyUri)
+                    if (readResult is com.vibespace.core.common.result.VibeResult.Success) {
+                        editorEngine.openDocument(
+                            uri = mainPyUri,
+                            fileName = "main.py",
+                            content = readResult.data,
+                            language = languageDetector.detectByFileName("main.py")
+                        )
+                    }
                 }
             }
         }

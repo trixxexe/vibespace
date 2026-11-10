@@ -47,7 +47,10 @@ class VibeSpaceApplication : Application() {
     }
 
     val runnerManager: RunnerManager by lazy {
-        DefaultRunnerManager(dispatchers = dispatchers)
+        DefaultRunnerManager(
+            workspaceManager = workspaceManager,
+            dispatchers = dispatchers
+        )
     }
 
     val terminalService: TerminalService by lazy {

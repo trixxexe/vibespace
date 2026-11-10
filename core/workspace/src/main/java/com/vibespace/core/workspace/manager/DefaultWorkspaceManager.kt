@@ -40,8 +40,26 @@ class DefaultWorkspaceManager(
             val rootChildren = mutableListOf<VirtualFile>()
             val srcDirUri = "$rootUri/src"
             val readmeUri = "$rootUri/README.md"
+            val mainPyUri = "$rootUri/main.py"
+            val indexJsUri = "$rootUri/index.js"
             val mainKtUri = "$srcDirUri/Main.kt"
 
+            rootChildren.add(
+                VirtualFile(
+                    uri = mainPyUri,
+                    name = "main.py",
+                    nodeType = FileNodeType.FILE,
+                    parentUri = rootUri
+                )
+            )
+            rootChildren.add(
+                VirtualFile(
+                    uri = indexJsUri,
+                    name = "index.js",
+                    nodeType = FileNodeType.FILE,
+                    parentUri = rootUri
+                )
+            )
             rootChildren.add(
                 VirtualFile(
                     uri = srcDirUri,
@@ -71,6 +89,18 @@ class DefaultWorkspaceManager(
             directoryChildren[srcDirUri] = srcChildren
 
             fileContents[readmeUri] = "# ${project.name}\n\nBuilt with VibeSpace Mobile IDE."
+            fileContents[mainPyUri] = """
+                # VibeSpace Python Runner
+                name = "VibeSpace Mobile"
+                print("Welcome to " + name + "!")
+                print("Multiplication test:", 21 * 2)
+            """.trimIndent()
+            fileContents[indexJsUri] = """
+                // VibeSpace JavaScript Runner
+                const app = "VibeSpace";
+                console.log("Running in " + app);
+                console.log("Addition test:", 2000 + 26);
+            """.trimIndent()
             fileContents[mainKtUri] = """
                 fun main() {
                     println("Hello from VibeSpace on Android!")

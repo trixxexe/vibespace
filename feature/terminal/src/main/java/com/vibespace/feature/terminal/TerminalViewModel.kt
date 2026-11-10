@@ -84,19 +84,16 @@ class TerminalViewModel(
         _uiState.update { it.copy(commandInput = text) }
     }
 
-    fun submitCommand() {
-        val input = _uiState.value.commandInput.trim()
+    fun executeCommand(command: String) {
         val session = _uiState.value.activeSession ?: return
-        if (input.isEmpty()) return
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) return
 
-        _uiState.update { it.copy(commandInput = "") }
         viewModelScope.launch(dispatchers.default) {
-            // Echo input to terminal session
-            terminalService.sendInput(session.sessionId, input)
+            terminalService.sendInput(session.sessionId, "$ $trimmed")
 
-            // Execute via active Tri-Mode Runner and pipe outputs back to session
             if (runnerManager != null) {
-                val result = runnerManager.runCommand(input, session.workingDirectory)
+                val result = runnerManager.runCommand(trimmed, session.workingDirectory)
                 if (result is VibeResult.Success) {
                     for (out in result.data.outputs) {
                         terminalService.sendInput(session.sessionId, out.line)
@@ -104,6 +101,23 @@ class TerminalViewModel(
                 }
             }
         }
+    }
+
+    fun submitCommand() {
+        val input = _uiState.value.commandInput.trim()
+        if (input.isEmpty()) return
+        _uiState.update { it.copy(commandInput = "") }
+        executeCommand(input)
+    }
+
+    fun runActiveDocument(fileName: String, languageId: String) {
+        val command = when {
+            fileName.endsWith(".py") || languageId == "python" -> "python $fileName"
+            fileName.endsWith(".js") || fileName.endsWith(".ts") || languageId == "javascript" || languageId == "typescript" -> "node $fileName"
+            fileName.endsWith(".sh") || languageId == "shell" -> "sh $fileName"
+            else -> "echo Running $fileName"
+        }
+        executeCommand(command)
     }
 
     fun clearActiveSession() {

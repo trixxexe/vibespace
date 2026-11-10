@@ -210,6 +210,37 @@ fun TerminalPanel(
                         }
                     }
 
+                    if (uiState.activeRunnerMode == com.vibespace.core.runner.model.RunnerMode.ALPINE && !uiState.isAlpineInstalled) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = VibeTheme.colors.activeLineBackground,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clickable { viewModel.installAlpineSubsystem() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🐧", fontSize = 14.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Set Up Alpine Linux Subsystem",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = VibeTheme.colors.accentPrimary
+                                    )
+                                    Text(
+                                        text = "Tap to initialize in-app PRoot container for pip, npm, and apk (~60MB)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VibeTheme.colors.textMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Input bar
                     Row(
                         modifier = Modifier

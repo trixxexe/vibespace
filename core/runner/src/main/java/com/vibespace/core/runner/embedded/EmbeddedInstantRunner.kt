@@ -6,6 +6,7 @@ import com.vibespace.core.runner.manager.ExternalRunner
 import com.vibespace.core.runner.model.ExecutionState
 import com.vibespace.core.runner.model.ProcessExecution
 import com.vibespace.core.runner.model.ProcessOutput
+import com.vibespace.core.workspace.manager.WorkspaceManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -17,7 +18,9 @@ import java.util.Locale
  * Built-in zero-setup runtime executing JavaScript, Python, Web/HTML, and Shell scripts
  * directly inside the Android app without downloading external packages.
  */
-class EmbeddedInstantRunner : ExternalRunner {
+class EmbeddedInstantRunner(
+    private val workspaceManager: WorkspaceManager? = null
+) : ExternalRunner {
 
     override val runnerId: String = "embedded"
     override val name: String = "Instant Embedded Runner"
@@ -61,12 +64,12 @@ class EmbeddedInstantRunner : ExternalRunner {
         when {
             // Python execution
             trimmed.startsWith("python") || trimmed.endsWith(".py") -> {
-                exitCode = runPython(trimmed, ::emitLine)
+                exitCode = runPython(trimmed, workingDirectory, ::emitLine)
             }
 
             // JavaScript / Node execution
             trimmed.startsWith("node") || trimmed.startsWith("js") || trimmed.endsWith(".js") || trimmed.endsWith(".ts") -> {
-                exitCode = runJavaScript(trimmed, ::emitLine)
+                exitCode = runJavaScript(trimmed, workingDirectory, ::emitLine)
             }
 
             // Built-in Shell commands
@@ -104,18 +107,30 @@ class EmbeddedInstantRunner : ExternalRunner {
         return outputFlows.getOrPut(executionId) { MutableSharedFlow(replay = 50) }.asSharedFlow()
     }
 
-    private fun runPython(command: String, emit: (String, Boolean) -> Unit): Int {
+    private suspend fun runPython(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
         emit("Python 3.11.0 (VibeSpace Embedded Environment)", false)
         emit("Type 'help', 'copyright', 'credits' or 'license' for more information.", false)
 
-        val code = extractCodeFromCommand(command, "python3", "python")
-        if (code.isBlank()) {
+        val codeOrFile = extractCodeFromCommand(command, "python3", "python")
+        if (codeOrFile.isBlank()) {
             emit("Python interactive shell ready. Use 'Run' toolbar button to execute scripts.", false)
             return 0
         }
 
+        var codeToExecute = codeOrFile
+        if (codeOrFile.endsWith(".py") && workspaceManager != null) {
+            val fileContent = resolveFileContent(codeOrFile, workingDirectory)
+            if (fileContent != null) {
+                emit("[Running file: $codeOrFile]", false)
+                codeToExecute = fileContent
+            } else {
+                emit("FileNotFoundError: [Errno 2] No such file or directory: '$codeOrFile'", true)
+                return 1
+            }
+        }
+
         return try {
-            executePythonSnippet(code, emit)
+            executePythonSnippet(codeToExecute, emit)
             0
         } catch (e: Throwable) {
             emit("Traceback (most recent call last):", true)
@@ -125,22 +140,53 @@ class EmbeddedInstantRunner : ExternalRunner {
         }
     }
 
-    private fun runJavaScript(command: String, emit: (String, Boolean) -> Unit): Int {
+    private suspend fun runJavaScript(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
         emit("Node.js v20.10.0 (VibeSpace Embedded Environment)", false)
 
-        val code = extractCodeFromCommand(command, "node", "js")
-        if (code.isBlank()) {
+        val codeOrFile = extractCodeFromCommand(command, "node", "js")
+        if (codeOrFile.isBlank()) {
             emit("JavaScript runtime ready. Use 'Run' toolbar button to execute scripts.", false)
             return 0
         }
 
+        var codeToExecute = codeOrFile
+        if ((codeOrFile.endsWith(".js") || codeOrFile.endsWith(".ts")) && workspaceManager != null) {
+            val fileContent = resolveFileContent(codeOrFile, workingDirectory)
+            if (fileContent != null) {
+                emit("[Running file: $codeOrFile]", false)
+                codeToExecute = fileContent
+            } else {
+                emit("Error: Cannot find module '$codeOrFile'", true)
+                return 1
+            }
+        }
+
         return try {
-            executeJavaScriptSnippet(code, emit)
+            executeJavaScriptSnippet(codeToExecute, emit)
             0
         } catch (e: Throwable) {
             emit("Uncaught ${e.javaClass.simpleName}: ${e.message}", true)
             1
         }
+    }
+
+    private suspend fun resolveFileContent(fileName: String, workingDirectory: String): String? {
+        val manager = workspaceManager ?: return null
+        val project = manager.currentProject.value
+        val candidates = listOf(
+            fileName,
+            "$workingDirectory/$fileName",
+            project?.let { "${it.rootUri}/$fileName" },
+            project?.let { "${it.rootUri}/src/$fileName" }
+        ).filterNotNull()
+
+        for (candidate in candidates) {
+            val read = manager.readFile(candidate)
+            if (read is VibeResult.Success) {
+                return read.data
+            }
+        }
+        return null
     }
 
     private fun runShell(command: String, workingDir: String, emit: (String, Boolean) -> Unit): Int {
@@ -203,6 +249,39 @@ class EmbeddedInstantRunner : ExternalRunner {
         return command
     }
 
+    private fun splitArguments(raw: String): List<String> {
+        val results = mutableListOf<String>()
+        val current = StringBuilder()
+        var inSingleQuote = false
+        var inDoubleQuote = false
+
+        for (char in raw) {
+            when (char) {
+                '\'' -> {
+                    if (!inDoubleQuote) inSingleQuote = !inSingleQuote
+                    current.append(char)
+                }
+                '"' -> {
+                    if (!inSingleQuote) inDoubleQuote = !inDoubleQuote
+                    current.append(char)
+                }
+                ',' -> {
+                    if (!inSingleQuote && !inDoubleQuote) {
+                        results.add(current.toString().trim())
+                        current.clear()
+                    } else {
+                        current.append(char)
+                    }
+                }
+                else -> current.append(char)
+            }
+        }
+        if (current.isNotBlank()) {
+            results.add(current.toString().trim())
+        }
+        return results
+    }
+
     private fun executePythonSnippet(code: String, emit: (String, Boolean) -> Unit) {
         val lines = code.lines()
         val variables = mutableMapOf<String, Any>()
@@ -214,7 +293,8 @@ class EmbeddedInstantRunner : ExternalRunner {
             // print(...)
             if (line.startsWith("print(") && line.endsWith(")")) {
                 val content = line.substring(6, line.length - 1).trim()
-                val evaluated = evaluateExpression(content, variables)
+                val args = splitArguments(content)
+                val evaluated = args.joinToString(" ") { evaluateExpression(it, variables) }
                 emit(evaluated, false)
                 continue
             }
@@ -244,7 +324,8 @@ class EmbeddedInstantRunner : ExternalRunner {
             // console.log(...)
             if (line.startsWith("console.log(") && line.endsWith(")")) {
                 val content = line.substring(12, line.length - 1).trim()
-                val evaluated = evaluateExpression(content, scope)
+                val args = splitArguments(content)
+                val evaluated = args.joinToString(" ") { evaluateExpression(it, scope) }
                 emit(evaluated, false)
                 continue
             }
@@ -252,7 +333,8 @@ class EmbeddedInstantRunner : ExternalRunner {
             // console.error(...)
             if (line.startsWith("console.error(") && line.endsWith(")")) {
                 val content = line.substring(14, line.length - 1).trim()
-                val evaluated = evaluateExpression(content, scope)
+                val args = splitArguments(content)
+                val evaluated = args.joinToString(" ") { evaluateExpression(it, scope) }
                 emit(evaluated, true)
                 continue
             }
@@ -304,6 +386,26 @@ class EmbeddedInstantRunner : ExternalRunner {
             if (nums.size == 2) {
                 val prod = nums[0] * nums[1]
                 return if (prod % 1.0 == 0.0) prod.toLong().toString() else prod.toString()
+            }
+        }
+
+        // Simple subtraction: a - b
+        if (trimmed.contains("-") && !trimmed.startsWith("-")) {
+            val parts = trimmed.split("-").map { evaluateExpression(it.trim(), scope) }
+            val nums = parts.mapNotNull { it.toDoubleOrNull() }
+            if (nums.size == 2) {
+                val diff = nums[0] - nums[1]
+                return if (diff % 1.0 == 0.0) diff.toLong().toString() else diff.toString()
+            }
+        }
+
+        // Simple division: a / b
+        if (trimmed.contains("/")) {
+            val parts = trimmed.split("/").map { evaluateExpression(it.trim(), scope) }
+            val nums = parts.mapNotNull { it.toDoubleOrNull() }
+            if (nums.size == 2 && nums[1] != 0.0) {
+                val quotient = nums[0] / nums[1]
+                return if (quotient % 1.0 == 0.0) quotient.toLong().toString() else quotient.toString()
             }
         }
 

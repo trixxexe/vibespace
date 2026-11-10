@@ -183,7 +183,16 @@ fun VibeMainScreen(
                         onSearchClick = { isSearchVisible = !isSearchVisible },
                         onRunClick = {
                             isTerminalVisible = true
-                            terminalViewModel.submitCommand()
+                            val active = editorViewModel.uiState.value.activeDocument
+                            if (active != null) {
+                                if (active.isDirty) {
+                                    editorViewModel.saveActiveDocument()
+                                }
+                                terminalViewModel.runActiveDocument(
+                                    fileName = active.fileName,
+                                    languageId = active.language.id
+                                )
+                            }
                         },
                         onAiAssistantClick = { isAiChatVisible = !isAiChatVisible },
                         onToggleTerminalClick = { isTerminalVisible = !isTerminalVisible },
@@ -297,7 +306,19 @@ fun VibeMainScreen(
                     EditorScreen(
                         viewModel = editorViewModel,
                         onSearchClick = { isSearchVisible = !isSearchVisible },
-                        onRunClick = { isTerminalVisible = true },
+                        onRunClick = {
+                            isTerminalVisible = true
+                            val active = editorViewModel.uiState.value.activeDocument
+                            if (active != null) {
+                                if (active.isDirty) {
+                                    editorViewModel.saveActiveDocument()
+                                }
+                                terminalViewModel.runActiveDocument(
+                                    fileName = active.fileName,
+                                    languageId = active.language.id
+                                )
+                            }
+                        },
                         onAiAssistantClick = { isAiChatVisible = true },
                         onToggleTerminalClick = { isTerminalVisible = !isTerminalVisible },
                         onOpenExplorerClick = { scope.launch { drawerState.open() } }

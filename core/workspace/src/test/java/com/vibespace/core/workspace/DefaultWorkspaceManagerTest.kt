@@ -31,6 +31,8 @@ class DefaultWorkspaceManagerTest {
         assertNotNull(files)
         assertTrue(files!!.any { it.name == "src" && it.isDirectory })
         assertTrue(files.any { it.name == "README.md" && it.isFile })
+        assertTrue(files.any { it.name == "main.py" && it.isFile })
+        assertTrue(files.any { it.name == "index.js" && it.isFile })
 
         val readResult = workspaceManager.readFile("vibe://projects/proj-1/README.md")
         assertTrue(readResult.isSuccess)
