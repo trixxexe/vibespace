@@ -69,8 +69,8 @@ fun VibeNavigation(
     )
 
     val settingsState by settingsViewModel.uiState.collectAsState()
-    LaunchedEffect(settingsState.editorThemeId) {
-        editorViewModel.setEditorTheme(settingsState.editorThemeId)
+    LaunchedEffect(settingsState.settings.editorThemeId) {
+        editorViewModel.setEditorTheme(settingsState.settings.editorThemeId)
     }
 
     NavHost(
