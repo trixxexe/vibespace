@@ -219,7 +219,7 @@ class DefaultExtensionManager(
     ): VibeResult<Unit> = withContext(dispatchers.io) {
         val downloadUrl = extension.downloadUrl
         if (!downloadUrl.isNullOrEmpty() && (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://"))) {
-            try {
+            return@withContext try {
                 val connection = (URL(downloadUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 8000
                     readTimeout = 15000
@@ -246,18 +246,20 @@ class DefaultExtensionManager(
                     }
                     onProgress(1.0f)
                     tempFile.inputStream().use { input ->
-                        val result = installFromVsix(input)
-                        if (result is VibeResult.Success) {
-                            return@withContext VibeResult.Success(Unit)
+                        when (val result = installFromVsix(input)) {
+                            is VibeResult.Success -> VibeResult.Success(Unit)
+                            is VibeResult.Error -> VibeResult.Error("Failed to parse VSIX archive: ${result.message}", result.throwable)
+                            else -> VibeResult.Error("Unknown error occurred during VSIX installation.")
                         }
                     }
                 } finally {
                     tempFile.delete()
                 }
-            } catch (_: Exception) {
-                // Offline fallback or simulated network: proceed to metadata install
+            } catch (e: Exception) {
+                VibeResult.Error("Failed to download extension '${extension.displayName}': ${e.message}", e)
             }
         }
+
         try {
             onProgress(0.25f)
             onProgress(0.75f)

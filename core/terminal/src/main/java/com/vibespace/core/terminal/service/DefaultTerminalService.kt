@@ -85,15 +85,16 @@ class DefaultTerminalService(
         val session = _sessions.value.firstOrNull { it.sessionId == sessionId }
             ?: return@withContext VibeResult.Error("Session not found: $sessionId")
 
+        val cleanInput = input.trim().removePrefix("$").trim()
         val commandLine = TerminalLine(
             id = IdGenerator.shortId(),
-            text = "$ $input",
+            text = "$ $cleanInput",
             streamType = StreamType.COMMAND
         )
         emitLine(sessionId, commandLine)
 
         // Process built-in safe terminal command
-        executeInternalCommand(sessionId, session, input.trim())
+        executeInternalCommand(sessionId, session, cleanInput)
         VibeResult.Success(Unit)
     }
 

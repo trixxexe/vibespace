@@ -85,4 +85,23 @@ class DefaultExtensionManagerTest {
         val installed = extensionManager.installedExtensions.first()
         assertTrue(installed.any { it.id == ext.id })
     }
+
+    @Test
+    fun downloadAndInstall_with_invalid_network_url_returns_error() = runTest {
+        val ext = ExtensionMetadata(
+            id = "test.network-ext",
+            name = "network-ext",
+            displayName = "Network Ext",
+            publisher = "tester",
+            version = "1.0.0",
+            description = "Download network test",
+            category = ExtensionCategory.THEME,
+            downloadUrl = "http://127.0.0.1:9999/nonexistent.vsix"
+        )
+
+        val result = extensionManager.downloadAndInstall(ext) {}
+        assertTrue(result is com.vibespace.core.common.result.VibeResult.Error)
+        val installed = extensionManager.installedExtensions.first()
+        assertFalse(installed.any { it.id == ext.id })
+    }
 }

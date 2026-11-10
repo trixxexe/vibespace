@@ -23,7 +23,7 @@ class EmbeddedInstantRunner(
 ) : ExternalRunner {
 
     override val runnerId: String = "embedded"
-    override val name: String = "Instant Embedded Runner"
+    override val name: String = "Instant Evaluator (Basic Print & Arithmetic)"
 
     private val outputFlows = mutableMapOf<String, MutableSharedFlow<ProcessOutput>>()
     private val activeRuns = mutableMapOf<String, ProcessExecution>()
@@ -108,8 +108,8 @@ class EmbeddedInstantRunner(
     }
 
     private suspend fun runPython(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
-        emit("VibeSpace Instant Python Evaluator (Lightweight)", false)
-        emit("(Tip: Switch runner to 'Alpine Linux Subsystem' for full pip libraries & C-extensions)", false)
+        emit("VibeSpace Instant Evaluator (Basic Print & Arithmetic)", false)
+        emit("(Notice: Lightweight expression evaluator. Switch runner to 'Alpine Linux' or 'Termux' for full python/pip runtime)", false)
 
         val codeOrFile = extractCodeFromCommand(command, "python3", "python")
         if (codeOrFile.isBlank()) {
@@ -132,6 +132,8 @@ class EmbeddedInstantRunner(
         return try {
             executePythonSnippet(codeToExecute, emit)
             0
+        } catch (_: UnsupportedOperationException) {
+            1
         } catch (e: Throwable) {
             emit("Traceback (most recent call last):", true)
             emit("  File \"<string>\", line 1, in <module>", true)
@@ -141,8 +143,8 @@ class EmbeddedInstantRunner(
     }
 
     private suspend fun runJavaScript(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
-        emit("VibeSpace Instant JavaScript Evaluator (Lightweight)", false)
-        emit("(Tip: Switch runner to 'Alpine Linux Subsystem' for full npm packages & Node.js)", false)
+        emit("VibeSpace Instant Evaluator (Basic Print & Arithmetic)", false)
+        emit("(Notice: Lightweight expression evaluator. Switch runner to 'Alpine Linux' or 'Termux' for full Node.js/npm runtime)", false)
 
         val codeOrFile = extractCodeFromCommand(command, "node", "js")
         if (codeOrFile.isBlank()) {
@@ -165,6 +167,8 @@ class EmbeddedInstantRunner(
         return try {
             executeJavaScriptSnippet(codeToExecute, emit)
             0
+        } catch (_: UnsupportedOperationException) {
+            1
         } catch (e: Throwable) {
             emit("Uncaught ${e.javaClass.simpleName}: ${e.message}", true)
             1
@@ -228,8 +232,8 @@ class EmbeddedInstantRunner(
                 0
             }
             else -> {
-                emit("Command '$binary' executed. For system binaries or packages, switch to Alpine or Termux runner mode.", false)
-                0
+                emit("sh: $binary: command not found", true)
+                127
             }
         }
     }
@@ -291,6 +295,12 @@ class EmbeddedInstantRunner(
             val line = rawLine.trim()
             if (line.isEmpty() || line.startsWith("#")) continue
 
+            val firstWord = line.substringBefore('(').substringBefore(' ').trim()
+            if (firstWord in listOf("import", "from", "def", "class", "while", "for", "with", "try")) {
+                emit("SyntaxError: '$firstWord' statement is unsupported in Instant Evaluator. Switch runner to 'Alpine Linux' or 'Termux' for full language execution.", true)
+                throw UnsupportedOperationException("Unsupported construct: $firstWord")
+            }
+
             // print(...)
             if (line.startsWith("print(") && line.endsWith(")")) {
                 val content = line.substring(6, line.length - 1).trim()
@@ -321,6 +331,12 @@ class EmbeddedInstantRunner(
         for (rawLine in lines) {
             val line = rawLine.trim().removeSuffix(";")
             if (line.isEmpty() || line.startsWith("//")) continue
+
+            val firstWord = line.substringBefore('(').substringBefore(' ').trim()
+            if (firstWord in listOf("require", "import", "function", "class", "while", "for", "try", "switch")) {
+                emit("ReferenceError: '$firstWord' statement is unsupported in Instant Evaluator. Switch runner to 'Alpine Linux' or 'Termux' for full Node.js execution.", true)
+                throw UnsupportedOperationException("Unsupported construct: $firstWord")
+            }
 
             // console.log(...)
             if (line.startsWith("console.log(") && line.endsWith(")")) {

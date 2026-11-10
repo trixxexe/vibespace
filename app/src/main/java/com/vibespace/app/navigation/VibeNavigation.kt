@@ -28,77 +28,17 @@ fun VibeNavigation(
     navController: NavHostController = rememberNavController(),
     modifier: Modifier = Modifier
 ) {
-    // Instantiate view models connected to application dependencies, remembered across recompositions
-    val homeViewModel = remember {
-        HomeViewModel(
-            workspaceManager = app.workspaceManager,
-            recentProjectsRepository = app.recentProjectsRepository,
-            dispatchers = app.dispatchers
-        )
-    }
+    val factory = remember(app) { VibeViewModelFactory(app) }
 
-    val editorViewModel = remember {
-        EditorViewModel(
-            editorEngine = app.editorEngine,
-            workspaceManager = app.workspaceManager,
-            languageDetector = app.languageDetector,
-            lspClientProvider = { langId -> app.getLspClient(langId) },
-            gitManager = app.gitManager,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val explorerViewModel = remember {
-        ExplorerViewModel(
-            workspaceManager = app.workspaceManager,
-            gitManager = app.gitManager,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val terminalViewModel = remember {
-        TerminalViewModel(
-            terminalService = app.terminalService,
-            runnerManager = app.runnerManager,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val aiChatViewModel = remember {
-        AIChatViewModel(
-            aiService = app.aiService,
-            editorEngine = app.editorEngine,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val searchViewModel = remember {
-        SearchViewModel(
-            editorEngine = app.editorEngine,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val settingsViewModel = remember {
-        SettingsViewModel(
-            repository = app.settingsRepository,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val gitViewModel = remember {
-        com.vibespace.feature.explorer.git.GitViewModel(
-            gitManager = app.gitManager,
-            dispatchers = app.dispatchers
-        )
-    }
-
-    val extensionsViewModel = remember {
-        com.vibespace.feature.settings.extensions.ExtensionsViewModel(
-            extensionManager = app.extensionManager,
-            dispatchers = app.dispatchers
-        )
-    }
+    val homeViewModel: HomeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val editorViewModel: EditorViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val explorerViewModel: ExplorerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val terminalViewModel: TerminalViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val aiChatViewModel: AIChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val searchViewModel: SearchViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val settingsViewModel: SettingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val gitViewModel: com.vibespace.feature.explorer.git.GitViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
+    val extensionsViewModel: com.vibespace.feature.settings.extensions.ExtensionsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
 
     val settingsState by settingsViewModel.uiState.collectAsState()
     LaunchedEffect(settingsState.settings.editorThemeId) {

@@ -68,6 +68,24 @@ class VsixPackageParserTest {
     }
 
     @Test
+    fun parseThemeFromVsix_rejects_zip_slip_path_traversal() {
+        val byteOut = ByteArrayOutputStream()
+        val zipOut = ZipOutputStream(byteOut)
+
+        zipOut.putNextEntry(ZipEntry("../../etc/passwd"))
+        zipOut.write("root:x:0:0:root:/root:/bin/sh".toByteArray())
+        zipOut.closeEntry()
+        zipOut.close()
+
+        val inputStream = ByteArrayInputStream(byteOut.toByteArray())
+        val result = VsixPackageParser.parseThemeFromVsix(inputStream)
+
+        assertTrue(result is com.vibespace.core.common.result.VibeResult.Error)
+        val errMsg = (result as com.vibespace.core.common.result.VibeResult.Error).message
+        assertTrue(errMsg.contains("Path traversal detected") || errMsg.contains("Security violation"))
+    }
+
+    @Test
     fun builtinThemes_contain_classic_popular_presets() {
         val themes = EditorThemeDefinition.BUILTIN_THEMES
         assertEquals(5, themes.size)

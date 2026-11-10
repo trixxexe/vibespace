@@ -230,13 +230,22 @@ class EditorViewModel(
 
     fun requestHover(line: Int? = null, column: Int? = null) {
         val activeDoc = _uiState.value.activeDocument ?: return
-        val client = activeLspClient ?: return
+        val client = activeLspClient
+        if (client == null || !client.isRunning) {
+            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.name}") }
+            return
+        }
         val targetLine = line ?: _uiState.value.cursorPosition.line
         val targetCol = column ?: _uiState.value.cursorPosition.column
         viewModelScope.launch(dispatchers.default) {
-            val result = client.requestHover(activeDoc.uri, targetLine, targetCol)
-            if (result is com.vibespace.core.common.result.VibeResult.Success) {
-                _uiState.update { it.copy(hoverInfo = result.data) }
+            when (val result = client.requestHover(activeDoc.uri, targetLine, targetCol)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    _uiState.update { it.copy(hoverInfo = result.data) }
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(statusMessage = "Hover failed: ${result.message}") }
+                }
+                else -> Unit
             }
         }
     }
@@ -252,36 +261,57 @@ class EditorViewModel(
         onNavigateToFile: ((VirtualFile) -> Unit)? = null
     ) {
         val activeDoc = _uiState.value.activeDocument ?: return
-        val client = activeLspClient ?: return
+        val client = activeLspClient
+        if (client == null || !client.isRunning) {
+            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.name}") }
+            return
+        }
         val targetLine = line ?: _uiState.value.cursorPosition.line
         val targetCol = column ?: _uiState.value.cursorPosition.column
         viewModelScope.launch(dispatchers.default) {
-            val result = client.requestDefinition(activeDoc.uri, targetLine, targetCol)
-            if (result is com.vibespace.core.common.result.VibeResult.Success) {
-                _uiState.update { it.copy(definitionLocations = result.data) }
-                onLocations(result.data)
-                val target = result.data.firstOrNull()
-                if (target != null && target.uri != activeDoc.uri && onNavigateToFile != null) {
-                    val targetName = target.uri.substringAfterLast('/')
-                    val targetFile = VirtualFile(
-                        uri = target.uri,
-                        name = targetName,
-                        nodeType = com.vibespace.core.workspace.model.FileNodeType.FILE,
-                        parentUri = target.uri.substringBeforeLast('/')
-                    )
-                    onNavigateToFile(targetFile)
+            when (val result = client.requestDefinition(activeDoc.uri, targetLine, targetCol)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    _uiState.update { it.copy(definitionLocations = result.data) }
+                    onLocations(result.data)
+                    val target = result.data.firstOrNull()
+                    if (target != null && target.uri != activeDoc.uri && onNavigateToFile != null) {
+                        val targetName = target.uri.substringAfterLast('/')
+                        val targetFile = VirtualFile(
+                            uri = target.uri,
+                            name = targetName,
+                            nodeType = com.vibespace.core.workspace.model.FileNodeType.FILE,
+                            parentUri = target.uri.substringBeforeLast('/')
+                        )
+                        onNavigateToFile(targetFile)
+                    }
                 }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(statusMessage = "Definition lookup failed: ${result.message}") }
+                }
+                else -> Unit
             }
         }
     }
 
     fun formatDocument() {
         val activeDoc = _uiState.value.activeDocument ?: return
-        val client = activeLspClient ?: return
+        val client = activeLspClient
+        if (client == null || !client.isRunning) {
+            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.name}") }
+            return
+        }
         viewModelScope.launch(dispatchers.default) {
-            val result = client.formatDocument(activeDoc.uri)
-            if (result is com.vibespace.core.common.result.VibeResult.Success && result.data.isNotEmpty()) {
-                onContentChanged(result.data)
+            when (val result = client.formatDocument(activeDoc.uri)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    if (result.data.isNotEmpty()) {
+                        onContentChanged(result.data)
+                        _uiState.update { it.copy(statusMessage = "Document formatted") }
+                    }
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(statusMessage = "Formatting failed: ${result.message}") }
+                }
+                else -> Unit
             }
         }
     }

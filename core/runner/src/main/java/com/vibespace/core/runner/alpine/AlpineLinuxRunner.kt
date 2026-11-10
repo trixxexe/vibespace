@@ -6,6 +6,7 @@ import com.vibespace.core.runner.manager.ExternalRunner
 import com.vibespace.core.runner.model.ExecutionState
 import com.vibespace.core.runner.model.ProcessExecution
 import com.vibespace.core.runner.model.ProcessOutput
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -33,15 +35,54 @@ sealed interface AlpineInstallationState {
     data class Error(val message: String) : AlpineInstallationState
 }
 
+fun interface AlpineProcessExecutor {
+    suspend fun execute(
+        command: List<String>,
+        workingDir: File,
+        environment: Map<String, String>,
+        onOutputLine: (line: String, isError: Boolean) -> Unit
+    ): Int
+}
+
+class DefaultAlpineProcessExecutor : AlpineProcessExecutor {
+    override suspend fun execute(
+        command: List<String>,
+        workingDir: File,
+        environment: Map<String, String>,
+        onOutputLine: (line: String, isError: Boolean) -> Unit
+    ): Int = withContext(Dispatchers.IO) {
+        val pb = ProcessBuilder(command)
+        pb.directory(workingDir)
+        pb.environment().putAll(environment)
+        val process = pb.start()
+
+        val stdoutJob = CoroutineScope(Dispatchers.IO).launch {
+            process.inputStream.bufferedReader().useLines { lines ->
+                lines.forEach { onOutputLine(it, false) }
+            }
+        }
+        val stderrJob = CoroutineScope(Dispatchers.IO).launch {
+            process.errorStream.bufferedReader().useLines { lines ->
+                lines.forEach { onOutputLine(it, true) }
+            }
+        }
+        val exitCode = process.waitFor()
+        stdoutJob.join()
+        stderrJob.join()
+        exitCode
+    }
+}
+
 /**
  * In-app Linux container runner using Alpine Linux + PRoot.
  * Allows users to download official Alpine Linux minirootfs (~60MB), unpack it into
- * app-private storage, and manage packages via apk, pip, and npm.
+ * app-private storage, and execute real processes within the PRoot container.
  */
 class AlpineLinuxRunner(
     private val rootDirectory: File? = null,
     private val downloadTransport: (suspend (url: String, destFile: File, onProgress: (Float) -> Unit) -> Unit)? = null,
-    private val prootBinaryPath: String? = null
+    private val prootBinaryPath: String? = null,
+    private val processExecutor: AlpineProcessExecutor? = null
 ) : ExternalRunner {
 
     override val runnerId: String = "alpine"
@@ -91,14 +132,8 @@ class AlpineLinuxRunner(
                     _installationState.value = AlpineInstallationState.Downloading(progress)
                 }
             } else {
-                try {
-                    downloadArchive(alpineCdnUrl, archiveFile) { progress ->
-                        _installationState.value = AlpineInstallationState.Downloading(progress)
-                    }
-                } catch (e: Exception) {
-                    // Fallback to minimal valid rootfs archive if offline or in simulated test sandbox
-                    writeFallbackTarGz(archiveFile)
-                    _installationState.value = AlpineInstallationState.Downloading(1.0f)
+                downloadArchive(alpineCdnUrl, archiveFile) { progress ->
+                    _installationState.value = AlpineInstallationState.Downloading(progress)
                 }
             }
 
@@ -230,50 +265,6 @@ class AlpineLinuxRunner(
         return offset
     }
 
-    private fun writeFallbackTarGz(destFile: File) {
-        destFile.parentFile?.mkdirs()
-        GZIPOutputStream(FileOutputStream(destFile)).use { gzos ->
-            writeTarEntry(gzos, "etc/alpine-release", "3.19.1\n".toByteArray())
-            writeTarEntry(gzos, "bin/sh", "#!/bin/sh\necho Alpine Linux 3.19.1\n".toByteArray())
-            writeTarEntry(gzos, "usr/bin/python3", "#!/bin/sh\n".toByteArray())
-            gzos.write(ByteArray(1024))
-        }
-    }
-
-    private fun writeTarEntry(out: OutputStream, name: String, content: ByteArray) {
-        val header = ByteArray(512)
-        val nameBytes = name.toByteArray(Charsets.US_ASCII)
-        System.arraycopy(nameBytes, 0, header, 0, nameBytes.size)
-
-        val mode = "0000755\u0000".toByteArray(Charsets.US_ASCII)
-        System.arraycopy(mode, 0, header, 100, mode.size)
-
-        val sizeStr = String.format(Locale.US, "%011o ", content.size).toByteArray(Charsets.US_ASCII)
-        System.arraycopy(sizeStr, 0, header, 124, sizeStr.size)
-
-        header[156] = '0'.code.toByte()
-
-        val magic = "ustar\u000000".toByteArray(Charsets.US_ASCII)
-        System.arraycopy(magic, 0, header, 257, magic.size)
-
-        for (i in 148 until 156) {
-            header[i] = ' '.code.toByte()
-        }
-        var sum = 0
-        for (b in header) {
-            sum += (b.toInt() and 0xFF)
-        }
-        val chkStr = String.format(Locale.US, "%06o\u0000 ", sum).toByteArray(Charsets.US_ASCII)
-        System.arraycopy(chkStr, 0, header, 148, chkStr.size)
-
-        out.write(header)
-        out.write(content)
-        val pad = (512 - (content.size % 512)) % 512
-        if (pad in 1..511) {
-            out.write(ByteArray(pad.toInt()))
-        }
-    }
-
     override suspend fun execute(
         command: String,
         workingDirectory: String,
@@ -316,106 +307,50 @@ class AlpineLinuxRunner(
         }
 
         emitLine("[Alpine Linux PRoot Container] $ $command", false)
-        val baseDir = getBaseDir().absolutePath
-        val trimmed = command.trim()
+        val rootfsDir = getRootfsDir()
+        val prootFile = prootBinaryPath?.let { File(it) } ?: File(getBaseDir(), "bin/proot")
+
         val exitCode: Int
-
-        when {
-            trimmed.startsWith("pip install") || trimmed.startsWith("pip3 install") -> {
-                val pkg = trimmed.removePrefix("pip3 install").removePrefix("pip install").trim()
-                emitLine("Collecting $pkg", false)
-                emitLine("  Downloading $pkg-latest-py3-none-any.whl (100%)", false)
-                emitLine("Installing collected packages: $pkg", false)
-                emitLine("Successfully installed $pkg", false)
-                if (!installedPackages.contains(pkg)) installedPackages.add(pkg)
-                exitCode = 0
+        if (processExecutor != null) {
+            val prootCommand = listOf(prootFile.absolutePath, "-0", "-r", rootfsDir.absolutePath, "-w", workingDirectory, "/bin/sh", "-c", command)
+            exitCode = processExecutor.execute(
+                prootCommand,
+                rootfsDir,
+                environmentVariables
+            ) { line, isError ->
+                emitLine(line, isError)
             }
-
-            trimmed == "pip list" || trimmed == "pip3 list" -> {
-                emitLine("Package    Version", false)
-                emitLine("---------- -------", false)
-                emitLine("pip        23.3.1", false)
-                emitLine("setuptools 69.0.2", false)
-                for (pkg in installedPackages.filter { it != "py3-pip" && it != "bash" && it != "git" }) {
-                    emitLine(String.format(Locale.US, "%-10s 1.0.0", pkg), false)
-                }
-                exitCode = 0
+        } else if (prootFile.exists() && prootFile.canExecute()) {
+            val prootCommand = listOf(prootFile.absolutePath, "-0", "-r", rootfsDir.absolutePath, "-w", workingDirectory, "/bin/sh", "-c", command)
+            val defaultExecutor = DefaultAlpineProcessExecutor()
+            exitCode = defaultExecutor.execute(
+                prootCommand,
+                rootfsDir,
+                environmentVariables
+            ) { line, isError ->
+                emitLine(line, isError)
             }
-
-            trimmed.startsWith("npm install") || trimmed.startsWith("npm i") -> {
-                val pkg = trimmed.removePrefix("npm install").removePrefix("npm i").trim()
-                emitLine("npm WARN deprecated", false)
-                emitLine("added 12 packages, and audited 13 packages in 1s", false)
-                emitLine("found 0 vulnerabilities", false)
-                if (!installedPackages.contains(pkg)) installedPackages.add(pkg)
-                exitCode = 0
-            }
-
-            trimmed == "npm list" || trimmed == "npm ls" -> {
-                emitLine("vibespace-project@1.0.0 $baseDir/rootfs$workingDirectory", false)
-                for (pkg in installedPackages.filter { it != "python3" && it != "py3-pip" && it != "bash" && it != "git" }) {
-                    emitLine("├── $pkg@1.0.0", false)
-                }
-                exitCode = 0
-            }
-
-            trimmed.startsWith("apk add") -> {
-                val pkg = trimmed.removePrefix("apk add").trim()
-                emitLine("fetch https://dl-cdn.alpinelinux.org/alpine/v3.19/main/aarch64/APKINDEX.tar.gz", false)
-                emitLine("(1/1) Installing $pkg", false)
-                emitLine("OK: 120 MiB in 45 packages", false)
-                if (!installedPackages.contains(pkg)) installedPackages.add(pkg)
-                exitCode = 0
-            }
-
-            trimmed == "apk info" -> {
-                for (pkg in installedPackages) {
-                    emitLine(pkg, false)
-                }
-                exitCode = 0
-            }
-
-            trimmed == "python --version" || trimmed == "python -V" || trimmed == "python3 --version" -> {
-                emitLine("Python 3.11.9 (Alpine Linux Subsystem)", false)
-                exitCode = 0
-            }
-
-            trimmed == "node --version" || trimmed == "node -v" -> {
-                emitLine("v20.18.0", false)
-                exitCode = 0
-            }
-
-            trimmed == "uname -a" || trimmed == "uname" -> {
-                emitLine("Linux vibespace-mobile 6.1.0-android-aarch64 #1 SMP PREEMPT Alpine Linux", false)
-                exitCode = 0
-            }
-
-            trimmed == "whoami" -> {
-                emitLine("root", false)
-                exitCode = 0
-            }
-
-            trimmed.contains("alpine-release") -> {
-                emitLine("3.19.1", false)
-                exitCode = 0
-            }
-
-            else -> {
-                emitLine("Alpine Linux 3.19.1 (aarch64 proot)", false)
-                val base = getBaseDir().absolutePath
-                emitLine("Executed in $base/rootfs$workingDirectory: $command", false)
-                exitCode = 0
-            }
+        } else {
+            emitLine("[Alpine Linux Error: PRoot binary not found at ${prootFile.absolutePath}. Subsystem requires PRoot executable for Linux emulation.]", true)
+            emitLine("Tip: Place PRoot binary in ${File(getBaseDir(), "bin").absolutePath} or use Termux/Embedded runner.", true)
+            val failed = execution.copy(
+                state = ExecutionState.FAILED,
+                exitCode = 126,
+                endTime = System.currentTimeMillis(),
+                outputs = outputs
+            )
+            activeRuns[executionId] = failed
+            return VibeResult.Success(failed)
         }
 
         val completed = execution.copy(
-            state = ExecutionState.SUCCEEDED,
+            state = if (exitCode == 0) ExecutionState.SUCCEEDED else ExecutionState.FAILED,
             exitCode = exitCode,
             endTime = System.currentTimeMillis(),
             outputs = outputs
         )
         activeRuns[executionId] = completed
-        emitLine("[Process finished with exit code $exitCode]", false)
+        emitLine("[Process finished with exit code $exitCode]", exitCode != 0)
         return VibeResult.Success(completed)
     }
 

@@ -14,11 +14,15 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.result.VibeResult
+import com.vibespace.core.common.security.SecretStorage
+import com.vibespace.core.common.security.SecureSecretStorage
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
@@ -29,11 +33,15 @@ val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
 /**
  * Production persistent settings repository backed by AndroidX DataStore Preferences.
  * Ensures user themes, editor preferences, and BYOK AI keys survive app process destruction.
+ * AI keys are stored in encrypted form using Keystore-backed AES-256-GCM.
  */
 class DataStoreSettingsRepository(
     private val context: Context,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    private val secretStorage: SecretStorage = SecureSecretStorage()
 ) : SettingsRepository {
+
+    private val migrationScope = CoroutineScope(dispatchers.io)
 
     private object PreferencesKeys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -61,6 +69,21 @@ class DataStoreSettingsRepository(
                             ThemeMode.DARK
                         }
 
+                        val rawApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: ""
+                        val decryptedApiKey = if (rawApiKey.isNotBlank()) {
+                            secretStorage.decrypt(rawApiKey)
+                        } else ""
+
+                        // Auto-migrate legacy plaintext key to encrypted format
+                        if (rawApiKey.isNotBlank() && !rawApiKey.startsWith("enc:")) {
+                            migrationScope.launch {
+                                try {
+                                    val encrypted = secretStorage.encrypt(rawApiKey)
+                                    context.settingsDataStore.edit { it[PreferencesKeys.AI_API_KEY] = encrypted }
+                                } catch (_: Throwable) {}
+                            }
+                        }
+
                         UserSettings(
                             themeMode = themeMode,
                             editorThemeId = preferences[PreferencesKeys.EDITOR_THEME_ID] ?: "vibe_dark",
@@ -70,7 +93,7 @@ class DataStoreSettingsRepository(
                             wordWrap = preferences[PreferencesKeys.WORD_WRAP] ?: false,
                             autoSave = preferences[PreferencesKeys.AUTO_SAVE] ?: true,
                             aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini",
-                            aiApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: "",
+                            aiApiKey = decryptedApiKey,
                             aiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.0-flash",
                             aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: ""
                         )
@@ -89,6 +112,7 @@ class DataStoreSettingsRepository(
 
     override suspend fun updateSettings(settings: UserSettings): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
+            val encryptedKey = if (settings.aiApiKey.isNotBlank()) secretStorage.encrypt(settings.aiApiKey.trim()) else ""
             context.settingsDataStore.edit { preferences ->
                 preferences[PreferencesKeys.THEME_MODE] = settings.themeMode.name
                 preferences[PreferencesKeys.EDITOR_THEME_ID] = settings.editorThemeId
@@ -98,7 +122,7 @@ class DataStoreSettingsRepository(
                 preferences[PreferencesKeys.WORD_WRAP] = settings.wordWrap
                 preferences[PreferencesKeys.AUTO_SAVE] = settings.autoSave
                 preferences[PreferencesKeys.AI_PROVIDER_ID] = settings.aiProviderId
-                preferences[PreferencesKeys.AI_API_KEY] = settings.aiApiKey
+                preferences[PreferencesKeys.AI_API_KEY] = encryptedKey
                 preferences[PreferencesKeys.AI_MODEL] = settings.aiModel
                 preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] = settings.aiCustomEndpoint
             }
@@ -151,9 +175,11 @@ class DataStoreSettingsRepository(
         customEndpoint: String
     ): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
+            val trimmedKey = apiKey.trim()
+            val encryptedKey = if (trimmedKey.isNotBlank()) secretStorage.encrypt(trimmedKey) else ""
             context.settingsDataStore.edit {
                 it[PreferencesKeys.AI_PROVIDER_ID] = providerId
-                it[PreferencesKeys.AI_API_KEY] = apiKey.trim()
+                it[PreferencesKeys.AI_API_KEY] = encryptedKey
                 it[PreferencesKeys.AI_MODEL] = model.trim()
                 it[PreferencesKeys.AI_CUSTOM_ENDPOINT] = customEndpoint.trim()
             }

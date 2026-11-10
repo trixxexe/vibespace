@@ -232,4 +232,29 @@ class EditorViewModelTest {
         assertTrue(refreshStatusCalled)
         assertEquals("Saved main.py", viewModel.uiState.value.statusMessage)
     }
+
+    @Test
+    fun lsp_unavailable_reports_clear_status_message() = runTest {
+        val root = "vibe://projects/test-no-lsp"
+        workspaceManager.createFile(root, "main.py", "def add(x, y): return x + y\n")
+
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            lspClientProvider = null,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val file = VirtualFile(
+            uri = "$root/main.py",
+            name = "main.py",
+            nodeType = FileNodeType.FILE,
+            parentUri = root
+        )
+
+        viewModel.openFile(file)
+        viewModel.requestHover(1, 5)
+        assertEquals("Language server unavailable for Python", viewModel.uiState.value.statusMessage)
+    }
 }

@@ -114,22 +114,27 @@ class TerminalViewModel(
 
     fun executeCommand(command: String) {
         val session = _uiState.value.activeSession ?: return
-        val trimmed = command.trim()
-        if (trimmed.isEmpty()) return
+        val cleanCommand = command.trim().removePrefix("$").trim()
+        if (cleanCommand.isEmpty()) return
 
         viewModelScope.launch(dispatchers.default) {
-            terminalService.appendLine(session.sessionId, "$ $trimmed", StreamType.COMMAND)
+            terminalService.appendLine(session.sessionId, "$ $cleanCommand", StreamType.COMMAND)
 
             if (runnerManager != null) {
-                val result = runnerManager.runCommand(trimmed, session.workingDirectory)
-                if (result is VibeResult.Success) {
-                    for (out in result.data.outputs) {
-                        val type = if (out.isError) StreamType.STDERR else StreamType.STDOUT
-                        terminalService.appendLine(session.sessionId, out.line, type)
+                when (val result = runnerManager.runCommand(cleanCommand, session.workingDirectory)) {
+                    is VibeResult.Success -> {
+                        for (out in result.data.outputs) {
+                            val type = if (out.isError) StreamType.STDERR else StreamType.STDOUT
+                            terminalService.appendLine(session.sessionId, out.line, type)
+                        }
                     }
+                    is VibeResult.Error -> {
+                        terminalService.appendLine(session.sessionId, result.message, StreamType.STDERR)
+                    }
+                    else -> Unit
                 }
             } else {
-                terminalService.sendInput(session.sessionId, trimmed)
+                terminalService.sendInput(session.sessionId, cleanCommand)
             }
         }
     }

@@ -39,6 +39,7 @@ class VibeSpaceApplication : Application() {
 
     val workspaceManager: WorkspaceManager by lazy {
         DefaultWorkspaceManager(
+            context = this,
             recentProjectsRepository = recentProjectsRepository,
             dispatchers = dispatchers
         )
@@ -81,21 +82,12 @@ class VibeSpaceApplication : Application() {
 
     private val lspClients = java.util.concurrent.ConcurrentHashMap<String, com.vibespace.core.language.lsp.LanguageServerClient>()
 
-    fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient {
-        return lspClients.getOrPut(languageId) {
-            val transport = com.vibespace.core.language.lsp.InMemoryLspTransport()
-            val responder = com.vibespace.core.language.lsp.LocalLspServerResponder(
-                languageId = languageId,
-                transport = transport,
-                dispatchers = dispatchers
-            )
-            responder.start()
-            com.vibespace.core.language.lsp.StdioLanguageServerClient(
-                languageId = languageId,
-                transport = transport,
-                dispatchers = dispatchers
-            )
-        }
+    fun registerLspClient(languageId: String, client: com.vibespace.core.language.lsp.LanguageServerClient) {
+        lspClients[languageId] = client
+    }
+
+    fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? {
+        return lspClients[languageId]
     }
 
     override fun onCreate() {

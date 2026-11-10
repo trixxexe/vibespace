@@ -46,16 +46,51 @@ class DefaultRunnerManagerTest {
 
     @Test
     fun runnerMode_can_be_switched_to_alpine() = runTest {
-        runnerManager.setRunnerMode(RunnerMode.ALPINE)
-        assertEquals(RunnerMode.ALPINE, runnerManager.activeRunnerMode.value)
+        val fakeExecutor = com.vibespace.core.runner.alpine.AlpineProcessExecutor { _, _, _, onLine ->
+            onLine("Successfully installed requests", false)
+            0
+        }
+        val customAlpine = AlpineLinuxRunner(
+            downloadTransport = { _, destFile, progress ->
+                destFile.parentFile?.mkdirs()
+                java.util.zip.GZIPOutputStream(java.io.FileOutputStream(destFile)).use { gzos ->
+                    val header = ByteArray(512)
+                    val nameBytes = "etc/alpine-release".toByteArray(Charsets.US_ASCII)
+                    System.arraycopy(nameBytes, 0, header, 0, nameBytes.size)
+                    val mode = "0000755\u0000".toByteArray(Charsets.US_ASCII)
+                    System.arraycopy(mode, 0, header, 100, mode.size)
+                    val content = "3.19.1\n".toByteArray()
+                    val sizeStr = String.format(java.util.Locale.US, "%011o ", content.size).toByteArray(Charsets.US_ASCII)
+                    System.arraycopy(sizeStr, 0, header, 124, sizeStr.size)
+                    header[156] = '0'.code.toByte()
+                    val magic = "ustar\u000000".toByteArray(Charsets.US_ASCII)
+                    System.arraycopy(magic, 0, header, 257, magic.size)
+                    for (i in 148 until 156) header[i] = ' '.code.toByte()
+                    var sum = 0
+                    for (b in header) sum += (b.toInt() and 0xFF)
+                    val chkStr = String.format(java.util.Locale.US, "%06o\u0000 ", sum).toByteArray(Charsets.US_ASCII)
+                    System.arraycopy(chkStr, 0, header, 148, chkStr.size)
+                    gzos.write(header)
+                    gzos.write(content)
+                    val pad = (512 - (content.size % 512)) % 512
+                    if (pad in 1..511) gzos.write(ByteArray(pad))
+                    gzos.write(ByteArray(1024))
+                }
+                progress(1.0f)
+            },
+            processExecutor = fakeExecutor
+        )
+        val manager = DefaultRunnerManager(
+            dispatchers = TestDispatcherProvider(),
+            alpineRunner = customAlpine
+        )
+        manager.setRunnerMode(RunnerMode.ALPINE)
+        assertEquals(RunnerMode.ALPINE, manager.activeRunnerMode.value)
 
-        // Install alpine subsystem
-        val alpineRunner = runnerManager.getRunnerForMode(RunnerMode.ALPINE) as AlpineLinuxRunner
-        val installResult = alpineRunner.installSubsystem()
+        val installResult = customAlpine.installSubsystem()
         assertTrue(installResult.isSuccess)
 
-        // Execute pip install in alpine
-        val runResult = runnerManager.runCommand("pip install requests", "vibe://projects/test")
+        val runResult = manager.runCommand("pip install requests", "vibe://projects/test")
         assertTrue(runResult.isSuccess)
         val exec = runResult.getOrNull()
         assertTrue(exec!!.outputs.any { it.line.contains("Successfully installed requests") })

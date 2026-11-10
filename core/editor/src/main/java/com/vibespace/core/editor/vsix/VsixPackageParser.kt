@@ -13,20 +13,48 @@ import java.util.zip.ZipInputStream
  */
 object VsixPackageParser {
 
+    private const val MAX_ENTRY_BYTES = 5 * 1024 * 1024L // 5 MB per entry
+    private const val MAX_TOTAL_BYTES = 50 * 1024 * 1024L // 50 MB total archive
+    private const val MAX_ENTRIES_COUNT = 500
+
     fun parseThemeFromVsix(inputStream: InputStream): VibeResult<EditorThemeDefinition> {
         return try {
             val zip = ZipInputStream(inputStream)
             var entry = zip.nextEntry
             var packageJsonStr: String? = null
             val themeFiles = mutableMapOf<String, String>()
+            var totalBytesRead = 0L
+            var entryCount = 0
 
             while (entry != null) {
+                entryCount++
+                if (entryCount > MAX_ENTRIES_COUNT) {
+                    return VibeResult.Error("Security violation: VSIX archive contains too many entries (exceeds $MAX_ENTRIES_COUNT limit).")
+                }
+
                 val name = entry.name
+                // Zip Slip protection
+                if (name.contains("..") || name.startsWith("/") || name.startsWith("\\")) {
+                    return VibeResult.Error("Security violation: Path traversal detected in entry '$name'.")
+                }
+
                 if (name == "extension/package.json" || name.endsWith("/package.json")) {
-                    packageJsonStr = readEntryText(zip)
+                    val content = readEntryText(zip) { bytesRead ->
+                        totalBytesRead += bytesRead
+                        if (totalBytesRead > MAX_TOTAL_BYTES) {
+                            throw IllegalStateException("VSIX archive uncompressed size exceeds $MAX_TOTAL_BYTES bytes limit.")
+                        }
+                    }
+                    packageJsonStr = content
                 } else if (name.endsWith(".json") && name.contains("theme", ignoreCase = true)) {
                     val normalizedPath = name.removePrefix("extension/")
-                    themeFiles[normalizedPath] = readEntryText(zip)
+                    val content = readEntryText(zip) { bytesRead ->
+                        totalBytesRead += bytesRead
+                        if (totalBytesRead > MAX_TOTAL_BYTES) {
+                            throw IllegalStateException("VSIX archive uncompressed size exceeds $MAX_TOTAL_BYTES bytes limit.")
+                        }
+                    }
+                    themeFiles[normalizedPath] = content
                 }
                 zip.closeEntry()
                 entry = zip.nextEntry
@@ -109,11 +137,17 @@ object VsixPackageParser {
         }
     }
 
-    private fun readEntryText(zip: ZipInputStream): String {
+    private fun readEntryText(zip: ZipInputStream, onBytesRead: (Int) -> Unit = {}): String {
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(1024)
         var len: Int
+        var entryBytes = 0L
         while (zip.read(buffer).also { len = it } != -1) {
+            entryBytes += len
+            if (entryBytes > MAX_ENTRY_BYTES) {
+                throw IllegalStateException("VSIX archive entry exceeds $MAX_ENTRY_BYTES bytes limit.")
+            }
+            onBytesRead(len)
             out.write(buffer, 0, len)
         }
         return out.toString(Charsets.UTF_8.name())

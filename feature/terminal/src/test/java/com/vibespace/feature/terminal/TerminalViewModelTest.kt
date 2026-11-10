@@ -3,6 +3,7 @@ package com.vibespace.feature.terminal
 import com.vibespace.core.common.dispatchers.TestDispatcherProvider
 import com.vibespace.core.runner.manager.DefaultRunnerManager
 import com.vibespace.core.runner.model.RunnerMode
+import com.vibespace.core.terminal.model.StreamType
 import com.vibespace.core.terminal.service.DefaultTerminalService
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -134,5 +135,19 @@ class TerminalViewModelTest {
         viewModel.updateDiagnostics(listOf(diag))
         assertEquals(1, viewModel.uiState.value.problemsCount)
         assertEquals(1, viewModel.uiState.value.diagnostics.size)
+    }
+
+    @Test
+    fun command_with_leading_prompt_is_sanitized_and_not_duplicated() = runTest {
+        val viewModel = TerminalViewModel(
+            terminalService = terminalService,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        viewModel.executeCommand("$ echo sanitized")
+        val active = viewModel.uiState.value.activeSession
+        assertNotNull(active)
+        assertTrue(active!!.lines.any { it.streamType == StreamType.COMMAND && it.text == "$ echo sanitized" })
+        assertTrue(active.lines.any { it.streamType == StreamType.STDOUT && it.text == "sanitized" })
     }
 }

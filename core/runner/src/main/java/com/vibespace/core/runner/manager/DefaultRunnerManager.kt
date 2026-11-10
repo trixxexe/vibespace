@@ -40,7 +40,8 @@ class DefaultRunnerManager(
 
     private val outputFlows = mutableMapOf<String, MutableSharedFlow<ProcessOutput>>()
     private val runnerScope = CoroutineScope(SupervisorJob() + dispatchers.default)
-    private val collectionJobs = mutableMapOf<String, Job>()
+    private val collectionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+    private val executionRunners = java.util.concurrent.ConcurrentHashMap<String, ExternalRunner>()
 
     init {
         // Register out-of-the-box Tri-Mode Runners
@@ -79,18 +80,28 @@ class DefaultRunnerManager(
         if (result is VibeResult.Success) {
             val execution = result.data
             _activeExecutions.value = _activeExecutions.value + execution
+            executionRunners[execution.executionId] = runner
 
             // Pipe output from runner to output flow
             val combinedFlow = outputFlows.getOrPut(execution.executionId) { MutableSharedFlow(replay = 50) }
             val runnerOutputFlow = runner.observeOutput(execution.executionId)
 
             val job = runnerScope.launch {
-                runnerOutputFlow.collect { chunk ->
-                    combinedFlow.emit(chunk)
+                try {
+                    runnerOutputFlow.collect { chunk ->
+                        combinedFlow.emit(chunk)
+                    }
+                } finally {
+                    collectionJobs.remove(execution.executionId)
                 }
             }
             collectionJobs[execution.executionId]?.cancel()
             collectionJobs[execution.executionId] = job
+
+            if (execution.state != ExecutionState.RUNNING) {
+                job.cancel()
+                collectionJobs.remove(execution.executionId)
+            }
         }
 
         result
@@ -102,6 +113,7 @@ class DefaultRunnerManager(
 
         // Cancel output collection job
         collectionJobs.remove(executionId)?.cancel()
+        executionRunners.remove(executionId)
 
         // Notify runners
         runners.values.forEach { it.stop(executionId) }
@@ -120,7 +132,7 @@ class DefaultRunnerManager(
     }
 
     override fun observeOutput(executionId: String): Flow<ProcessOutput> {
-        val runner = runners[_activeRunnerMode.value.id]
+        val runner = executionRunners[executionId] ?: runners[_activeRunnerMode.value.id]
         if (runner != null) {
             return runner.observeOutput(executionId)
         }
