@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
+import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.runner.alpine.AlpineLinuxRunner
 import com.vibespace.core.runner.manager.RunnerManager
 import com.vibespace.core.runner.model.RunnerMode
@@ -94,10 +95,10 @@ class TerminalViewModel(
             terminalService.sendInput(session.sessionId, input)
 
             // Execute via active Tri-Mode Runner and pipe outputs back to session
-            runnerManager?.let { manager ->
-                val result = manager.runCommand(input, session.workingDirectory)
-                result.onSuccess { exec ->
-                    exec.outputs.forEach { out ->
+            if (runnerManager != null) {
+                val result = runnerManager.runCommand(input, session.workingDirectory)
+                if (result is VibeResult.Success) {
+                    for (out in result.data.outputs) {
                         terminalService.sendInput(session.sessionId, out.line)
                     }
                 }
