@@ -31,11 +31,13 @@ class DefaultWorkspaceManager(
     private val directoryChildren = mutableMapOf<String, MutableList<VirtualFile>>()
 
     override suspend fun openProject(project: Project): VibeResult<Project> = withContext(dispatchers.io) {
-        _currentProject.value = project
-        recentProjectsRepository?.addRecentProject(project)
+        val normalizedRoot = normalizeUri(project.rootUri)
+        val normalizedProject = project.copy(rootUri = normalizedRoot)
+        _currentProject.value = normalizedProject
+        recentProjectsRepository?.addRecentProject(normalizedProject)
 
         // Seed basic project structure if empty
-        val rootUri = project.rootUri
+        val rootUri = normalizedRoot
         if (!directoryChildren.containsKey(rootUri)) {
             val rootChildren = mutableListOf<VirtualFile>()
             val srcDirUri = "$rootUri/src"
@@ -116,19 +118,27 @@ class DefaultWorkspaceManager(
         VibeResult.Success(Unit)
     }
 
+    private fun normalizeUri(uri: String): String {
+        if (uri == "/" || uri == "file:///") return uri
+        return uri.trimEnd('/')
+    }
+
     private fun toPhysicalFile(uri: String): java.io.File? {
-        val path = when {
-            uri.startsWith("file://") -> {
-                try {
-                    val u = java.net.URI(uri)
-                    java.io.File(u).absolutePath
-                } catch (_: Exception) {
-                    val raw = uri.removePrefix("file://")
-                    if (raw.startsWith("/") && raw.length >= 3 && raw[2] == ':') {
-                        raw.substring(1)
-                    } else raw
+        if (uri.startsWith("file:")) {
+            return try {
+                val u = java.net.URI.create(uri)
+                java.io.File(u)
+            } catch (_: Exception) {
+                val raw = uri.replaceFirst(Regex("^file:/+"), "/")
+                val p = if (raw.length >= 3 && raw[2] == ':') {
+                    raw.substring(1)
+                } else {
+                    raw
                 }
+                java.io.File(p)
             }
+        }
+        val path = when {
             uri.startsWith("/") -> uri
             uri.length >= 3 && uri[1] == ':' && (uri[2] == '/' || uri[2] == '\\') -> uri
             else -> null
@@ -138,25 +148,26 @@ class DefaultWorkspaceManager(
 
     override suspend fun listFiles(parentDirectoryUri: String): VibeResult<List<VirtualFile>> =
         withContext(dispatchers.io) {
-            val inMemory = directoryChildren[parentDirectoryUri]
+            val normParent = normalizeUri(parentDirectoryUri)
+            val inMemory = directoryChildren[normParent]
             if (inMemory != null && inMemory.isNotEmpty()) {
                 return@withContext VibeResult.Success(inMemory.sortedWith(compareBy({ it.isFile }, { it.name })))
             }
-            val diskDir = toPhysicalFile(parentDirectoryUri)
+            val diskDir = toPhysicalFile(normParent)
             if (diskDir != null && diskDir.exists() && diskDir.isDirectory) {
                 val list = diskDir.listFiles() ?: emptyArray()
                 val result = list.filter { !ignoredDirectories.contains(it.name) }.map { f ->
                     VirtualFile(
-                        uri = f.toURI().toString(),
+                        uri = f.toURI().toString().trimEnd('/'),
                         name = f.name,
                         nodeType = if (f.isDirectory) FileNodeType.DIRECTORY else FileNodeType.FILE,
-                        parentUri = parentDirectoryUri,
+                        parentUri = normParent,
                         sizeBytes = if (f.isFile) f.length() else 0L,
                         lastModifiedTimestamp = f.lastModified(),
                         path = f.absolutePath
                     )
                 }.toMutableList()
-                directoryChildren[parentDirectoryUri] = result
+                directoryChildren[normParent] = result
                 return@withContext VibeResult.Success(result.sortedWith(compareBy({ it.isFile }, { it.name })))
             }
             val fallback = inMemory ?: emptyList()
@@ -169,10 +180,11 @@ class DefaultWorkspaceManager(
 
     override suspend fun getAllProjectFiles(rootUri: String?): VibeResult<List<VirtualFile>> =
         withContext(dispatchers.io) {
-            val targetRoot = rootUri ?: _currentProject.value?.rootUri
-            if (targetRoot == null) {
+            val rawRoot = rootUri ?: _currentProject.value?.rootUri
+            if (rawRoot == null) {
                 return@withContext VibeResult.Success(emptyList())
             }
+            val targetRoot = normalizeUri(rawRoot)
 
             val resultList = mutableListOf<VirtualFile>()
             val queue = ArrayDeque<String>()
@@ -291,8 +303,9 @@ class DefaultWorkspaceManager(
         fileName: String,
         initialContent: String
     ): VibeResult<VirtualFile> = withContext(dispatchers.io) {
-        val fileUri = "$parentDirectoryUri/$fileName"
-        val diskParent = toPhysicalFile(parentDirectoryUri)
+        val normParent = normalizeUri(parentDirectoryUri)
+        val fileUri = "$normParent/$fileName"
+        val diskParent = toPhysicalFile(normParent)
         val diskFile = if (diskParent != null) java.io.File(diskParent, fileName) else null
         if (diskFile != null) {
             try {
@@ -309,12 +322,12 @@ class DefaultWorkspaceManager(
             uri = fileUri,
             name = fileName,
             nodeType = FileNodeType.FILE,
-            parentUri = parentDirectoryUri,
+            parentUri = normParent,
             sizeBytes = initialContent.toByteArray().size.toLong(),
             path = diskFile?.absolutePath
         )
 
-        val children = directoryChildren.getOrPut(parentDirectoryUri) { mutableListOf() }
+        val children = directoryChildren.getOrPut(normParent) { mutableListOf() }
         if (children.any { it.name == fileName }) {
             return@withContext VibeResult.Error("A file with name '$fileName' already exists.")
         }
@@ -327,8 +340,9 @@ class DefaultWorkspaceManager(
         parentDirectoryUri: String,
         directoryName: String
     ): VibeResult<VirtualFile> = withContext(dispatchers.io) {
-        val dirUri = "$parentDirectoryUri/$directoryName"
-        val diskParent = toPhysicalFile(parentDirectoryUri)
+        val normParent = normalizeUri(parentDirectoryUri)
+        val dirUri = "$normParent/$directoryName"
+        val diskParent = toPhysicalFile(normParent)
         val diskDir = if (diskParent != null) java.io.File(diskParent, directoryName) else null
         if (diskDir != null) {
             try {
@@ -344,11 +358,11 @@ class DefaultWorkspaceManager(
             uri = dirUri,
             name = directoryName,
             nodeType = FileNodeType.DIRECTORY,
-            parentUri = parentDirectoryUri,
+            parentUri = normParent,
             path = diskDir?.absolutePath
         )
 
-        val children = directoryChildren.getOrPut(parentDirectoryUri) { mutableListOf() }
+        val children = directoryChildren.getOrPut(normParent) { mutableListOf() }
         if (children.any { it.name == directoryName }) {
             return@withContext VibeResult.Error("A directory with name '$directoryName' already exists.")
         }
@@ -358,10 +372,13 @@ class DefaultWorkspaceManager(
     }
 
     override suspend fun delete(targetUri: String): VibeResult<Unit> = withContext(dispatchers.io) {
+        val normTarget = normalizeUri(targetUri)
+        fileContents.remove(normTarget)
         fileContents.remove(targetUri)
+        directoryChildren.remove(normTarget)
         directoryChildren.remove(targetUri)
 
-        val diskTarget = toPhysicalFile(targetUri)
+        val diskTarget = toPhysicalFile(normTarget)
         if (diskTarget != null && diskTarget.exists()) {
             try {
                 diskTarget.deleteRecursively()
@@ -372,7 +389,7 @@ class DefaultWorkspaceManager(
 
         // Remove from parent
         directoryChildren.values.forEach { children ->
-            children.removeAll { it.uri == targetUri }
+            children.removeAll { it.uri == normTarget || it.uri == targetUri }
         }
         VibeResult.Success(Unit)
     }
@@ -381,8 +398,9 @@ class DefaultWorkspaceManager(
         withContext(dispatchers.io) {
             var foundFile: VirtualFile? = null
             var parentDir: String? = null
+            val normTarget = normalizeUri(targetUri)
 
-            val diskTarget = toPhysicalFile(targetUri)
+            val diskTarget = toPhysicalFile(normTarget)
             val diskDest = if (diskTarget != null && diskTarget.parentFile != null) {
                 java.io.File(diskTarget.parentFile, newName)
             } else null
@@ -393,20 +411,21 @@ class DefaultWorkspaceManager(
             }
 
             for ((pUri, children) in directoryChildren) {
-                val index = children.indexOfFirst { it.uri == targetUri }
+                val index = children.indexOfFirst { it.uri == normTarget || it.uri == targetUri }
                 if (index != -1) {
                     val old = children[index]
-                    val newUri = "${old.parentUri}/$newName"
+                    val normParent = normalizeUri(old.parentUri)
+                    val newUri = "$normParent/$newName"
                     val updated = old.copy(uri = newUri, name = newName, path = diskDest?.absolutePath ?: old.path)
                     children[index] = updated
                     foundFile = updated
                     parentDir = pUri
 
                     if (old.isFile) {
-                        val content = fileContents.remove(targetUri) ?: ""
+                        val content = fileContents.remove(targetUri) ?: fileContents.remove(normTarget) ?: ""
                         fileContents[newUri] = content
                     } else {
-                        val childList = directoryChildren.remove(targetUri) ?: mutableListOf()
+                        val childList = directoryChildren.remove(targetUri) ?: directoryChildren.remove(normTarget) ?: mutableListOf()
                         directoryChildren[newUri] = childList
                     }
                     break
