@@ -118,7 +118,8 @@ class DefaultWorkspaceManager(
         VibeResult.Success(Unit)
     }
 
-    private fun normalizeUri(uri: String): String {
+    private fun normalizeUri(uri: String?): String {
+        if (uri.isNullOrEmpty()) return ""
         if (uri == "/" || uri == "file:///") return uri
         return uri.trimEnd('/')
     }
@@ -415,7 +416,7 @@ class DefaultWorkspaceManager(
                 if (index != -1) {
                     val old = children[index]
                     val normParent = normalizeUri(old.parentUri)
-                    val newUri = "$normParent/$newName"
+                    val newUri = if (normParent.isNotEmpty()) "$normParent/$newName" else newName
                     val updated = old.copy(uri = newUri, name = newName, path = diskDest?.absolutePath ?: old.path)
                     children[index] = updated
                     foundFile = updated
