@@ -232,7 +232,7 @@ class EditorViewModel(
         val activeDoc = _uiState.value.activeDocument ?: return
         val client = activeLspClient
         if (client == null || !client.isRunning) {
-            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.name}") }
+            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.displayName}") }
             return
         }
         val targetLine = line ?: _uiState.value.cursorPosition.line
@@ -263,7 +263,7 @@ class EditorViewModel(
         val activeDoc = _uiState.value.activeDocument ?: return
         val client = activeLspClient
         if (client == null || !client.isRunning) {
-            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.name}") }
+            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.displayName}") }
             return
         }
         val targetLine = line ?: _uiState.value.cursorPosition.line
@@ -297,7 +297,7 @@ class EditorViewModel(
         val activeDoc = _uiState.value.activeDocument ?: return
         val client = activeLspClient
         if (client == null || !client.isRunning) {
-            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.name}") }
+            _uiState.update { it.copy(statusMessage = "Language server unavailable for ${activeDoc.language.displayName}") }
             return
         }
         viewModelScope.launch(dispatchers.default) {
