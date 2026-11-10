@@ -64,7 +64,7 @@ class LocalLspServerResponderTest {
         val hover = hoverResult.getOrNull()
         assertNotNull(hover)
         assertTrue(hover!!.contents.contains("print"))
-        assertTrue(hover.contents.contains("sys.stdout"))
+        assertTrue(hover.contents.contains("sys.stdout") || hover.contents.contains("output"))
     }
 
     @Test

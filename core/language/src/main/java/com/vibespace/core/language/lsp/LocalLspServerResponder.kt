@@ -275,7 +275,7 @@ class LocalLspServerResponder(
         val label = "*(Local Heuristic Analyzer)*\n\n"
         val body = when (languageId.lowercase()) {
             "python" -> when (word) {
-                "print" -> "```python\nprint(*values: object, sep: str = \" \", end: str = \"\\n\", file=None, flush=False) -> None\n```\nPrints values to standard output."
+                "print" -> "```python\nprint(*values: object, sep: str = \" \", end: str = \"\\n\", file=sys.stdout, flush=False) -> None\n```\nPrints values to standard output, sys.stdout by default."
                 "len" -> "```python\nlen(obj, /) -> int\n```\nReturn the number of items in a container."
                 "range" -> "```python\nrange(stop) -> range object\nrange(start, stop[, step]) -> range object\n```\nReturn an object producing an integer sequence."
                 "open" -> "```python\nopen(file, mode=\"r\", buffering=-1, encoding=None) -> file object\n```\nOpen file and return a stream."
