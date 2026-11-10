@@ -11,12 +11,14 @@ class NavigationTest {
         val routes = listOf(
             VibeDestination.Home.route,
             VibeDestination.Editor.route,
-            VibeDestination.Settings.route
+            VibeDestination.Settings.route,
+            VibeDestination.Extensions.route
         )
 
-        assertEquals(3, routes.distinct().size)
+        assertEquals(4, routes.distinct().size)
         assertEquals("home", VibeDestination.Home.route)
         assertEquals("editor", VibeDestination.Editor.route)
         assertEquals("settings", VibeDestination.Settings.route)
+        assertEquals("extensions", VibeDestination.Extensions.route)
     }
 }

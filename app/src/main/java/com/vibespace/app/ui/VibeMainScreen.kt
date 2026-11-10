@@ -77,8 +77,10 @@ import com.vibespace.feature.terminal.TerminalPanel
 import com.vibespace.feature.terminal.TerminalViewModel
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -128,38 +130,50 @@ fun VibeMainScreen(
     val rootModifier = modifier
         .fillMaxSize()
         .onKeyEvent { keyEvent ->
-            if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.isCtrlPressed || keyEvent.isMetaPressed)) {
-                when (keyEvent.key) {
-                    Key.P -> {
-                        isCommandPaletteVisible = true
-                        true
-                    }
-                    Key.S -> {
-                        editorViewModel.saveActiveDocument()
-                        true
-                    }
-                    Key.F -> {
-                        isSearchVisible = !isSearchVisible
-                        true
-                    }
-                    Key.Enter -> {
-                        val active = editorViewModel.uiState.value.activeDocument
-                        if (active != null) {
-                            if (active.isDirty) editorViewModel.saveActiveDocument()
-                            terminalViewModel.runActiveDocument(active.fileName, active.language.id)
-                            isTerminalVisible = true
+            if (keyEvent.type == KeyEventType.KeyDown) {
+                if (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) {
+                    when (keyEvent.key) {
+                        Key.P -> {
+                            isCommandPaletteVisible = true
+                            true
                         }
-                        true
-                    }
-                    Key.W -> {
-                        val active = editorViewModel.uiState.value.activeDocument
-                        if (active != null) {
-                            editorViewModel.closeTab(active.documentId)
+                        Key.S -> {
+                            editorViewModel.saveActiveDocument()
+                            gitViewModel?.refreshStatus()
+                            true
                         }
-                        true
+                        Key.F -> {
+                            isSearchVisible = !isSearchVisible
+                            true
+                        }
+                        Key.Enter -> {
+                            val active = editorViewModel.uiState.value.activeDocument
+                            if (active != null) {
+                                if (active.isDirty) {
+                                    editorViewModel.saveActiveDocument()
+                                    gitViewModel?.refreshStatus()
+                                }
+                                terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                                isTerminalVisible = true
+                            }
+                            true
+                        }
+                        Key.W -> {
+                            val active = editorViewModel.uiState.value.activeDocument
+                            if (active != null) {
+                                editorViewModel.closeTab(active.documentId)
+                            }
+                            true
+                        }
+                        else -> false
                     }
-                    else -> false
-                }
+                } else if (keyEvent.isShiftPressed && keyEvent.isAltPressed && keyEvent.key == Key.F) {
+                    editorViewModel.formatDocument()
+                    true
+                } else if (keyEvent.key == Key.F12) {
+                    editorViewModel.requestDefinition(onNavigateToFile = { editorViewModel.openFile(it) })
+                    true
+                } else false
             } else false
         }
 
@@ -323,6 +337,7 @@ fun VibeMainScreen(
                                     if (active != null) {
                                         if (active.isDirty) {
                                             editorViewModel.saveActiveDocument()
+                                            gitViewModel?.refreshStatus()
                                         }
                                         terminalViewModel.runActiveDocument(
                                             fileName = active.fileName,
@@ -354,6 +369,7 @@ fun VibeMainScreen(
                                 if (active != null) {
                                     if (active.isDirty) {
                                         editorViewModel.saveActiveDocument()
+                                        gitViewModel?.refreshStatus()
                                     }
                                     terminalViewModel.runActiveDocument(
                                         fileName = active.fileName,
@@ -545,6 +561,7 @@ fun VibeMainScreen(
                             if (active != null) {
                                 if (active.isDirty) {
                                     editorViewModel.saveActiveDocument()
+                                    gitViewModel?.refreshStatus()
                                 }
                                 terminalViewModel.runActiveDocument(
                                     fileName = active.fileName,
@@ -607,7 +624,10 @@ fun VibeMainScreen(
             onRunScript = {
                 val active = editorViewModel.uiState.value.activeDocument
                 if (active != null) {
-                    if (active.isDirty) editorViewModel.saveActiveDocument()
+                    if (active.isDirty) {
+                        editorViewModel.saveActiveDocument()
+                        gitViewModel?.refreshStatus()
+                    }
                     terminalViewModel.runActiveDocument(active.fileName, active.language.id)
                     isTerminalVisible = true
                 }
@@ -615,6 +635,19 @@ fun VibeMainScreen(
             },
             onSaveFile = {
                 editorViewModel.saveActiveDocument()
+                gitViewModel?.refreshStatus()
+                isCommandPaletteVisible = false
+            },
+            onFormatDocument = {
+                editorViewModel.formatDocument()
+                isCommandPaletteVisible = false
+            },
+            onShowHover = {
+                editorViewModel.requestHover()
+                isCommandPaletteVisible = false
+            },
+            onGoToDefinition = {
+                editorViewModel.requestDefinition(onNavigateToFile = { editorViewModel.openFile(it) })
                 isCommandPaletteVisible = false
             },
             onOpenSearch = {

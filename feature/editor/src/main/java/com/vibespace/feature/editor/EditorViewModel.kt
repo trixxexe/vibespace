@@ -24,8 +24,12 @@ class EditorViewModel(
     private val editorEngine: EditorEngine,
     private val workspaceManager: WorkspaceManager,
     private val languageDetector: LanguageDetector,
+    private val lspClientProvider: ((String) -> com.vibespace.core.language.lsp.LanguageServerClient?)? = null,
+    private val gitManager: com.vibespace.core.workspace.git.GitManager? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : ViewModel() {
+
+    private var activeLspClient: com.vibespace.core.language.lsp.LanguageServerClient? = null
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -69,12 +73,23 @@ class EditorViewModel(
                     val mainPyUri = "${project.rootUri}/main.py"
                     val readResult = workspaceManager.readFile(mainPyUri)
                     if (readResult is com.vibespace.core.common.result.VibeResult.Success) {
+                        val language = languageDetector.detectByFileName("main.py")
                         editorEngine.openDocument(
                             uri = mainPyUri,
                             fileName = "main.py",
                             content = readResult.data,
-                            language = languageDetector.detectByFileName("main.py")
+                            language = language
                         )
+                        val client = lspClientProvider?.invoke(language.id)
+                        activeLspClient = client
+                        if (client != null) {
+                            if (!client.isRunning) {
+                                client.start(project.rootUri)
+                            }
+                            if (client.isRunning) {
+                                client.didOpen(mainPyUri, readResult.data)
+                            }
+                        }
                     }
                 }
             }
@@ -93,12 +108,32 @@ class EditorViewModel(
                 content = content,
                 language = language
             )
+            val client = lspClientProvider?.invoke(language.id)
+            activeLspClient = client
+            if (client != null) {
+                if (!client.isRunning) {
+                    val rootUri = workspaceManager.currentProject.value?.rootUri ?: file.parentUri ?: file.uri
+                    client.start(rootUri)
+                }
+                if (client.isRunning) {
+                    client.didOpen(file.uri, content)
+                }
+            }
         }
     }
 
     fun switchActiveTab(documentId: String) {
         viewModelScope.launch(dispatchers.default) {
             editorEngine.setActiveDocument(documentId)
+            val doc = editorEngine.documents.value.find { it.documentId == documentId }
+            if (doc != null) {
+                val client = lspClientProvider?.invoke(doc.language.id)
+                activeLspClient = client
+                if (client != null && !client.isRunning) {
+                    val rootUri = workspaceManager.currentProject.value?.rootUri ?: doc.uri
+                    client.start(rootUri)
+                }
+            }
         }
     }
 
@@ -115,6 +150,10 @@ class EditorViewModel(
             val diags = SyntaxDiagnosticsValidator.validate(newContent, activeDoc.language.id)
             val suggestions = AutocompleteEngine.getSuggestions(newContent, "", activeDoc.language.id)
             _uiState.update { it.copy(diagnostics = diags, completions = suggestions) }
+            val client = activeLspClient
+            if (client != null && client.isRunning) {
+                client.didChange(activeDoc.uri, newContent, activeDoc.version)
+            }
         }
     }
 
@@ -156,6 +195,7 @@ class EditorViewModel(
             when (val writeResult = workspaceManager.writeFile(activeDoc.uri, activeDoc.content)) {
                 is com.vibespace.core.common.result.VibeResult.Success -> {
                     editorEngine.markSaved(activeDoc.documentId)
+                    gitManager?.refreshStatus()
                     _uiState.update { it.copy(isSaving = false, statusMessage = "Saved ${activeDoc.fileName}") }
                 }
                 is com.vibespace.core.common.result.VibeResult.Error -> {
@@ -186,5 +226,63 @@ class EditorViewModel(
 
     fun setEditorTheme(themeId: String) {
         _uiState.update { it.copy(themeId = themeId) }
+    }
+
+    fun requestHover(line: Int? = null, column: Int? = null) {
+        val activeDoc = _uiState.value.activeDocument ?: return
+        val client = activeLspClient ?: return
+        val targetLine = line ?: _uiState.value.cursorPosition.line
+        val targetCol = column ?: _uiState.value.cursorPosition.column
+        viewModelScope.launch(dispatchers.default) {
+            val result = client.requestHover(activeDoc.uri, targetLine, targetCol)
+            if (result is com.vibespace.core.common.result.VibeResult.Success) {
+                _uiState.update { it.copy(hoverInfo = result.data) }
+            }
+        }
+    }
+
+    fun clearHover() {
+        _uiState.update { it.copy(hoverInfo = null) }
+    }
+
+    fun requestDefinition(
+        line: Int? = null,
+        column: Int? = null,
+        onLocations: (List<com.vibespace.core.language.model.DefinitionLocation>) -> Unit = {},
+        onNavigateToFile: ((VirtualFile) -> Unit)? = null
+    ) {
+        val activeDoc = _uiState.value.activeDocument ?: return
+        val client = activeLspClient ?: return
+        val targetLine = line ?: _uiState.value.cursorPosition.line
+        val targetCol = column ?: _uiState.value.cursorPosition.column
+        viewModelScope.launch(dispatchers.default) {
+            val result = client.requestDefinition(activeDoc.uri, targetLine, targetCol)
+            if (result is com.vibespace.core.common.result.VibeResult.Success) {
+                _uiState.update { it.copy(definitionLocations = result.data) }
+                onLocations(result.data)
+                val target = result.data.firstOrNull()
+                if (target != null && target.uri != activeDoc.uri && onNavigateToFile != null) {
+                    val targetName = target.uri.substringAfterLast('/')
+                    val targetFile = VirtualFile(
+                        uri = target.uri,
+                        name = targetName,
+                        nodeType = com.vibespace.core.workspace.model.FileNodeType.FILE,
+                        parentUri = target.uri.substringBeforeLast('/')
+                    )
+                    onNavigateToFile(targetFile)
+                }
+            }
+        }
+    }
+
+    fun formatDocument() {
+        val activeDoc = _uiState.value.activeDocument ?: return
+        val client = activeLspClient ?: return
+        viewModelScope.launch(dispatchers.default) {
+            val result = client.formatDocument(activeDoc.uri)
+            if (result is com.vibespace.core.common.result.VibeResult.Success && result.data.isNotEmpty()) {
+                onContentChanged(result.data)
+            }
+        }
     }
 }

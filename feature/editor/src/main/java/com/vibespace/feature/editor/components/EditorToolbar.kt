@@ -27,6 +27,7 @@ fun EditorToolbar(
     onAiAssistantClick: () -> Unit,
     onToggleTerminalClick: () -> Unit,
     isDocumentDirty: Boolean,
+    onFormatClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -71,6 +72,20 @@ fun EditorToolbar(
                 tint = VibeTheme.colors.textSecondary,
                 modifier = Modifier.size(18.dp)
             )
+        }
+
+        if (onFormatClick != null) {
+            IconButton(
+                onClick = onFormatClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = VibeIcons.Editor,
+                    contentDescription = "Format Document",
+                    tint = VibeTheme.colors.textSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
 
         IconButton(

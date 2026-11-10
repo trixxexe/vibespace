@@ -69,4 +69,53 @@ class DefaultWorkspaceManagerTest {
         assertTrue(allFiles.any { it.name == "main.py" })
         assertTrue(allFiles.any { it.name == "index.js" })
     }
+
+    @Test
+    fun disk_operations_create_read_write_delete_work_correctly() = runTest {
+        val tempDir = java.io.File.createTempFile("vibe_test_disk_", "").apply {
+            delete()
+            mkdirs()
+        }
+        try {
+            val rootUri = tempDir.toURI().toString()
+            val project = Project(id = "disk-proj", name = "DiskTest", rootUri = rootUri)
+            workspaceManager.openProject(project)
+
+            // Create file on disk
+            val createResult = workspaceManager.createFile(rootUri, "disk_script.py", "print('on disk')")
+            assertTrue(createResult.isSuccess)
+            val physicalFile = java.io.File(tempDir, "disk_script.py")
+            assertTrue(physicalFile.exists())
+            assertEquals("print('on disk')", physicalFile.readText())
+
+            // Write updated content
+            val writeResult = workspaceManager.writeFile(createResult.getOrNull()!!.uri, "print('updated on disk')")
+            assertTrue(writeResult.isSuccess)
+            assertEquals("print('updated on disk')", physicalFile.readText())
+
+            // Read via manager
+            val readResult = workspaceManager.readFile(createResult.getOrNull()!!.uri)
+            assertTrue(readResult.isSuccess)
+            assertEquals("print('updated on disk')", readResult.getOrNull())
+
+            // Rename file
+            val renameResult = workspaceManager.rename(createResult.getOrNull()!!.uri, "disk_renamed.py")
+            assertTrue(renameResult.isSuccess)
+            val renamedPhysical = java.io.File(tempDir, "disk_renamed.py")
+            assertTrue(renamedPhysical.exists())
+            assertTrue(!physicalFile.exists())
+
+            // List files from disk
+            val listResult = workspaceManager.listFiles(rootUri)
+            assertTrue(listResult.isSuccess)
+            assertTrue(listResult.getOrNull()!!.any { it.name == "disk_renamed.py" })
+
+            // Delete file
+            val deleteResult = workspaceManager.delete(renameResult.getOrNull()!!.uri)
+            assertTrue(deleteResult.isSuccess)
+            assertTrue(!renamedPhysical.exists())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

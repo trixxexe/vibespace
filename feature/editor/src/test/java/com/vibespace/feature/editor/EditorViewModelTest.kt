@@ -128,4 +128,108 @@ class EditorViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.diagnostics.isNotEmpty())
     }
+
+    @Test
+    fun lsp_client_requestHover_and_requestDefinition_work() = runTest {
+        val root = "vibe://projects/test-lsp"
+        workspaceManager.createFile(root, "main.py", "def add(x, y): return x + y\n")
+
+        val fakeLsp = object : com.vibespace.core.language.lsp.LanguageServerClient {
+            override val languageId: String = "python"
+            override val isRunning: Boolean = true
+            override suspend fun start(workspaceRootUri: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun stop() = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun didOpen(documentUri: String, text: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun didChange(documentUri: String, newText: String, version: Int) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun didClose(documentUri: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override fun observeDiagnostics(documentUri: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.vibespace.core.language.model.Diagnostic>())
+            override suspend fun requestHover(documentUri: String, line: Int, column: Int) =
+                com.vibespace.core.common.result.VibeResult.Success(com.vibespace.core.language.model.HoverInfo("Adds two numbers"))
+            override suspend fun requestCompletion(documentUri: String, line: Int, column: Int) =
+                com.vibespace.core.common.result.VibeResult.Success(emptyList<com.vibespace.core.language.model.CompletionItem>())
+            override suspend fun requestDefinition(documentUri: String, line: Int, column: Int) =
+                com.vibespace.core.common.result.VibeResult.Success(listOf(com.vibespace.core.language.model.DefinitionLocation(documentUri, 1, 5)))
+            override suspend fun formatDocument(documentUri: String) =
+                com.vibespace.core.common.result.VibeResult.Success("def add(x, y):\n    return x + y\n")
+        }
+
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            lspClientProvider = { fakeLsp },
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val file = VirtualFile(
+            uri = "$root/main.py",
+            name = "main.py",
+            nodeType = FileNodeType.FILE,
+            parentUri = root
+        )
+
+        viewModel.openFile(file)
+        viewModel.requestHover(1, 5)
+
+        assertEquals("Adds two numbers", viewModel.uiState.value.hoverInfo?.contents)
+
+        viewModel.requestDefinition(1, 5)
+        assertEquals(1, viewModel.uiState.value.definitionLocations.size)
+        assertEquals(5, viewModel.uiState.value.definitionLocations[0].column)
+
+        viewModel.formatDocument()
+        assertEquals("def add(x, y):\n    return x + y\n", viewModel.uiState.value.activeDocument?.content)
+
+        viewModel.clearHover()
+        assertEquals(null, viewModel.uiState.value.hoverInfo)
+    }
+
+    @Test
+    fun saveActiveDocument_triggers_gitManager_refreshStatus() = runTest {
+        val root = "vibe://projects/test-save-git"
+        val project = com.vibespace.core.workspace.model.Project("proj-git", "GitApp", root)
+        workspaceManager.openProject(project)
+
+        var refreshStatusCalled = false
+        val fakeGit = object : com.vibespace.core.workspace.git.GitManager {
+            override val status = kotlinx.coroutines.flow.MutableStateFlow(com.vibespace.core.workspace.git.GitWorkspaceStatus())
+            override suspend fun refreshStatus(): com.vibespace.core.common.result.VibeResult<com.vibespace.core.workspace.git.GitWorkspaceStatus> {
+                refreshStatusCalled = true
+                return com.vibespace.core.common.result.VibeResult.Success(status.value)
+            }
+            override suspend fun stageFile(path: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun unstageFile(path: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun stageAll() = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun unstageAll() = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun discardChanges(path: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun commit(message: String) = com.vibespace.core.common.result.VibeResult.Error("stub")
+            override suspend fun checkoutBranch(branchName: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun createBranch(branchName: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun getFileDiff(path: String) = com.vibespace.core.common.result.VibeResult.Error("stub")
+            override suspend fun push() = com.vibespace.core.common.result.VibeResult.Success("Pushed")
+            override suspend fun pull() = com.vibespace.core.common.result.VibeResult.Success("Pulled")
+        }
+
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            gitManager = fakeGit,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val file = VirtualFile(
+            uri = "$root/main.py",
+            name = "main.py",
+            nodeType = FileNodeType.FILE,
+            parentUri = root
+        )
+
+        viewModel.openFile(file)
+        viewModel.onContentChanged("print('changed for git')")
+        viewModel.saveActiveDocument()
+
+        assertTrue(refreshStatusCalled)
+        assertEquals("Saved main.py", viewModel.uiState.value.statusMessage)
+    }
 }

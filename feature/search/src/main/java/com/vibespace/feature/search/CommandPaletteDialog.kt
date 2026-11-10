@@ -67,11 +67,14 @@ fun CommandPaletteDialog(
     onOpenAi: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
+    onFormatDocument: (() -> Unit)? = null,
+    onShowHover: (() -> Unit)? = null,
+    onGoToDefinition: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
 
-    val allActions = listOf(
+    val allActions = listOfNotNull(
         CommandAction(
             title = "Run Active File",
             subtitle = "Execute current file via Tri-Mode Runner",
@@ -86,6 +89,33 @@ fun CommandPaletteDialog(
             shortcut = "Ctrl+S",
             action = onSaveFile
         ),
+        onFormatDocument?.let {
+            CommandAction(
+                title = "Format Document",
+                subtitle = "Format active file via Language Server (LSP)",
+                icon = Icons.Default.Code,
+                shortcut = "Shift+Alt+F",
+                action = it
+            )
+        },
+        onShowHover?.let {
+            CommandAction(
+                title = "Show Documentation",
+                subtitle = "Semantic hover docs for symbol at cursor",
+                icon = Icons.Default.Description,
+                shortcut = "Ctrl+K Ctrl+I",
+                action = it
+            )
+        },
+        onGoToDefinition?.let {
+            CommandAction(
+                title = "Go to Definition",
+                subtitle = "Jump to declaration/definition of symbol",
+                icon = Icons.Default.PlayArrow,
+                shortcut = "F12",
+                action = it
+            )
+        },
         CommandAction(
             title = "Find in Document",
             subtitle = "Search and replace text",
@@ -114,7 +144,12 @@ fun CommandPaletteDialog(
         if (cleanQuery.isEmpty()) {
             files.filter { !it.isDirectory }
         } else {
-            files.filter { !it.isDirectory && it.name.lowercase().contains(cleanQuery) }
+            files.filter { !it.isDirectory && (it.name.lowercase().contains(cleanQuery) || (it.path ?: it.uri).lowercase().contains(cleanQuery)) }
+                .sortedWith(compareBy(
+                    { !it.name.lowercase().startsWith(cleanQuery) },
+                    { !it.name.lowercase().contains(cleanQuery) },
+                    { it.name.length }
+                ))
         }
     }
 
@@ -204,15 +239,27 @@ fun CommandPaletteDialog(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = file.name,
-                                        style = VibeCodeTypography.copy(
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = VibeTheme.colors.textPrimary
-                                        ),
-                                        modifier = Modifier.weight(1f)
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = file.name,
+                                            style = VibeCodeTypography.copy(
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = VibeTheme.colors.textPrimary
+                                            )
+                                        )
+                                        val displayPath = (file.path ?: file.parentUri ?: file.uri)
+                                            .removePrefix("vibe://projects/")
+                                            .removePrefix("file://")
+                                        if (displayPath.isNotEmpty() && displayPath != file.name) {
+                                            Text(
+                                                text = displayPath,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = VibeTheme.colors.textMuted,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

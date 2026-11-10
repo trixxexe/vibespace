@@ -14,5 +14,7 @@ data class EditorUiState(
     val isSaving: Boolean = false,
     val statusMessage: String? = null,
     val diagnostics: List<Diagnostic> = emptyList(),
-    val completions: List<CompletionItem> = emptyList()
+    val completions: List<CompletionItem> = emptyList(),
+    val hoverInfo: com.vibespace.core.language.model.HoverInfo? = null,
+    val definitionLocations: List<com.vibespace.core.language.model.DefinitionLocation> = emptyList()
 )

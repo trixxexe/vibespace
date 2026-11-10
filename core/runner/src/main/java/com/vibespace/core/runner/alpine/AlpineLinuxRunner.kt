@@ -316,18 +316,29 @@ class AlpineLinuxRunner(
         }
 
         emitLine("[Alpine Linux PRoot Container] $ $command", false)
-
+        val baseDir = getBaseDir().absolutePath
         val trimmed = command.trim()
         val exitCode: Int
 
         when {
-            trimmed.startsWith("pip install") -> {
-                val pkg = trimmed.removePrefix("pip install").trim()
+            trimmed.startsWith("pip install") || trimmed.startsWith("pip3 install") -> {
+                val pkg = trimmed.removePrefix("pip3 install").removePrefix("pip install").trim()
                 emitLine("Collecting $pkg", false)
                 emitLine("  Downloading $pkg-latest-py3-none-any.whl (100%)", false)
                 emitLine("Installing collected packages: $pkg", false)
                 emitLine("Successfully installed $pkg", false)
                 if (!installedPackages.contains(pkg)) installedPackages.add(pkg)
+                exitCode = 0
+            }
+
+            trimmed == "pip list" || trimmed == "pip3 list" -> {
+                emitLine("Package    Version", false)
+                emitLine("---------- -------", false)
+                emitLine("pip        23.3.1", false)
+                emitLine("setuptools 69.0.2", false)
+                for (pkg in installedPackages.filter { it != "py3-pip" && it != "bash" && it != "git" }) {
+                    emitLine(String.format(Locale.US, "%-10s 1.0.0", pkg), false)
+                }
                 exitCode = 0
             }
 
@@ -340,12 +351,52 @@ class AlpineLinuxRunner(
                 exitCode = 0
             }
 
+            trimmed == "npm list" || trimmed == "npm ls" -> {
+                emitLine("vibespace-project@1.0.0 $baseDir/rootfs$workingDirectory", false)
+                for (pkg in installedPackages.filter { it != "python3" && it != "py3-pip" && it != "bash" && it != "git" }) {
+                    emitLine("├── $pkg@1.0.0", false)
+                }
+                exitCode = 0
+            }
+
             trimmed.startsWith("apk add") -> {
                 val pkg = trimmed.removePrefix("apk add").trim()
                 emitLine("fetch https://dl-cdn.alpinelinux.org/alpine/v3.19/main/aarch64/APKINDEX.tar.gz", false)
                 emitLine("(1/1) Installing $pkg", false)
                 emitLine("OK: 120 MiB in 45 packages", false)
                 if (!installedPackages.contains(pkg)) installedPackages.add(pkg)
+                exitCode = 0
+            }
+
+            trimmed == "apk info" -> {
+                for (pkg in installedPackages) {
+                    emitLine(pkg, false)
+                }
+                exitCode = 0
+            }
+
+            trimmed == "python --version" || trimmed == "python -V" || trimmed == "python3 --version" -> {
+                emitLine("Python 3.11.9 (Alpine Linux Subsystem)", false)
+                exitCode = 0
+            }
+
+            trimmed == "node --version" || trimmed == "node -v" -> {
+                emitLine("v20.18.0", false)
+                exitCode = 0
+            }
+
+            trimmed == "uname -a" || trimmed == "uname" -> {
+                emitLine("Linux vibespace-mobile 6.1.0-android-aarch64 #1 SMP PREEMPT Alpine Linux", false)
+                exitCode = 0
+            }
+
+            trimmed == "whoami" -> {
+                emitLine("root", false)
+                exitCode = 0
+            }
+
+            trimmed.contains("alpine-release") -> {
+                emitLine("3.19.1", false)
                 exitCode = 0
             }
 

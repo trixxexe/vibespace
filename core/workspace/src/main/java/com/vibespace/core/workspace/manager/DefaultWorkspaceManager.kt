@@ -116,10 +116,51 @@ class DefaultWorkspaceManager(
         VibeResult.Success(Unit)
     }
 
+    private fun toPhysicalFile(uri: String): java.io.File? {
+        val path = when {
+            uri.startsWith("file://") -> {
+                try {
+                    val u = java.net.URI(uri)
+                    java.io.File(u).absolutePath
+                } catch (_: Exception) {
+                    val raw = uri.removePrefix("file://")
+                    if (raw.startsWith("/") && raw.length >= 3 && raw[2] == ':') {
+                        raw.substring(1)
+                    } else raw
+                }
+            }
+            uri.startsWith("/") -> uri
+            uri.length >= 3 && uri[1] == ':' && (uri[2] == '/' || uri[2] == '\\') -> uri
+            else -> null
+        } ?: return null
+        return java.io.File(path)
+    }
+
     override suspend fun listFiles(parentDirectoryUri: String): VibeResult<List<VirtualFile>> =
         withContext(dispatchers.io) {
-            val children = directoryChildren[parentDirectoryUri] ?: emptyList()
-            VibeResult.Success(children.sortedWith(compareBy({ it.isFile }, { it.name })))
+            val inMemory = directoryChildren[parentDirectoryUri]
+            if (inMemory != null && inMemory.isNotEmpty()) {
+                return@withContext VibeResult.Success(inMemory.sortedWith(compareBy({ it.isFile }, { it.name })))
+            }
+            val diskDir = toPhysicalFile(parentDirectoryUri)
+            if (diskDir != null && diskDir.exists() && diskDir.isDirectory) {
+                val list = diskDir.listFiles() ?: emptyArray()
+                val result = list.filter { !ignoredDirectories.contains(it.name) }.map { f ->
+                    VirtualFile(
+                        uri = f.toURI().toString(),
+                        name = f.name,
+                        nodeType = if (f.isDirectory) FileNodeType.DIRECTORY else FileNodeType.FILE,
+                        parentUri = parentDirectoryUri,
+                        sizeBytes = if (f.isFile) f.length() else 0L,
+                        lastModifiedTimestamp = f.lastModified(),
+                        path = f.absolutePath
+                    )
+                }.toMutableList()
+                directoryChildren[parentDirectoryUri] = result
+                return@withContext VibeResult.Success(result.sortedWith(compareBy({ it.isFile }, { it.name })))
+            }
+            val fallback = inMemory ?: emptyList()
+            VibeResult.Success(fallback.sortedWith(compareBy({ it.isFile }, { it.name })))
         }
 
     private val ignoredDirectories = setOf(
@@ -153,17 +194,8 @@ class DefaultWorkspaceManager(
             }
 
             // Also check if target is a physical directory on disk
-            val physicalPath = if (targetRoot.startsWith("file://")) {
-                targetRoot.removePrefix("file://")
-            } else if (targetRoot.startsWith("/")) {
-                targetRoot
-            } else {
-                null
-            }
-
-            if (physicalPath != null) {
-                val rootDir = java.io.File(physicalPath)
-                if (rootDir.exists() && rootDir.isDirectory) {
+            val rootDir = toPhysicalFile(targetRoot)
+            if (rootDir != null && rootDir.exists() && rootDir.isDirectory) {
                     val fileQueue = ArrayDeque<java.io.File>()
                     fileQueue.add(rootDir)
                     while (fileQueue.isNotEmpty()) {
@@ -200,7 +232,6 @@ class DefaultWorkspaceManager(
                         }
                     }
                 }
-            }
 
             VibeResult.Success(resultList.sortedWith(compareBy({ it.isFile }, { it.name })))
         }
@@ -208,15 +239,33 @@ class DefaultWorkspaceManager(
     override suspend fun readFile(fileUri: String): VibeResult<String> = withContext(dispatchers.io) {
         val content = fileContents[fileUri]
         if (content != null) {
-            VibeResult.Success(content)
-        } else {
-            VibeResult.Error("File not found: $fileUri")
+            return@withContext VibeResult.Success(content)
         }
+        val diskFile = toPhysicalFile(fileUri)
+        if (diskFile != null && diskFile.exists() && diskFile.isFile) {
+            try {
+                val text = diskFile.readText()
+                fileContents[fileUri] = text
+                return@withContext VibeResult.Success(text)
+            } catch (e: Exception) {
+                return@withContext VibeResult.Error("Failed to read file from disk: ${e.message}", e)
+            }
+        }
+        VibeResult.Error("File not found: $fileUri")
     }
 
     override suspend fun writeFile(fileUri: String, content: String): VibeResult<Unit> =
         withContext(dispatchers.io) {
             fileContents[fileUri] = content
+            val diskFile = toPhysicalFile(fileUri)
+            if (diskFile != null) {
+                try {
+                    diskFile.parentFile?.mkdirs()
+                    diskFile.writeText(content)
+                } catch (e: Exception) {
+                    return@withContext VibeResult.Error("Failed to write to disk: ${e.message}", e)
+                }
+            }
             val parentUri = fileUri.substringBeforeLast('/', "")
             if (parentUri.isNotEmpty()) {
                 val fileName = fileUri.substringAfterLast('/')
@@ -228,7 +277,8 @@ class DefaultWorkspaceManager(
                             name = fileName,
                             nodeType = FileNodeType.FILE,
                             parentUri = parentUri,
-                            sizeBytes = content.toByteArray().size.toLong()
+                            sizeBytes = content.toByteArray().size.toLong(),
+                            path = diskFile?.absolutePath
                         )
                     )
                 }
@@ -242,12 +292,26 @@ class DefaultWorkspaceManager(
         initialContent: String
     ): VibeResult<VirtualFile> = withContext(dispatchers.io) {
         val fileUri = "$parentDirectoryUri/$fileName"
+        val diskParent = toPhysicalFile(parentDirectoryUri)
+        val diskFile = if (diskParent != null) java.io.File(diskParent, fileName) else null
+        if (diskFile != null) {
+            try {
+                diskFile.parentFile?.mkdirs()
+                if (diskFile.exists()) {
+                    return@withContext VibeResult.Error("A file with name '$fileName' already exists.")
+                }
+                diskFile.writeText(initialContent)
+            } catch (e: Exception) {
+                return@withContext VibeResult.Error("Failed to create file on disk: ${e.message}", e)
+            }
+        }
         val newFile = VirtualFile(
             uri = fileUri,
             name = fileName,
             nodeType = FileNodeType.FILE,
             parentUri = parentDirectoryUri,
-            sizeBytes = initialContent.toByteArray().size.toLong()
+            sizeBytes = initialContent.toByteArray().size.toLong(),
+            path = diskFile?.absolutePath
         )
 
         val children = directoryChildren.getOrPut(parentDirectoryUri) { mutableListOf() }
@@ -264,11 +328,24 @@ class DefaultWorkspaceManager(
         directoryName: String
     ): VibeResult<VirtualFile> = withContext(dispatchers.io) {
         val dirUri = "$parentDirectoryUri/$directoryName"
+        val diskParent = toPhysicalFile(parentDirectoryUri)
+        val diskDir = if (diskParent != null) java.io.File(diskParent, directoryName) else null
+        if (diskDir != null) {
+            try {
+                if (diskDir.exists()) {
+                    return@withContext VibeResult.Error("A directory with name '$directoryName' already exists.")
+                }
+                diskDir.mkdirs()
+            } catch (e: Exception) {
+                return@withContext VibeResult.Error("Failed to create directory on disk: ${e.message}", e)
+            }
+        }
         val newDir = VirtualFile(
             uri = dirUri,
             name = directoryName,
             nodeType = FileNodeType.DIRECTORY,
-            parentUri = parentDirectoryUri
+            parentUri = parentDirectoryUri,
+            path = diskDir?.absolutePath
         )
 
         val children = directoryChildren.getOrPut(parentDirectoryUri) { mutableListOf() }
@@ -284,6 +361,15 @@ class DefaultWorkspaceManager(
         fileContents.remove(targetUri)
         directoryChildren.remove(targetUri)
 
+        val diskTarget = toPhysicalFile(targetUri)
+        if (diskTarget != null && diskTarget.exists()) {
+            try {
+                diskTarget.deleteRecursively()
+            } catch (e: Exception) {
+                return@withContext VibeResult.Error("Failed to delete from disk: ${e.message}", e)
+            }
+        }
+
         // Remove from parent
         directoryChildren.values.forEach { children ->
             children.removeAll { it.uri == targetUri }
@@ -296,12 +382,22 @@ class DefaultWorkspaceManager(
             var foundFile: VirtualFile? = null
             var parentDir: String? = null
 
+            val diskTarget = toPhysicalFile(targetUri)
+            val diskDest = if (diskTarget != null && diskTarget.parentFile != null) {
+                java.io.File(diskTarget.parentFile, newName)
+            } else null
+            if (diskTarget != null && diskTarget.exists() && diskDest != null) {
+                try {
+                    diskTarget.renameTo(diskDest)
+                } catch (_: Exception) {}
+            }
+
             for ((pUri, children) in directoryChildren) {
                 val index = children.indexOfFirst { it.uri == targetUri }
                 if (index != -1) {
                     val old = children[index]
                     val newUri = "${old.parentUri}/$newName"
-                    val updated = old.copy(uri = newUri, name = newName)
+                    val updated = old.copy(uri = newUri, name = newName, path = diskDest?.absolutePath ?: old.path)
                     children[index] = updated
                     foundFile = updated
                     parentDir = pUri

@@ -106,7 +106,10 @@ class ExplorerViewModel(
         val targetParent = parentUri ?: _uiState.value.currentProject?.rootUri ?: return
         viewModelScope.launch(dispatchers.io) {
             when (val result = workspaceManager.createFile(targetParent, fileName)) {
-                is com.vibespace.core.common.result.VibeResult.Success -> refreshFiles()
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    refreshFiles()
+                    gitManager?.refreshStatus()
+                }
                 is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
                 else -> Unit
             }
@@ -117,7 +120,10 @@ class ExplorerViewModel(
         val targetParent = parentUri ?: _uiState.value.currentProject?.rootUri ?: return
         viewModelScope.launch(dispatchers.io) {
             when (val result = workspaceManager.createDirectory(targetParent, folderName)) {
-                is com.vibespace.core.common.result.VibeResult.Success -> refreshFiles()
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    refreshFiles()
+                    gitManager?.refreshStatus()
+                }
                 is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
                 else -> Unit
             }
@@ -128,6 +134,7 @@ class ExplorerViewModel(
         viewModelScope.launch(dispatchers.io) {
             workspaceManager.delete(fileUri)
             refreshFiles()
+            gitManager?.refreshStatus()
         }
     }
 }

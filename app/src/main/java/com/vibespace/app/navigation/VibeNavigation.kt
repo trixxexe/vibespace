@@ -42,6 +42,8 @@ fun VibeNavigation(
             editorEngine = app.editorEngine,
             workspaceManager = app.workspaceManager,
             languageDetector = app.languageDetector,
+            lspClientProvider = { langId -> app.getLspClient(langId) },
+            gitManager = app.gitManager,
             dispatchers = app.dispatchers
         )
     }
@@ -134,7 +136,7 @@ fun VibeNavigation(
                     navController.navigate(VibeDestination.Settings.route)
                 },
                 onNavigateToExtensions = {
-                    navController.navigate("extensions")
+                    navController.navigate(VibeDestination.Extensions.route)
                 }
             )
         }
@@ -154,7 +156,7 @@ fun VibeNavigation(
                     navController.navigate(VibeDestination.Settings.route)
                 },
                 onNavigateToExtensions = {
-                    navController.navigate("extensions")
+                    navController.navigate(VibeDestination.Extensions.route)
                 }
             )
         }
@@ -168,7 +170,7 @@ fun VibeNavigation(
             )
         }
 
-        composable("extensions") {
+        composable(VibeDestination.Extensions.route) {
             com.vibespace.feature.settings.extensions.ExtensionsScreen(
                 viewModel = extensionsViewModel,
                 onNavigateBack = {

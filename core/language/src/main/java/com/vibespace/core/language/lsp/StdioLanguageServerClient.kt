@@ -295,13 +295,13 @@ class StdioLanguageServerClient(
 
         val diagnosticsList = mutableListOf<Diagnostic>()
 
-        val messageMatches = Regex(""""message"\s*:\s*"([^"]+)"""").findAll(rawJson).toList()
+        val messageMatches = Regex(""""message"\s*:\s*"((?:[^"\\]|\\.)*)"""").findAll(rawJson).toList()
         val severityMatches = Regex(""""severity"\s*:\s*(\d+)""").findAll(rawJson).toList()
         val lineMatches = Regex(""""line"\s*:\s*(\d+)""").findAll(rawJson).toList()
         val charMatches = Regex(""""character"\s*:\s*(\d+)""").findAll(rawJson).toList()
 
         for (i in messageMatches.indices) {
-            val message = messageMatches[i].groupValues[1]
+            val message = unescapeJson(messageMatches[i].groupValues[1])
             val severityInt = severityMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 1
             val severity = when (severityInt) {
                 1 -> DiagnosticSeverity.ERROR
@@ -330,11 +330,11 @@ class StdioLanguageServerClient(
     }
 
     private fun parseHoverResponse(json: String): HoverInfo? {
-        val valueMatch = Regex(""""value"\s*:\s*"([^"]+)"""").find(json)
+        val valueMatch = Regex(""""value"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
         if (valueMatch != null) {
             return HoverInfo(contents = unescapeJson(valueMatch.groupValues[1]))
         }
-        val contentsMatch = Regex(""""contents"\s*:\s*"([^"]+)"""").find(json)
+        val contentsMatch = Regex(""""contents"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
         if (contentsMatch != null) {
             return HoverInfo(contents = unescapeJson(contentsMatch.groupValues[1]))
         }
@@ -343,14 +343,19 @@ class StdioLanguageServerClient(
 
     private fun parseDefinitionResponse(json: String): List<DefinitionLocation> {
         val list = mutableListOf<DefinitionLocation>()
-        val uriMatches = Regex(""""(?:targetUri|uri)"\s*:\s*"([^"]+)"""").findAll(json).toList()
+        val uriMatches = Regex(""""(?:targetUri|uri)"\s*:\s*"((?:[^"\\]|\\.)*)"""").findAll(json).toList()
+        val lineMatch = Regex(""""line"\s*:\s*(\d+)""").find(json)
+        val charMatch = Regex(""""character"\s*:\s*(\d+)""").find(json)
+        val targetLine = lineMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val targetCol = charMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
         for (uriMatch in uriMatches) {
             val uri = uriMatch.groupValues[1]
             list.add(
                 DefinitionLocation(
                     uri = uri,
-                    line = 1,
-                    column = 1
+                    line = targetLine,
+                    column = targetCol
                 )
             )
         }
@@ -359,9 +364,9 @@ class StdioLanguageServerClient(
 
     private fun parseCompletionResponse(json: String): List<CompletionItem> {
         val items = mutableListOf<CompletionItem>()
-        val labelRegex = Regex(""""label"\s*:\s*"([^"]+)"""")
+        val labelRegex = Regex(""""label"\s*:\s*"((?:[^"\\]|\\.)*)"""")
         for (match in labelRegex.findAll(json)) {
-            val label = match.groupValues[1]
+            val label = unescapeJson(match.groupValues[1])
             items.add(
                 CompletionItem(
                     label = label,
@@ -374,8 +379,8 @@ class StdioLanguageServerClient(
     }
 
     private fun extractFormattedText(json: String): String {
-        val textMatch = Regex(""""newText"\s*:\s*"([^"]+)"""").find(json)
-        return textMatch?.groupValues?.get(1) ?: ""
+        val textMatch = Regex(""""newText"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
+        return textMatch?.groupValues?.get(1)?.let { unescapeJson(it) } ?: ""
     }
 
     private fun escapeJson(input: String): String {

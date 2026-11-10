@@ -79,6 +79,25 @@ class VibeSpaceApplication : Application() {
         AIService(dispatchers = dispatchers)
     }
 
+    private val lspClients = java.util.concurrent.ConcurrentHashMap<String, com.vibespace.core.language.lsp.LanguageServerClient>()
+
+    fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient {
+        return lspClients.getOrPut(languageId) {
+            val transport = com.vibespace.core.language.lsp.InMemoryLspTransport()
+            val responder = com.vibespace.core.language.lsp.LocalLspServerResponder(
+                languageId = languageId,
+                transport = transport,
+                dispatchers = dispatchers
+            )
+            responder.start()
+            com.vibespace.core.language.lsp.StdioLanguageServerClient(
+                languageId = languageId,
+                transport = transport,
+                dispatchers = dispatchers
+            )
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()

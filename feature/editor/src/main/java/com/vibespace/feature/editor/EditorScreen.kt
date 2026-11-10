@@ -19,6 +19,26 @@ import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.components.VibeStatusBar
 import com.vibespace.core.designsystem.components.VibeTabBar
 import com.vibespace.core.designsystem.components.VibeTabItem
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.language.snippets.SnippetRepository
 import com.vibespace.feature.editor.components.EditorToolbar
@@ -95,7 +115,8 @@ fun EditorScreen(
             onRunClick = onRunClick,
             onAiAssistantClick = onAiAssistantClick,
             onToggleTerminalClick = onToggleTerminalClick,
-            isDocumentDirty = activeDoc?.isDirty ?: false
+            isDocumentDirty = activeDoc?.isDirty ?: false,
+            onFormatClick = { viewModel.formatDocument() }
         )
 
         // Main Editor Surface or Empty State
@@ -114,6 +135,60 @@ fun EditorScreen(
                     onCursorChange = { viewModel.onCursorPositionChanged(it) },
                     controller = soraController
                 )
+
+                if (uiState.hoverInfo != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = VibeTheme.colors.panelBackground,
+                        border = BorderStroke(1.dp, VibeTheme.colors.accentPrimary),
+                        tonalElevation = 6.dp
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = VibeIcons.Editor,
+                                        contentDescription = "Documentation",
+                                        tint = VibeTheme.colors.accentPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Documentation (LSP)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = VibeTheme.colors.accentPrimary
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { viewModel.clearHover() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Close documentation",
+                                        tint = VibeTheme.colors.textMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = uiState.hoverInfo?.contents ?: "",
+                                style = VibeCodeTypography.copy(fontSize = 12.sp),
+                                color = VibeTheme.colors.textPrimary
+                            )
+                        }
+                    }
+                }
             } else {
                 VibeEmptyState(
                     icon = VibeIcons.Editor,

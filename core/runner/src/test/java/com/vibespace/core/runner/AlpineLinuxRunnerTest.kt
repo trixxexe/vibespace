@@ -50,4 +50,39 @@ class AlpineLinuxRunnerTest {
         assertEquals(127, exec.exitCode)
         assertTrue(exec.outputs.any { it.line.contains("Alpine Linux Subsystem Not Installed") })
     }
+
+    @Test
+    fun execute_when_installed_runs_pip_and_system_queries() = runTest {
+        val testBaseDir = tempFolder.newFolder("test_alpine_installed")
+        val runner = AlpineLinuxRunner(rootDirectory = testBaseDir)
+        runner.installSubsystem()
+
+        // Test pip install
+        val pipResult = runner.execute("pip install flask", "/")
+        assertTrue(pipResult.isSuccess)
+        val pipExec = pipResult.getOrNull()!!
+        assertEquals(0, pipExec.exitCode)
+        assertTrue(pipExec.outputs.any { it.line.contains("Successfully installed flask") })
+
+        // Test pip list
+        val listResult = runner.execute("pip list", "/")
+        assertTrue(listResult.isSuccess)
+        val listExec = listResult.getOrNull()!!
+        assertEquals(0, listExec.exitCode)
+        assertTrue(listExec.outputs.any { it.line.contains("flask") })
+
+        // Test uname -a
+        val unameResult = runner.execute("uname -a", "/")
+        assertTrue(unameResult.isSuccess)
+        val unameExec = unameResult.getOrNull()!!
+        assertEquals(0, unameExec.exitCode)
+        assertTrue(unameExec.outputs.any { it.line.contains("Linux") })
+
+        // Test python --version
+        val pyResult = runner.execute("python --version", "/")
+        assertTrue(pyResult.isSuccess)
+        val pyExec = pyResult.getOrNull()!!
+        assertEquals(0, pyExec.exitCode)
+        assertTrue(pyExec.outputs.any { it.line.contains("Python 3.11") })
+    }
 }
