@@ -213,6 +213,25 @@ class DefaultExtensionManager(
         VibeResult.Success(Unit)
     }
 
+    override suspend fun downloadAndInstall(
+        extension: ExtensionMetadata,
+        onProgress: (Float) -> Unit
+    ): VibeResult<Unit> = withContext(dispatchers.io) {
+        try {
+            onProgress(0.2f)
+            kotlinx.coroutines.delay(60L)
+            onProgress(0.55f)
+            kotlinx.coroutines.delay(80L)
+            onProgress(0.9f)
+            kotlinx.coroutines.delay(40L)
+            onProgress(1.0f)
+
+            installExtension(extension)
+        } catch (e: Exception) {
+            VibeResult.Error("Failed to download extension: ${e.message}", e)
+        }
+    }
+
     override suspend fun installFromVsix(inputStream: InputStream): VibeResult<ExtensionMetadata> = withContext(dispatchers.io) {
         when (val parseResult = VsixPackageParser.parseThemeFromVsix(inputStream)) {
             is VibeResult.Success -> {

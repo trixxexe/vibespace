@@ -33,6 +33,8 @@ class DefaultGitManager(
     private val stagedPaths = mutableSetOf<String>()
     private val branches = mutableListOf(GitBranch("main", isCurrent = true))
     private val commits = mutableListOf<GitCommit>()
+    private var aheadCount = 0
+    private var behindCount = 0
 
     init {
         observeWorkspaceProject()
@@ -56,6 +58,8 @@ class DefaultGitManager(
     private suspend fun initRepositoryForProject(rootUri: String) = withContext(dispatchers.io) {
         baselineFiles.clear()
         stagedPaths.clear()
+        aheadCount = 0
+        behindCount = 0
         val allFiles = workspaceManager.getAllProjectFiles(rootUri).getOrNull() ?: emptyList()
         for (f in allFiles) {
             if (!f.isDirectory) {
@@ -148,6 +152,9 @@ class DefaultGitManager(
             stagedFiles = staged,
             unstagedFiles = unstaged,
             commits = commits.toList(),
+            aheadCount = aheadCount,
+            behindCount = behindCount,
+            remoteBranch = "origin/$currentBranch",
             isClean = staged.isEmpty() && unstaged.isEmpty()
         )
         _status.value = newStatus
@@ -225,6 +232,7 @@ class DefaultGitManager(
             timestamp = System.currentTimeMillis()
         )
         commits.add(0, newCommit)
+        aheadCount++
 
         refreshStatus()
         VibeResult.Success(newCommit)
@@ -277,6 +285,29 @@ class DefaultGitManager(
                 deletedCount = deletedCount
             )
         )
+    }
+
+    override suspend fun push(): VibeResult<String> = withContext(dispatchers.io) {
+        val project = workspaceManager.currentProject.value
+            ?: return@withContext VibeResult.Error("No active project to push")
+        val branch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
+        val count = aheadCount
+        aheadCount = 0
+        refreshStatus()
+        if (count == 0) {
+            VibeResult.Success("Everything up-to-date on origin/$branch")
+        } else {
+            VibeResult.Success("Pushed $count commit(s) to origin/$branch")
+        }
+    }
+
+    override suspend fun pull(): VibeResult<String> = withContext(dispatchers.io) {
+        val project = workspaceManager.currentProject.value
+            ?: return@withContext VibeResult.Error("No active project to pull")
+        val branch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
+        behindCount = 0
+        refreshStatus()
+        VibeResult.Success("Already up-to-date with origin/$branch")
     }
 
     private fun computeDiffLines(oldLines: List<String>, newLines: List<String>): List<DiffLine> {

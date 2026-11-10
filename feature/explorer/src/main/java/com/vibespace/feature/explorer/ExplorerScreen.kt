@@ -207,6 +207,7 @@ fun ExplorerScreen(
                             level = node.level,
                             isExpanded = node.isExpanded,
                             isSelected = node.file.uri == uiState.selectedFileUri,
+                            gitStatus = uiState.fileGitStatuses[node.file.uri],
                             onClick = {
                                 viewModel.selectFile(node.file, onOpenFile)
                             },

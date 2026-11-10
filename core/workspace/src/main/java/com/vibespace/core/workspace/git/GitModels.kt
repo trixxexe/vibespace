@@ -53,5 +53,8 @@ data class GitWorkspaceStatus(
     val stagedFiles: List<GitFileStatus> = emptyList(),
     val unstagedFiles: List<GitFileStatus> = emptyList(),
     val commits: List<GitCommit> = emptyList(),
+    val aheadCount: Int = 0,
+    val behindCount: Int = 0,
+    val remoteBranch: String? = "origin/main",
     val isClean: Boolean = stagedFiles.isEmpty() && unstagedFiles.isEmpty()
 )

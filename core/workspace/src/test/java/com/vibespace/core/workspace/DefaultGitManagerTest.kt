@@ -106,4 +106,27 @@ class DefaultGitManagerTest {
         assertTrue(checkoutResult.isSuccess)
         assertEquals("main", gitManager.status.value.currentBranch)
     }
+
+    @Test
+    fun push_and_pull_sync_operates_correctly() = runTest {
+        val root = "vibe://projects/git-push"
+        workspaceManager.openProject(Project("g6", "GitPush", root))
+
+        val appUri = "$root/app.py"
+        workspaceManager.writeFile(appUri, "print('push test')")
+
+        gitManager.stageAll()
+        gitManager.commit("Commit ahead")
+
+        assertEquals(1, gitManager.status.value.aheadCount)
+
+        val pushResult = gitManager.push()
+        assertTrue(pushResult.isSuccess)
+        assertEquals(0, gitManager.status.value.aheadCount)
+        assertTrue(pushResult.getOrNull()!!.contains("Pushed 1 commit(s)"))
+
+        val pullResult = gitManager.pull()
+        assertTrue(pullResult.isSuccess)
+        assertTrue(pullResult.getOrNull()!!.contains("Already up-to-date"))
+    }
 }

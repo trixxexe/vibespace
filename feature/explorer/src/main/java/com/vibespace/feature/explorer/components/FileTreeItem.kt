@@ -27,10 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.vibespace.core.designsystem.theme.VibeShapes
 import com.vibespace.core.designsystem.theme.VibeTheme
+import com.vibespace.core.workspace.git.GitStatusType
 import com.vibespace.core.workspace.model.VirtualFile
 
 @Composable
@@ -40,6 +43,7 @@ fun FileTreeItem(
     isExpanded: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
+    gitStatus: GitStatusType? = null,
     onDeleteClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -90,6 +94,24 @@ fun FileTreeItem(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
+
+        if (gitStatus != null) {
+            val (badgeText, badgeColor) = when (gitStatus) {
+                GitStatusType.MODIFIED -> Pair("M", Color(0xFF64B5F6))
+                GitStatusType.UNTRACKED -> Pair("U", Color(0xFF81C784))
+                GitStatusType.ADDED -> Pair("A", Color(0xFF81C784))
+                GitStatusType.DELETED -> Pair("D", Color(0xFFE57373))
+            }
+            Text(
+                text = badgeText,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
+                color = badgeColor,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
 
         if (onDeleteClick != null) {
             IconButton(

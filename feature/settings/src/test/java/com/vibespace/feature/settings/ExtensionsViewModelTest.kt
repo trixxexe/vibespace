@@ -30,6 +30,9 @@ class ExtensionsViewModelTest {
     fun setFilter_updates_activeFilter() {
         viewModel.setFilter(ExtensionFilter.THEMES)
         assertEquals(ExtensionFilter.THEMES, viewModel.uiState.value.activeFilter)
+
+        viewModel.setFilter(ExtensionFilter.FORMATTERS)
+        assertEquals(ExtensionFilter.FORMATTERS, viewModel.uiState.value.activeFilter)
     }
 
     @Test

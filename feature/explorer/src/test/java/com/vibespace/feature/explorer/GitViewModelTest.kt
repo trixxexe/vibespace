@@ -57,4 +57,26 @@ class GitViewModelTest {
         viewModel.closeDiff()
         assertEquals(null, viewModel.uiState.value.activeDiff)
     }
+
+    @Test
+    fun dialog_toggles_and_sync_operations_work() = runTest {
+        viewModel.toggleBranchDialog(true)
+        assertTrue(viewModel.uiState.value.showBranchDialog)
+        viewModel.toggleBranchDialog(false)
+        assertFalse(viewModel.uiState.value.showBranchDialog)
+
+        viewModel.toggleCommitDialog(true)
+        assertTrue(viewModel.uiState.value.showCommitDialog)
+        viewModel.toggleCommitDialog(false)
+        assertFalse(viewModel.uiState.value.showCommitDialog)
+
+        val root = "vibe://projects/vm-sync"
+        workspaceManager.openProject(Project("vm3", "SyncProject", root))
+
+        viewModel.pull()
+        assertNotNull(viewModel.uiState.value.syncMessage)
+
+        viewModel.push()
+        assertNotNull(viewModel.uiState.value.syncMessage)
+    }
 }

@@ -49,4 +49,28 @@ class ExplorerViewModelTest {
         assertTrue(updatedSrc.isExpanded)
         assertTrue(updatedSrc.children.any { it.file.name == "Main.kt" })
     }
+
+    @Test
+    fun gitManager_updates_fileGitStatuses_in_explorer() = runTest {
+        val project = Project("p3", "GitStatusTest", "vibe://projects/gitstatustest")
+        workspaceManager.openProject(project)
+
+        val gitManager = com.vibespace.core.workspace.git.DefaultGitManager(
+            workspaceManager = workspaceManager,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val viewModel = ExplorerViewModel(
+            workspaceManager = workspaceManager,
+            gitManager = gitManager,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        workspaceManager.writeFile("vibe://projects/gitstatustest/new_file.py", "print('hello')")
+        gitManager.refreshStatus()
+
+        val statuses = viewModel.uiState.value.fileGitStatuses
+        assertTrue(statuses.containsKey("vibe://projects/gitstatustest/new_file.py"))
+        assertEquals(com.vibespace.core.workspace.git.GitStatusType.UNTRACKED, statuses["vibe://projects/gitstatustest/new_file.py"])
+    }
 }

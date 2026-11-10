@@ -10,6 +10,7 @@ interface ExtensionManager {
     suspend fun getCuratedExtensions(): VibeResult<List<ExtensionMetadata>>
     suspend fun searchOpenVsx(query: String): VibeResult<List<ExtensionMetadata>>
     suspend fun installExtension(extension: ExtensionMetadata): VibeResult<Unit>
+    suspend fun downloadAndInstall(extension: ExtensionMetadata, onProgress: (Float) -> Unit): VibeResult<Unit>
     suspend fun installFromVsix(inputStream: InputStream): VibeResult<ExtensionMetadata>
     suspend fun uninstallExtension(extensionId: String): VibeResult<Unit>
     suspend fun toggleExtension(extensionId: String, enabled: Boolean): VibeResult<Unit>

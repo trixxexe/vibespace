@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
+import com.vibespace.core.workspace.git.GitManager
 import com.vibespace.core.workspace.manager.WorkspaceManager
 import com.vibespace.core.workspace.model.VirtualFile
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.launch
 
 class ExplorerViewModel(
     private val workspaceManager: WorkspaceManager,
+    private val gitManager: GitManager? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : ViewModel() {
 
@@ -24,6 +26,18 @@ class ExplorerViewModel(
 
     init {
         observeCurrentProject()
+        observeGitStatus()
+    }
+
+    private fun observeGitStatus() {
+        if (gitManager == null) return
+        viewModelScope.launch(dispatchers.default) {
+            gitManager.status.collect { gitStatus ->
+                val statusMap = (gitStatus.stagedFiles + gitStatus.unstagedFiles)
+                    .associate { it.path to it.statusType }
+                _uiState.update { it.copy(fileGitStatuses = statusMap) }
+            }
+        }
     }
 
     private fun observeCurrentProject() {

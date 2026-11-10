@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,7 +57,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.vibespace.core.designsystem.components.SplitOrientation
 import com.vibespace.core.designsystem.components.VibeIcons
+import com.vibespace.core.designsystem.components.VibeSplitLayout
 import com.vibespace.core.designsystem.layout.WindowWidthSizeClass
 import com.vibespace.core.designsystem.layout.rememberVibeAdaptiveInfo
 import com.vibespace.core.designsystem.theme.VibeShapes
@@ -109,6 +112,14 @@ fun VibeMainScreen(
     var isExplorerVisibleOnTablet by remember { mutableStateOf(true) }
     var isSourceControlVisible by remember { mutableStateOf(false) }
     var phoneDrawerTab by remember { mutableStateOf(0) } // 0: Explorer, 1: Git
+
+    val isExpanded = adaptiveInfo.widthSizeClass == WindowWidthSizeClass.Expanded
+    var splitOrientation by remember {
+        mutableStateOf(if (isExpanded) SplitOrientation.HORIZONTAL else SplitOrientation.VERTICAL)
+    }
+    var splitRatio by remember {
+        mutableFloatStateOf(if (isExpanded) 0.55f else 0.65f)
+    }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -206,6 +217,26 @@ fun VibeMainScreen(
                     icon = { Icon(VibeIcons.Terminal, contentDescription = "Terminal", modifier = Modifier.size(20.dp)) },
                     label = { Text("Terminal") }
                 )
+                if (isTerminalVisible) {
+                    NavigationRailItem(
+                        selected = splitOrientation == SplitOrientation.HORIZONTAL,
+                        onClick = {
+                            splitOrientation = if (splitOrientation == SplitOrientation.HORIZONTAL) {
+                                SplitOrientation.VERTICAL
+                            } else {
+                                SplitOrientation.HORIZONTAL
+                            }
+                        },
+                        icon = {
+                            Text(
+                                text = if (splitOrientation == SplitOrientation.HORIZONTAL) "◫" else "⬒",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (splitOrientation == SplitOrientation.HORIZONTAL) MaterialTheme.colorScheme.primary else VibeTheme.colors.textSecondary
+                            )
+                        },
+                        label = { Text(if (splitOrientation == SplitOrientation.HORIZONTAL) "Side" else "Stack") }
+                    )
+                }
                 NavigationRailItem(
                     selected = isAiChatVisible,
                     onClick = { isAiChatVisible = !isAiChatVisible },
@@ -275,36 +306,66 @@ fun VibeMainScreen(
                     )
                 }
 
-                // Editor Canvas
-                Box(modifier = Modifier.weight(1f)) {
-                    EditorScreen(
-                        viewModel = editorViewModel,
-                        onSearchClick = { isSearchVisible = !isSearchVisible },
-                        onRunClick = {
-                            isTerminalVisible = true
-                            val active = editorViewModel.uiState.value.activeDocument
-                            if (active != null) {
-                                if (active.isDirty) {
-                                    editorViewModel.saveActiveDocument()
-                                }
-                                terminalViewModel.runActiveDocument(
-                                    fileName = active.fileName,
-                                    languageId = active.language.id
-                                )
-                            }
-                        },
-                        onAiAssistantClick = { isAiChatVisible = !isAiChatVisible },
-                        onToggleTerminalClick = { isTerminalVisible = !isTerminalVisible },
-                        onOpenExplorerClick = { isExplorerVisibleOnTablet = true }
-                    )
-                }
-
-                // Bottom Dockable Terminal
+                // Resizable Dual Split View (Side-by-side or stacked)
                 if (isTerminalVisible) {
-                    TerminalPanel(
-                        viewModel = terminalViewModel,
-                        onClosePanel = { isTerminalVisible = false }
+                    VibeSplitLayout(
+                        splitRatio = splitRatio,
+                        onSplitRatioChange = { splitRatio = it },
+                        orientation = splitOrientation,
+                        modifier = Modifier.weight(1f),
+                        firstContent = {
+                            EditorScreen(
+                                viewModel = editorViewModel,
+                                onSearchClick = { isSearchVisible = !isSearchVisible },
+                                onRunClick = {
+                                    isTerminalVisible = true
+                                    val active = editorViewModel.uiState.value.activeDocument
+                                    if (active != null) {
+                                        if (active.isDirty) {
+                                            editorViewModel.saveActiveDocument()
+                                        }
+                                        terminalViewModel.runActiveDocument(
+                                            fileName = active.fileName,
+                                            languageId = active.language.id
+                                        )
+                                    }
+                                },
+                                onAiAssistantClick = { isAiChatVisible = !isAiChatVisible },
+                                onToggleTerminalClick = { isTerminalVisible = !isTerminalVisible },
+                                onOpenExplorerClick = { isExplorerVisibleOnTablet = true }
+                            )
+                        },
+                        secondContent = {
+                            TerminalPanel(
+                                viewModel = terminalViewModel,
+                                onClosePanel = { isTerminalVisible = false },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     )
+                } else {
+                    Box(modifier = Modifier.weight(1f)) {
+                        EditorScreen(
+                            viewModel = editorViewModel,
+                            onSearchClick = { isSearchVisible = !isSearchVisible },
+                            onRunClick = {
+                                isTerminalVisible = true
+                                val active = editorViewModel.uiState.value.activeDocument
+                                if (active != null) {
+                                    if (active.isDirty) {
+                                        editorViewModel.saveActiveDocument()
+                                    }
+                                    terminalViewModel.runActiveDocument(
+                                        fileName = active.fileName,
+                                        languageId = active.language.id
+                                    )
+                                }
+                            },
+                            onAiAssistantClick = { isAiChatVisible = !isAiChatVisible },
+                            onToggleTerminalClick = { isTerminalVisible = !isTerminalVisible },
+                            onOpenExplorerClick = { isExplorerVisibleOnTablet = true }
+                        )
+                    }
                 }
             }
 

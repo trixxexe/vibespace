@@ -52,8 +52,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextDecoration
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
+import com.vibespace.core.terminal.ansi.AnsiParser
 import com.vibespace.core.terminal.model.StreamType
 import com.vibespace.core.terminal.model.TerminalLine
 
@@ -74,10 +79,14 @@ fun TerminalPanel(
         }
     }
 
+    val panelModifier = if (modifier == Modifier) {
+        Modifier.fillMaxWidth().height(260.dp)
+    } else {
+        modifier
+    }
+
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(260.dp)
+        modifier = panelModifier
             .background(VibeTheme.colors.panelBackground)
     ) {
         // Tab Header Strip
@@ -549,17 +558,51 @@ private fun PanelTabButton(
 
 @Composable
 private fun TerminalLineView(line: TerminalLine) {
-    val color = when (line.streamType) {
+    val defaultColor = when (line.streamType) {
         StreamType.COMMAND -> VibeTheme.colors.textPrimary
         StreamType.STDOUT -> VibeTheme.colors.textSecondary
         StreamType.STDERR -> VibeTheme.colors.statusError
         StreamType.SYSTEM -> VibeTheme.colors.accentSecondary
     }
 
+    val spans = remember(line.text) {
+        AnsiParser.parse(line.text)
+    }
+
+    val annotatedString = remember(spans, defaultColor) {
+        buildAnnotatedString {
+            for (span in spans) {
+                val spanFgColor = span.style.foregroundColor?.let { Color(it.toInt()) } ?: defaultColor
+                val spanBgColor = span.style.backgroundColor?.let { Color(it.toInt()) } ?: Color.Transparent
+                val fontWeight = if (span.style.isBold) FontWeight.Bold else FontWeight.Normal
+                val fontStyle = if (span.style.isItalic) FontStyle.Italic else FontStyle.Normal
+                val textDecoration = when {
+                    span.style.isUnderline && span.style.isStrikethrough -> TextDecoration.combine(listOf(TextDecoration.Underline, TextDecoration.LineThrough))
+                    span.style.isUnderline -> TextDecoration.Underline
+                    span.style.isStrikethrough -> TextDecoration.LineThrough
+                    else -> TextDecoration.None
+                }
+
+                val start = length
+                append(span.text)
+                addStyle(
+                    style = SpanStyle(
+                        color = spanFgColor,
+                        background = spanBgColor,
+                        fontWeight = fontWeight,
+                        fontStyle = fontStyle,
+                        textDecoration = textDecoration
+                    ),
+                    start = start,
+                    end = length
+                )
+            }
+        }
+    }
+
     Text(
-        text = line.text,
+        text = annotatedString,
         style = VibeCodeTypography.copy(fontSize = 12.sp, lineHeight = 16.sp),
-        color = color,
         modifier = Modifier.padding(vertical = 1.dp)
     )
 }

@@ -49,6 +49,7 @@ fun VibeNavigation(
     val explorerViewModel = remember {
         ExplorerViewModel(
             workspaceManager = app.workspaceManager,
+            gitManager = app.gitManager,
             dispatchers = app.dispatchers
         )
     }

@@ -20,6 +20,10 @@ data class GitUiState(
     val activeDiffFile: String? = null,
     val activeDiff: FileDiff? = null,
     val isCommitting: Boolean = false,
+    val isSyncing: Boolean = false,
+    val syncMessage: String? = null,
+    val showBranchDialog: Boolean = false,
+    val showCommitDialog: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -127,12 +131,52 @@ class GitViewModel(
     fun createBranch(name: String) {
         viewModelScope.launch(dispatchers.io) {
             gitManager.createBranch(name)
+            _uiState.update { it.copy(showBranchDialog = false) }
         }
     }
 
     fun checkoutBranch(name: String) {
         viewModelScope.launch(dispatchers.io) {
             gitManager.checkoutBranch(name)
+            _uiState.update { it.copy(showBranchDialog = false) }
+        }
+    }
+
+    fun toggleBranchDialog(show: Boolean) {
+        _uiState.update { it.copy(showBranchDialog = show) }
+    }
+
+    fun toggleCommitDialog(show: Boolean) {
+        _uiState.update { it.copy(showCommitDialog = show) }
+    }
+
+    fun push() {
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
+            when (val result = gitManager.push()) {
+                is VibeResult.Success -> {
+                    _uiState.update { it.copy(isSyncing = false, syncMessage = result.data) }
+                }
+                is VibeResult.Error -> {
+                    _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }
+                }
+                else -> _uiState.update { it.copy(isSyncing = false) }
+            }
+        }
+    }
+
+    fun pull() {
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
+            when (val result = gitManager.pull()) {
+                is VibeResult.Success -> {
+                    _uiState.update { it.copy(isSyncing = false, syncMessage = result.data) }
+                }
+                is VibeResult.Error -> {
+                    _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }
+                }
+                else -> _uiState.update { it.copy(isSyncing = false) }
+            }
         }
     }
 }

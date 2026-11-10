@@ -20,7 +20,8 @@ enum class ExtensionFilter {
     INSTALLED,
     THEMES,
     LANGUAGES,
-    ICONS
+    ICONS,
+    FORMATTERS
 }
 
 data class ExtensionsUiState(
@@ -28,6 +29,7 @@ data class ExtensionsUiState(
     val activeFilter: ExtensionFilter = ExtensionFilter.ALL,
     val extensions: List<ExtensionMetadata> = emptyList(),
     val installedExtensions: List<ExtensionMetadata> = emptyList(),
+    val downloadingExtensions: Map<String, Float> = emptyMap(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
@@ -84,7 +86,20 @@ class ExtensionsViewModel(
 
     fun installExtension(extension: ExtensionMetadata) {
         viewModelScope.launch(dispatchers.io) {
-            extensionManager.installExtension(extension)
+            _uiState.update {
+                it.copy(downloadingExtensions = it.downloadingExtensions + (extension.id to 0.1f))
+            }
+            val result = extensionManager.downloadAndInstall(extension) { progress ->
+                _uiState.update {
+                    it.copy(downloadingExtensions = it.downloadingExtensions + (extension.id to progress))
+                }
+            }
+            _uiState.update {
+                it.copy(downloadingExtensions = it.downloadingExtensions - extension.id)
+            }
+            if (result is VibeResult.Error) {
+                _uiState.update { it.copy(errorMessage = result.message) }
+            }
             loadExtensions()
         }
     }

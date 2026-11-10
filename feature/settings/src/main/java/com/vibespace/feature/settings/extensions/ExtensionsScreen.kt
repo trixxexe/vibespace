@@ -34,6 +34,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -200,6 +201,13 @@ fun ExtensionsScreen(
                     label = { Text("Icons") }
                 )
             }
+            item {
+                FilterChip(
+                    selected = uiState.activeFilter == ExtensionFilter.FORMATTERS,
+                    onClick = { viewModel.setFilter(ExtensionFilter.FORMATTERS) },
+                    label = { Text("Formatters") }
+                )
+            }
         }
 
         if (uiState.errorMessage != null) {
@@ -217,6 +225,7 @@ fun ExtensionsScreen(
             ExtensionFilter.THEMES -> uiState.extensions.filter { it.category == ExtensionCategory.THEME }
             ExtensionFilter.LANGUAGES -> uiState.extensions.filter { it.category == ExtensionCategory.LANGUAGE }
             ExtensionFilter.ICONS -> uiState.extensions.filter { it.category == ExtensionCategory.ICON_PACK }
+            ExtensionFilter.FORMATTERS -> uiState.extensions.filter { it.category == ExtensionCategory.FORMATTER }
         }
 
         if (uiState.isLoading) {
@@ -239,6 +248,7 @@ fun ExtensionsScreen(
                 items(filteredList, key = { it.id }) { ext ->
                     ExtensionCard(
                         extension = ext,
+                        downloadProgress = uiState.downloadingExtensions[ext.id],
                         onInstall = { viewModel.installExtension(ext) },
                         onUninstall = { viewModel.uninstallExtension(ext.id) },
                         onToggle = { enabled -> viewModel.toggleExtension(ext.id, enabled) }
@@ -252,6 +262,7 @@ fun ExtensionsScreen(
 @Composable
 private fun ExtensionCard(
     extension: ExtensionMetadata,
+    downloadProgress: Float? = null,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
     onToggle: (Boolean) -> Unit
@@ -352,6 +363,26 @@ private fun ExtensionCard(
                                     fontSize = 12.sp
                                 )
                             }
+                        }
+                    } else if (downloadProgress != null) {
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.width(140.dp)
+                        ) {
+                            Text(
+                                text = "Downloading ${(downloadProgress * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { downloadProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = VibeTheme.colors.borderSubtle
+                            )
                         }
                     } else {
                         Button(

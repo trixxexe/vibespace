@@ -4,6 +4,7 @@ import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.language.model.CompletionItem
 import com.vibespace.core.language.model.DefinitionLocation
 import com.vibespace.core.language.model.Diagnostic
+import com.vibespace.core.language.model.HoverInfo
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -22,6 +23,12 @@ interface LanguageServerClient {
     suspend fun didClose(documentUri: String): VibeResult<Unit>
 
     fun observeDiagnostics(documentUri: String): Flow<List<Diagnostic>>
+
+    suspend fun requestHover(
+        documentUri: String,
+        line: Int,
+        column: Int
+    ): VibeResult<HoverInfo?>
 
     suspend fun requestCompletion(
         documentUri: String,

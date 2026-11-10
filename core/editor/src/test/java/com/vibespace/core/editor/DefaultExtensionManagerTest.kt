@@ -60,4 +60,29 @@ class DefaultExtensionManagerTest {
         val matches = result.getOrNull()!!
         assertTrue(matches.any { it.displayName.contains("Dracula") })
     }
+
+    @Test
+    fun downloadAndInstall_reports_progress_and_installs() = runTest {
+        val ext = ExtensionMetadata(
+            id = "test.progress-ext",
+            name = "progress-ext",
+            displayName = "Progress Ext",
+            publisher = "tester",
+            version = "1.0.0",
+            description = "Download test",
+            category = ExtensionCategory.THEME
+        )
+
+        val progressValues = mutableListOf<Float>()
+        val result = extensionManager.downloadAndInstall(ext) { progress ->
+            progressValues.add(progress)
+        }
+
+        assertTrue(result.isSuccess)
+        assertTrue(progressValues.isNotEmpty())
+        assertEquals(1.0f, progressValues.last(), 0.001f)
+
+        val installed = extensionManager.installedExtensions.first()
+        assertTrue(installed.any { it.id == ext.id })
+    }
 }

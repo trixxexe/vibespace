@@ -16,4 +16,6 @@ interface GitManager {
     suspend fun checkoutBranch(branchName: String): VibeResult<Unit>
     suspend fun createBranch(branchName: String): VibeResult<Unit>
     suspend fun getFileDiff(path: String): VibeResult<FileDiff>
+    suspend fun push(): VibeResult<String>
+    suspend fun pull(): VibeResult<String>
 }
