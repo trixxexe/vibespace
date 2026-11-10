@@ -107,7 +107,7 @@ fun VibeMainScreen(
                     selected = false,
                     onClick = onNavigateToHome,
                     icon = { Icon(VibeIcons.Home, contentDescription = "Home", modifier = Modifier.size(20.dp)) },
-                    label = { Text("Home", style = VibeTheme.colors.textMuted.let { androidx.compose.ui.text.TextStyle() }) }
+                    label = { Text("Home") }
                 )
                 NavigationRailItem(
                     selected = isExplorerVisibleOnTablet,

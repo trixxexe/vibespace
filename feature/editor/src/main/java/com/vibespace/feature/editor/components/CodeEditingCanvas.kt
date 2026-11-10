@@ -15,8 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,7 +47,6 @@ fun CodeEditingCanvas(
         Box(
             modifier = Modifier
                 .width(gutterWidth)
-                .fillMaxHeight()
                 .background(VibeTheme.colors.gutterBackground)
                 .padding(vertical = 12.dp, horizontal = 6.dp)
         ) {
@@ -70,7 +67,6 @@ fun CodeEditingCanvas(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight()
                 .horizontalScroll(horizontalScroll)
                 .padding(vertical = 12.dp, horizontal = 12.dp)
         ) {
@@ -85,7 +81,7 @@ fun CodeEditingCanvas(
                     color = VibeTheme.colors.textPrimary
                 ),
                 cursorBrush = SolidColor(VibeTheme.colors.accentPrimary),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
