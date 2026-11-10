@@ -63,13 +63,11 @@ class AIService(
             codeContext = _activeContext.value
         )
 
-        val responseResult = provider.generateResponse(request)
-        responseResult.onSuccess { resp ->
-            _messages.value = _messages.value + resp.message
-        }
-
-        when (responseResult) {
-            is VibeResult.Success -> VibeResult.Success(responseResult.data.message)
+        when (val responseResult = provider.generateResponse(request)) {
+            is VibeResult.Success -> {
+                _messages.value = _messages.value + responseResult.data.message
+                VibeResult.Success(responseResult.data.message)
+            }
             is VibeResult.Error -> VibeResult.Error(responseResult.message, responseResult.throwable)
             is VibeResult.Loading -> VibeResult.Loading
         }

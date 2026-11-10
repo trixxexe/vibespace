@@ -94,12 +94,15 @@ class EditorViewModel(
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isSaving = true) }
-            val writeResult = workspaceManager.writeFile(activeDoc.uri, activeDoc.content)
-            writeResult.onSuccess {
-                editorEngine.markSaved(activeDoc.documentId)
-                _uiState.update { it.copy(isSaving = false, statusMessage = "Saved ${activeDoc.fileName}") }
-            }.onError { err ->
-                _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: ${err.message}") }
+            when (val writeResult = workspaceManager.writeFile(activeDoc.uri, activeDoc.content)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    editorEngine.markSaved(activeDoc.documentId)
+                    _uiState.update { it.copy(isSaving = false, statusMessage = "Saved ${activeDoc.fileName}") }
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: ${writeResult.message}") }
+                }
+                else -> Unit
             }
         }
     }

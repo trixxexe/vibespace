@@ -89,11 +89,10 @@ class ExplorerViewModel(
     fun createNewFile(fileName: String, parentUri: String? = null) {
         val targetParent = parentUri ?: _uiState.value.currentProject?.rootUri ?: return
         viewModelScope.launch(dispatchers.io) {
-            val result = workspaceManager.createFile(targetParent, fileName)
-            result.onSuccess {
-                refreshFiles()
-            }.onError { err ->
-                _uiState.update { it.copy(errorMessage = err.message) }
+            when (val result = workspaceManager.createFile(targetParent, fileName)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> refreshFiles()
+                is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> Unit
             }
         }
     }
@@ -101,11 +100,10 @@ class ExplorerViewModel(
     fun createNewFolder(folderName: String, parentUri: String? = null) {
         val targetParent = parentUri ?: _uiState.value.currentProject?.rootUri ?: return
         viewModelScope.launch(dispatchers.io) {
-            val result = workspaceManager.createDirectory(targetParent, folderName)
-            result.onSuccess {
-                refreshFiles()
-            }.onError { err ->
-                _uiState.update { it.copy(errorMessage = err.message) }
+            when (val result = workspaceManager.createDirectory(targetParent, folderName)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> refreshFiles()
+                is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> Unit
             }
         }
     }

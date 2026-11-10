@@ -68,9 +68,11 @@ class AIChatViewModel(
 
         _uiState.update { it.copy(inputPrompt = "", isGenerating = true, errorMessage = null) }
         viewModelScope.launch(dispatchers.default) {
-            val result = aiService.sendUserPrompt(prompt)
-            result.onError { err ->
-                _uiState.update { it.copy(errorMessage = err.message) }
+            when (val result = aiService.sendUserPrompt(prompt)) {
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                }
+                else -> Unit
             }
             _uiState.update { it.copy(isGenerating = false) }
         }

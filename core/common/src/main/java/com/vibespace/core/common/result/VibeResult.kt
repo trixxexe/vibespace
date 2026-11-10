@@ -34,20 +34,20 @@ sealed interface VibeResult<out T> {
         is Success -> data
         else -> defaultValue
     }
-}
 
-inline fun <T, R> VibeResult<T>.map(transform: (T) -> R): VibeResult<R> = when (this) {
-    is VibeResult.Success -> VibeResult.Success(transform(data))
-    is VibeResult.Error -> VibeResult.Error(message, throwable, code)
-    is VibeResult.Loading -> VibeResult.Loading
-}
+    fun <R> map(transform: (T) -> R): VibeResult<R> = when (this) {
+        is Success -> Success(transform(data))
+        is Error -> Error(message, throwable, code)
+        is Loading -> Loading
+    }
 
-inline fun <T> VibeResult<T>.onSuccess(action: (T) -> Unit): VibeResult<T> {
-    if (this is VibeResult.Success) action(data)
-    return this
-}
+    fun onSuccess(action: (T) -> Unit): VibeResult<T> {
+        if (this is Success) action(data)
+        return this
+    }
 
-inline fun <T> VibeResult<T>.onError(action: (VibeResult.Error) -> Unit): VibeResult<T> {
-    if (this is VibeResult.Error) action(this)
-    return this
+    fun onError(action: (Error) -> Unit): VibeResult<T> {
+        if (this is Error) action(this)
+        return this
+    }
 }
