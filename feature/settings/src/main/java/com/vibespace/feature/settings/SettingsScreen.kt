@@ -299,12 +299,12 @@ fun SettingsScreen(
                             )
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.accentSuccess.copy(alpha = 0.15f) else VibeTheme.colors.accentWarning.copy(alpha = 0.15f)
+                                color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.statusSuccess.copy(alpha = 0.15f) else VibeTheme.colors.statusWarning.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     text = if (settings.aiApiKey.isNotBlank()) "✓ Active" else "⚠ Key Needed",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.accentSuccess else VibeTheme.colors.accentWarning,
+                                        color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.statusSuccess else VibeTheme.colors.statusWarning,
                                         fontWeight = FontWeight.Bold
                                     ),
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -443,7 +443,7 @@ fun SettingsScreen(
                                         style = VibeCodeTypography.copy(
                                             fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) VibeTheme.colors.background else VibeTheme.colors.textPrimary
+                                            color = if (isSelected) androidx.compose.ui.graphics.Color.Black else VibeTheme.colors.textPrimary
                                         ),
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
                                     )

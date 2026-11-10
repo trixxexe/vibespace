@@ -109,7 +109,7 @@ fun AIChatScreen(
             // Status chip: BYOK
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = if (uiState.isConfigured) VibeTheme.colors.accentSuccess.copy(alpha = 0.15f) else VibeTheme.colors.accentWarning.copy(alpha = 0.15f),
+                color = if (uiState.isConfigured) VibeTheme.colors.statusSuccess.copy(alpha = 0.15f) else VibeTheme.colors.statusWarning.copy(alpha = 0.15f),
                 modifier = Modifier.padding(end = 6.dp)
             ) {
                 Text(
@@ -117,7 +117,7 @@ fun AIChatScreen(
                     style = VibeCodeTypography.copy(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (uiState.isConfigured) VibeTheme.colors.accentSuccess else VibeTheme.colors.accentWarning
+                        color = if (uiState.isConfigured) VibeTheme.colors.statusSuccess else VibeTheme.colors.statusWarning
                     ),
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )

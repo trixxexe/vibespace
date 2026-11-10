@@ -118,6 +118,7 @@ class AIProvidersTest {
         val result = provider.generateResponse(request)
 
         assertTrue(result.isError)
-        assertTrue(result.message.contains("Incorrect API key provided"))
+        val errorResult = result as com.vibespace.core.common.result.VibeResult.Error
+        assertTrue(errorResult.message.contains("Incorrect API key provided"))
     }
 }
