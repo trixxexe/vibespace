@@ -18,6 +18,7 @@ interface TerminalService {
     suspend fun closeSession(sessionId: String): VibeResult<Unit>
     suspend fun setActiveSession(sessionId: String): VibeResult<Unit>
     suspend fun sendInput(sessionId: String, input: String): VibeResult<Unit>
+    suspend fun appendLine(sessionId: String, text: String, streamType: com.vibespace.core.terminal.model.StreamType = com.vibespace.core.terminal.model.StreamType.STDOUT): VibeResult<Unit>
     suspend fun clearSession(sessionId: String): VibeResult<Unit>
     fun observeLines(sessionId: String): Flow<TerminalLine>
 }

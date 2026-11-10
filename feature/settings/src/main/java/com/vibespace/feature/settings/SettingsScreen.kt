@@ -111,6 +111,50 @@ fun SettingsScreen(
                 }
             }
 
+            // VS Code Color Themes
+            item {
+                SectionHeader("VS CODE COLOR THEMES")
+                VibeCard {
+                    Column {
+                        val themes = listOf(
+                            Triple("vibe_dark", "Vibe Dark (Default)", "#0F1115"),
+                            Triple("one_dark_pro", "One Dark Pro", "#282C34"),
+                            Triple("dracula", "Dracula", "#282A36"),
+                            Triple("monokai_pro", "Monokai Pro", "#2D2A2E"),
+                            Triple("nord", "Nord", "#2E3440")
+                        )
+
+                        themes.forEach { (id, name, bgHex) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setEditorTheme(id) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = settings.editorThemeId == id,
+                                    onClick = { viewModel.setEditorTheme(id) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .background(androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(bgHex)), RoundedCornerShape(4.dp))
+                                        .border(0.5.dp, VibeTheme.colors.borderSubtle, RoundedCornerShape(4.dp))
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = VibeTheme.colors.textPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Editor Preferences
             item {
                 SectionHeader("EDITOR PREFERENCES")

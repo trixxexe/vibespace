@@ -62,10 +62,18 @@ import com.vibespace.feature.editor.EditorScreen
 import com.vibespace.feature.editor.EditorViewModel
 import com.vibespace.feature.explorer.ExplorerScreen
 import com.vibespace.feature.explorer.ExplorerViewModel
+import com.vibespace.feature.search.CommandPaletteDialog
 import com.vibespace.feature.search.SearchPanel
 import com.vibespace.feature.search.SearchViewModel
 import com.vibespace.feature.terminal.TerminalPanel
 import com.vibespace.feature.terminal.TerminalViewModel
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,12 +98,50 @@ fun VibeMainScreen(
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var isCommandPaletteVisible by remember { mutableStateOf(false) }
+
+    val rootModifier = modifier
+        .fillMaxSize()
+        .onKeyEvent { keyEvent ->
+            if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.isCtrlPressed || keyEvent.isMetaPressed)) {
+                when (keyEvent.key) {
+                    Key.P -> {
+                        isCommandPaletteVisible = true
+                        true
+                    }
+                    Key.S -> {
+                        editorViewModel.saveActiveDocument()
+                        true
+                    }
+                    Key.F -> {
+                        isSearchVisible = !isSearchVisible
+                        true
+                    }
+                    Key.Enter -> {
+                        val active = editorViewModel.uiState.value.activeDocument
+                        if (active != null) {
+                            if (active.isDirty) editorViewModel.saveActiveDocument()
+                            terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                            isTerminalVisible = true
+                        }
+                        true
+                    }
+                    Key.W -> {
+                        val active = editorViewModel.uiState.value.activeDocument
+                        if (active != null) {
+                            editorViewModel.closeTab(active.documentId)
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            } else false
+        }
 
     if (isTablet) {
         // Tablet / Large Screen Layout: Navigation Rail + Sidebar + Editor + Dockable Terminal & AI
         Row(
-            modifier = modifier
-                .fillMaxSize()
+            modifier = rootModifier
                 .background(VibeTheme.colors.editorBackground)
         ) {
             // Left Navigation Rail
@@ -109,6 +155,12 @@ fun VibeMainScreen(
                     onClick = onNavigateToHome,
                     icon = { Icon(VibeIcons.Home, contentDescription = "Home", modifier = Modifier.size(20.dp)) },
                     label = { Text("Home") }
+                )
+                NavigationRailItem(
+                    selected = false,
+                    onClick = { isCommandPaletteVisible = true },
+                    icon = { Icon(Icons.Default.Search, contentDescription = "Palette", modifier = Modifier.size(20.dp)) },
+                    label = { Text("Palette") }
                 )
                 NavigationRailItem(
                     selected = isExplorerVisibleOnTablet,
@@ -244,8 +296,7 @@ fun VibeMainScreen(
             }
         ) {
             Column(
-                modifier = modifier
-                    .fillMaxSize()
+                modifier = rootModifier
                     .background(VibeTheme.colors.editorBackground)
             ) {
                 // Top Navigation bar for Phone
@@ -277,6 +328,13 @@ fun VibeMainScreen(
                         color = VibeTheme.colors.textPrimary,
                         modifier = Modifier.padding(start = 8.dp).weight(1f)
                     )
+
+                    IconButton(
+                        onClick = { isCommandPaletteVisible = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = "Palette", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                    }
 
                     IconButton(
                         onClick = { isAiChatVisible = true },
@@ -355,5 +413,43 @@ fun VibeMainScreen(
                 }
             }
         }
+    }
+
+    if (isCommandPaletteVisible) {
+        val explorerUiState by explorerViewModel.uiState.collectAsState()
+        val allFiles = explorerUiState.rootNodes.map { it.file }
+        CommandPaletteDialog(
+            files = allFiles,
+            onOpenFile = { file ->
+                editorViewModel.openFile(file)
+                isCommandPaletteVisible = false
+            },
+            onRunScript = {
+                val active = editorViewModel.uiState.value.activeDocument
+                if (active != null) {
+                    if (active.isDirty) editorViewModel.saveActiveDocument()
+                    terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                    isTerminalVisible = true
+                }
+                isCommandPaletteVisible = false
+            },
+            onSaveFile = {
+                editorViewModel.saveActiveDocument()
+                isCommandPaletteVisible = false
+            },
+            onOpenSearch = {
+                isSearchVisible = true
+                isCommandPaletteVisible = false
+            },
+            onOpenAi = {
+                isAiChatVisible = true
+                isCommandPaletteVisible = false
+            },
+            onOpenSettings = {
+                onNavigateToSettings()
+                isCommandPaletteVisible = false
+            },
+            onDismiss = { isCommandPaletteVisible = false }
+        )
     }
 }

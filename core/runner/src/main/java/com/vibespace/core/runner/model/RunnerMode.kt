@@ -10,14 +10,14 @@ enum class RunnerMode(
     val description: String
 ) {
     /**
-     * Out-of-the-box instant offline runtime for JavaScript, Python, Web/HTML, and Shell.
-     * Zero setup, zero download required.
+     * Out-of-the-box instant offline script evaluator for JavaScript, Python, Web/HTML, and Shell.
+     * Zero setup, zero download required for lightweight scripts and logic.
      */
     EMBEDDED(
         id = "embedded",
-        displayName = "Instant Embedded",
+        displayName = "Instant Script Evaluator",
         shortBadge = "⚡ Instant",
-        description = "Pre-bundled offline runner for JS, Python, HTML/Web, and Shell. Zero setup."
+        description = "Lightweight offline script evaluator for Python, JS, and Shell builtins. Zero download."
     ),
 
     /**

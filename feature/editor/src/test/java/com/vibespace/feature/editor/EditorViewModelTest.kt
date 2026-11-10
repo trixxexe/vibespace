@@ -88,4 +88,18 @@ class EditorViewModelTest {
         assertNotNull(active)
         assertEquals("main.py", active!!.fileName)
     }
+
+    @Test
+    fun setEditorTheme_updates_themeId_in_ui_state() = runTest {
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertEquals("vibe_dark", viewModel.uiState.value.themeId)
+        viewModel.setEditorTheme("dracula")
+        assertEquals("dracula", viewModel.uiState.value.themeId)
+    }
 }

@@ -8,6 +8,7 @@ import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.runner.alpine.AlpineLinuxRunner
 import com.vibespace.core.runner.manager.RunnerManager
 import com.vibespace.core.runner.model.RunnerMode
+import com.vibespace.core.terminal.model.StreamType
 import com.vibespace.core.terminal.service.TerminalService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,15 +91,18 @@ class TerminalViewModel(
         if (trimmed.isEmpty()) return
 
         viewModelScope.launch(dispatchers.default) {
-            terminalService.sendInput(session.sessionId, "$ $trimmed")
+            terminalService.appendLine(session.sessionId, "$ $trimmed", StreamType.COMMAND)
 
             if (runnerManager != null) {
                 val result = runnerManager.runCommand(trimmed, session.workingDirectory)
                 if (result is VibeResult.Success) {
                     for (out in result.data.outputs) {
-                        terminalService.sendInput(session.sessionId, out.line)
+                        val type = if (out.isError) StreamType.STDERR else StreamType.STDOUT
+                        terminalService.appendLine(session.sessionId, out.line, type)
                     }
                 }
+            } else {
+                terminalService.sendInput(session.sessionId, trimmed)
             }
         }
     }

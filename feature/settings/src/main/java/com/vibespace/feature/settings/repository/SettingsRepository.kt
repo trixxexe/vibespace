@@ -13,6 +13,7 @@ enum class ThemeMode {
 
 data class UserSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
+    val editorThemeId: String = "vibe_dark",
     val editorFontSizeSp: Float = 13f,
     val tabSizeSpaces: Int = 4,
     val showLineNumbers: Boolean = true,
@@ -24,6 +25,7 @@ interface SettingsRepository {
     fun observeSettings(): Flow<UserSettings>
     suspend fun updateSettings(settings: UserSettings): VibeResult<Unit>
     suspend fun setThemeMode(mode: ThemeMode): VibeResult<Unit>
+    suspend fun setEditorTheme(themeId: String): VibeResult<Unit>
     suspend fun setEditorFontSize(fontSizeSp: Float): VibeResult<Unit>
     suspend fun setTabSize(spaces: Int): VibeResult<Unit>
 }
@@ -43,6 +45,11 @@ class InMemorySettingsRepository(
 
     override suspend fun setThemeMode(mode: ThemeMode): VibeResult<Unit> {
         _settings.value = _settings.value.copy(themeMode = mode)
+        return VibeResult.Success(Unit)
+    }
+
+    override suspend fun setEditorTheme(themeId: String): VibeResult<Unit> {
+        _settings.value = _settings.value.copy(editorThemeId = themeId)
         return VibeResult.Success(Unit)
     }
 

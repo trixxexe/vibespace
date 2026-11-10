@@ -12,6 +12,7 @@ import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.editor.model.CursorPosition
 import com.vibespace.core.editor.sora.TextMateLanguageManager
 import com.vibespace.core.editor.sora.VibeEditorColorScheme
+import com.vibespace.core.editor.theme.EditorThemeDefinition
 import com.vibespace.core.language.model.LanguageDefinition
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
@@ -29,6 +30,7 @@ fun SoraEditorCanvas(
     fontSizeSp: Float,
     onContentChange: (String) -> Unit,
     onCursorChange: (CursorPosition) -> Unit,
+    theme: EditorThemeDefinition = EditorThemeDefinition.VIBE_DARK,
     controller: SoraEditorController = remember { SoraEditorController() },
     modifier: Modifier = Modifier
 ) {
@@ -47,7 +49,7 @@ fun SoraEditorCanvas(
 
             CodeEditor(context).apply {
                 typefaceText = Typeface.MONOSPACE
-                colorScheme = VibeEditorColorScheme()
+                colorScheme = VibeEditorColorScheme(theme)
                 isLineNumberEnabled = true
                 isWordwrap = false
                 setTextSize(fontSizeSp)
@@ -79,6 +81,9 @@ fun SoraEditorCanvas(
         update = { editor ->
             // Update font size if changed externally
             editor.setTextSize(fontSizeSp)
+
+            // Update color scheme if theme changed
+            editor.colorScheme = VibeEditorColorScheme(theme)
 
             // Sync content if updated externally
             if (editor.text.toString() != content) {

@@ -8,6 +8,7 @@ data class EditorUiState(
     val activeDocument: EditorDocument? = null,
     val cursorPosition: CursorPosition = CursorPosition(1, 1, 0),
     val fontSizeSp: Float = 13f,
+    val themeId: String = "vibe_dark",
     val isSaving: Boolean = false,
     val statusMessage: String? = null
 )

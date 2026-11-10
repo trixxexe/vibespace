@@ -108,8 +108,8 @@ class EmbeddedInstantRunner(
     }
 
     private suspend fun runPython(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
-        emit("Python 3.11.0 (VibeSpace Embedded Environment)", false)
-        emit("Type 'help', 'copyright', 'credits' or 'license' for more information.", false)
+        emit("VibeSpace Instant Python Evaluator (Lightweight)", false)
+        emit("(Tip: Switch runner to 'Alpine Linux Subsystem' for full pip libraries & C-extensions)", false)
 
         val codeOrFile = extractCodeFromCommand(command, "python3", "python")
         if (codeOrFile.isBlank()) {
@@ -141,7 +141,8 @@ class EmbeddedInstantRunner(
     }
 
     private suspend fun runJavaScript(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
-        emit("Node.js v20.10.0 (VibeSpace Embedded Environment)", false)
+        emit("VibeSpace Instant JavaScript Evaluator (Lightweight)", false)
+        emit("(Tip: Switch runner to 'Alpine Linux Subsystem' for full npm packages & Node.js)", false)
 
         val codeOrFile = extractCodeFromCommand(command, "node", "js")
         if (codeOrFile.isBlank()) {

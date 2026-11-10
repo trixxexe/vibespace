@@ -10,7 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.vibespace.core.designsystem.components.VibeEmptyState
 import com.vibespace.core.designsystem.components.VibeIcons
@@ -18,10 +20,13 @@ import com.vibespace.core.designsystem.components.VibeStatusBar
 import com.vibespace.core.designsystem.components.VibeTabBar
 import com.vibespace.core.designsystem.components.VibeTabItem
 import com.vibespace.core.designsystem.theme.VibeTheme
+import com.vibespace.core.language.snippets.SnippetRepository
 import com.vibespace.feature.editor.components.EditorToolbar
 import com.vibespace.feature.editor.components.MobileSymbolBar
+import com.vibespace.feature.editor.components.SnippetCompletionBar
 import com.vibespace.feature.editor.components.SoraEditorCanvas
 import com.vibespace.feature.editor.components.SoraEditorController
+import com.vibespace.feature.editor.components.TemplateBottomSheet
 
 @Composable
 fun EditorScreen(
@@ -36,6 +41,22 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val activeDoc = uiState.activeDocument
     val soraController = remember { SoraEditorController() }
+    var showTemplateSheet by remember { mutableStateOf(false) }
+
+    val currentLanguageId = activeDoc?.language?.id ?: "text"
+    val languageDisplayName = activeDoc?.language?.displayName ?: "Plain Text"
+    val suggestions = remember(currentLanguageId) {
+        SnippetRepository.getSnippetsForLanguage(currentLanguageId)
+    }
+
+    if (showTemplateSheet) {
+        TemplateBottomSheet(
+            languageName = languageDisplayName,
+            snippets = suggestions,
+            onSelectSnippet = { soraController.insertSymbol(it) },
+            onDismiss = { showTemplateSheet = false }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -87,6 +108,7 @@ fun EditorScreen(
                     content = activeDoc.content,
                     language = activeDoc.language,
                     fontSizeSp = uiState.fontSizeSp,
+                    theme = com.vibespace.core.editor.theme.EditorThemeDefinition.fromId(uiState.themeId),
                     onContentChange = { viewModel.onContentChanged(it) },
                     onCursorChange = { viewModel.onCursorPositionChanged(it) },
                     controller = soraController
@@ -100,6 +122,15 @@ fun EditorScreen(
                     onActionClick = onOpenExplorerClick
                 )
             }
+        }
+
+        // Mobile Predictive Snippet Bar
+        if (activeDoc != null && suggestions.isNotEmpty()) {
+            SnippetCompletionBar(
+                suggestions = suggestions,
+                onSelectSnippet = { soraController.insertSymbol(it) },
+                onOpenTemplates = { showTemplateSheet = true }
+            )
         }
 
         // Mobile Virtual Symbol Accessory Bar

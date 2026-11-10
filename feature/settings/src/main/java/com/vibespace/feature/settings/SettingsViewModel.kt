@@ -46,6 +46,12 @@ class SettingsViewModel(
         }
     }
 
+    fun setEditorTheme(themeId: String) {
+        viewModelScope.launch(dispatchers.default) {
+            repository.setEditorTheme(themeId)
+        }
+    }
+
     fun setFontSize(fontSizeSp: Float) {
         viewModelScope.launch(dispatchers.default) {
             repository.setEditorFontSize(fontSizeSp)

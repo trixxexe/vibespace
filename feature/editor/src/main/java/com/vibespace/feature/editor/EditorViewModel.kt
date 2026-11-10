@@ -145,4 +145,8 @@ class EditorViewModel(
     fun setFontSize(fontSizeSp: Float) {
         _uiState.update { it.copy(fontSizeSp = fontSizeSp.coerceIn(10f, 24f)) }
     }
+
+    fun setEditorTheme(themeId: String) {
+        _uiState.update { it.copy(themeId = themeId) }
+    }
 }

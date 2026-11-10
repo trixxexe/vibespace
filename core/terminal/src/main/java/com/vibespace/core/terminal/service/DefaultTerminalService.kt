@@ -97,6 +97,20 @@ class DefaultTerminalService(
         VibeResult.Success(Unit)
     }
 
+    override suspend fun appendLine(
+        sessionId: String,
+        text: String,
+        streamType: StreamType
+    ): VibeResult<Unit> = withContext(dispatchers.default) {
+        val line = TerminalLine(
+            id = IdGenerator.shortId(),
+            text = text,
+            streamType = streamType
+        )
+        emitLine(sessionId, line)
+        VibeResult.Success(Unit)
+    }
+
     override suspend fun clearSession(sessionId: String): VibeResult<Unit> = withContext(dispatchers.default) {
         val session = _sessions.value.firstOrNull { it.sessionId == sessionId }
             ?: return@withContext VibeResult.Error("Session not found: $sessionId")

@@ -35,4 +35,16 @@ class SettingsViewModelTest {
         viewModel.setFontSize(16f)
         assertEquals(16f, viewModel.uiState.value.settings.editorFontSizeSp, 0.01f)
     }
+
+    @Test
+    fun setEditorTheme_updates_theme_id() = runTest {
+        val viewModel = SettingsViewModel(
+            repository = repository,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertEquals("vibe_dark", viewModel.uiState.value.settings.editorThemeId)
+        viewModel.setEditorTheme("dracula")
+        assertEquals("dracula", viewModel.uiState.value.settings.editorThemeId)
+    }
 }

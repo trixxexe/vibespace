@@ -11,6 +11,9 @@ import com.vibespace.core.runner.model.ProcessOutput
 import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.runner.termux.TermuxBridgeRunner
 import com.vibespace.core.workspace.manager.WorkspaceManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +38,8 @@ class DefaultRunnerManager(
     override val activeRunnerMode: StateFlow<RunnerMode> = _activeRunnerMode.asStateFlow()
 
     private val outputFlows = mutableMapOf<String, MutableSharedFlow<ProcessOutput>>()
+    private val runnerScope = CoroutineScope(SupervisorJob() + dispatchers.default)
+    private val collectionJobs = mutableMapOf<String, Job>()
 
     init {
         // Register out-of-the-box Tri-Mode Runners
@@ -78,11 +83,13 @@ class DefaultRunnerManager(
             val combinedFlow = outputFlows.getOrPut(execution.executionId) { MutableSharedFlow(replay = 50) }
             val runnerOutputFlow = runner.observeOutput(execution.executionId)
 
-            kotlinx.coroutines.CoroutineScope(dispatchers.default).launch {
+            val job = runnerScope.launch {
                 runnerOutputFlow.collect { chunk ->
                     combinedFlow.emit(chunk)
                 }
             }
+            collectionJobs[execution.executionId]?.cancel()
+            collectionJobs[execution.executionId] = job
         }
 
         result
@@ -91,6 +98,9 @@ class DefaultRunnerManager(
     override suspend fun stopExecution(executionId: String): VibeResult<Unit> = withContext(dispatchers.default) {
         val current = _activeExecutions.value.firstOrNull { it.executionId == executionId }
             ?: return@withContext VibeResult.Error("Execution not found: $executionId")
+
+        // Cancel output collection job
+        collectionJobs.remove(executionId)?.cancel()
 
         // Notify runners
         runners.values.forEach { it.stop(executionId) }
