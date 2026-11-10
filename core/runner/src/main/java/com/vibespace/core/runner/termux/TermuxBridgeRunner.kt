@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Runner that dispatches execution commands to Termux via the official RUN_COMMAND intent contract.
- * Allows VibeSpace to run full native compilers, package managers, and binaries.
+ * Allows VibeSpace to run native compilers, package managers, and binaries.
+ * Accurately reports fire-and-forget state without fabricating synchronous completion.
  */
 class TermuxBridgeRunner(
     private val context: Context? = null
@@ -81,6 +82,7 @@ class TermuxBridgeRunner(
         emitLine("[Termux Native Runner] Connecting to Termux service...", false)
         emitLine("[Termux RUN_COMMAND] $ $command", false)
 
+        var dispatchSucceeded = false
         try {
             val intent = Intent(TermuxContract.ACTION_RUN_COMMAND).apply {
                 setClassName(TermuxContract.TERMUX_PACKAGE, TermuxContract.TERMUX_SERVICE)
@@ -90,20 +92,28 @@ class TermuxBridgeRunner(
                 putExtra(TermuxContract.EXTRA_BACKGROUND, true)
                 putExtra(TermuxContract.EXTRA_SESSION_ACTION, "0")
             }
-            context?.startService(intent)
-            emitLine("Command dispatched to Termux session.", false)
+            if (context != null) {
+                context.startService(intent)
+                dispatchSucceeded = true
+                emitLine("[Termux] Command dispatched to background Termux session.", false)
+                emitLine("[Termux] Note: Fire-and-forget execution; command runs independently in Termux.", false)
+            } else {
+                emitLine("[Termux Bridge] Android context unavailable to send intent.", true)
+            }
         } catch (e: Throwable) {
             emitLine("Failed to dispatch Termux command: ${e.message}", true)
         }
 
-        val completed = execution.copy(
-            state = ExecutionState.SUCCEEDED,
-            exitCode = 0,
-            endTime = System.currentTimeMillis(),
+        val resultState = if (dispatchSucceeded) ExecutionState.RUNNING else ExecutionState.FAILED
+        val exitCode = if (dispatchSucceeded) null else 1
+        val finalExecution = execution.copy(
+            state = resultState,
+            exitCode = exitCode,
+            endTime = if (dispatchSucceeded) null else System.currentTimeMillis(),
             outputs = outputs
         )
-        activeRuns[executionId] = completed
-        return VibeResult.Success(completed)
+        activeRuns[executionId] = finalExecution
+        return VibeResult.Success(finalExecution)
     }
 
     override suspend fun stop(executionId: String): VibeResult<Unit> {

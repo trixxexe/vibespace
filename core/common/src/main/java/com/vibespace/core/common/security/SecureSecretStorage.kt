@@ -2,35 +2,35 @@ package com.vibespace.core.common.security
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import com.vibespace.core.common.result.VibeResult
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
-import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 /**
  * Contract for secure encryption and decryption of sensitive user credentials (such as AI API keys).
+ * Fails closed: all fallible operations explicitly return [VibeResult].
  */
 interface SecretStorage {
-    fun encrypt(plaintext: String): String
-    fun decrypt(ciphertext: String): String
+    fun encrypt(plaintext: String): VibeResult<String>
+    fun decrypt(ciphertext: String): VibeResult<String>
     fun maskSecret(secret: String): String
 }
 
 /**
  * Android Keystore-backed AES-256-GCM secret storage.
- * Encrypts API keys before persisting to DataStore and provides backward-compatible
- * migration for legacy plaintext values.
+ * Enforces authenticated encryption with no hardcoded fallback key in production.
+ * If the Keystore is unavailable, operations fail closed by returning [VibeResult.Error].
  *
- * Includes an automated software fallback for local JVM unit test environments where
- * the AndroidKeyStore provider is unavailable.
+ * For unit test runners, a [customKey] can be passed into the constructor.
  */
 class SecureSecretStorage(
-    private val keyAlias: String = "vibespace_ai_credentials"
+    private val keyAlias: String = "vibespace_ai_credentials",
+    private val customKey: SecretKey? = null
 ) : SecretStorage {
 
     private val isAndroidKeyStoreAvailable: Boolean by lazy {
@@ -43,14 +43,8 @@ class SecureSecretStorage(
         }
     }
 
-    private val fallbackKey: SecretKey by lazy {
-        // Fallback AES key for JVM test runners where AndroidKeyStore is absent
-        val seed = "vibespace_jvm_test_salt_secret_256bit!".toByteArray(StandardCharsets.UTF_8).copyOf(32)
-        SecretKeySpec(seed, "AES")
-    }
-
     init {
-        if (isAndroidKeyStoreAvailable) {
+        if (customKey == null && isAndroidKeyStoreAvailable) {
             ensureKeystoreKey()
         }
     }
@@ -73,57 +67,61 @@ class SecureSecretStorage(
                 keyGenerator.generateKey()
             }
         } catch (_: Throwable) {
-            // Gracefully handled by falling back to software key if hardware provider fails
+            // Failure to generate keystore key will fail closed during getSecretKey()
         }
     }
 
-    private fun getSecretKey(): SecretKey {
-        return if (isAndroidKeyStoreAvailable) {
-            try {
-                val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
-                (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey ?: fallbackKey
-            } catch (_: Throwable) {
-                fallbackKey
-            }
-        } else {
-            fallbackKey
+    private fun getSecretKey(): SecretKey? {
+        if (customKey != null) {
+            return customKey
         }
-    }
-
-    override fun encrypt(plaintext: String): String {
-        if (plaintext.isEmpty()) return ""
+        if (!isAndroidKeyStoreAvailable) {
+            return null
+        }
         return try {
-            val key = getSecretKey()
+            val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
+            (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    override fun encrypt(plaintext: String): VibeResult<String> {
+        if (plaintext.isEmpty()) return VibeResult.Success("")
+        val key = getSecretKey()
+            ?: return VibeResult.Error("Android Keystore authenticated key unavailable; encryption refused.")
+
+        return try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, key)
             val iv = cipher.iv
             val cipherText = cipher.doFinal(plaintext.toByteArray(StandardCharsets.UTF_8))
 
-            // Format: IV (12 bytes) + CipherText
             val combined = ByteArray(iv.size + cipherText.size)
             System.arraycopy(iv, 0, combined, 0, iv.size)
             System.arraycopy(cipherText, 0, combined, iv.size, cipherText.size)
 
-            PREFIX + Base64.getEncoder().encodeToString(combined)
-        } catch (_: Throwable) {
-            // Fail-safe: never return corrupted unrecoverable data
-            plaintext
+            VibeResult.Success(PREFIX + Base64.getEncoder().encodeToString(combined))
+        } catch (e: Throwable) {
+            VibeResult.Error("Encryption failed: ${e.message}", e)
         }
     }
 
-    override fun decrypt(ciphertext: String): String {
-        if (ciphertext.isEmpty()) return ""
-        // Legacy plaintext migration: if it doesn't start with "enc:", return plaintext directly
+    override fun decrypt(ciphertext: String): VibeResult<String> {
+        if (ciphertext.isEmpty()) return VibeResult.Success("")
+        // Safe legacy plaintext migration: unencrypted legacy keys returned for one-time migration
         if (!ciphertext.startsWith(PREFIX)) {
-            return ciphertext
+            return VibeResult.Success(ciphertext)
         }
 
+        val key = getSecretKey()
+            ?: return VibeResult.Error("Android Keystore authenticated key unavailable; decryption failed.")
+
         return try {
-            val key = getSecretKey()
             val rawBase64 = ciphertext.removePrefix(PREFIX)
             val combined = Base64.getDecoder().decode(rawBase64)
             if (combined.size < GCM_IV_LENGTH) {
-                return ""
+                return VibeResult.Error("Ciphertext payload is truncated or corrupted.")
             }
 
             val iv = ByteArray(GCM_IV_LENGTH)
@@ -136,9 +134,9 @@ class SecureSecretStorage(
             cipher.init(Cipher.DECRYPT_MODE, key, spec)
 
             val decryptedBytes = cipher.doFinal(encryptedBytes)
-            String(decryptedBytes, StandardCharsets.UTF_8)
-        } catch (_: Throwable) {
-            ""
+            VibeResult.Success(String(decryptedBytes, StandardCharsets.UTF_8))
+        } catch (e: Throwable) {
+            VibeResult.Error("Decryption failed: corrupted ciphertext or invalid key: ${e.message}", e)
         }
     }
 

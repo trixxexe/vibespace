@@ -41,8 +41,22 @@ fun VibeNavigation(
     val extensionsViewModel: com.vibespace.feature.settings.extensions.ExtensionsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
 
     val settingsState by settingsViewModel.uiState.collectAsState()
-    LaunchedEffect(settingsState.settings.editorThemeId) {
-        editorViewModel.setEditorTheme(settingsState.settings.editorThemeId)
+    LaunchedEffect(
+        settingsState.settings.editorThemeId,
+        settingsState.settings.editorFontSizeSp,
+        settingsState.settings.tabSizeSpaces,
+        settingsState.settings.showLineNumbers,
+        settingsState.settings.wordWrap,
+        settingsState.settings.autoSave
+    ) {
+        editorViewModel.updateEditorPreferences(
+            fontSizeSp = settingsState.settings.editorFontSizeSp,
+            tabSize = settingsState.settings.tabSizeSpaces,
+            showLineNumbers = settingsState.settings.showLineNumbers,
+            wordWrap = settingsState.settings.wordWrap,
+            themeId = settingsState.settings.editorThemeId,
+            autoSave = settingsState.settings.autoSave
+        )
     }
 
     LaunchedEffect(

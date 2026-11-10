@@ -118,4 +118,71 @@ class DefaultWorkspaceManagerTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun disk_operation_rejects_sibling_path_sharing_prefix() = runTest {
+        val baseDir = java.io.File.createTempFile("vibe_base_", "").apply {
+            delete()
+            mkdirs()
+        }
+        val projectDir = java.io.File(baseDir, "project").apply { mkdirs() }
+        val siblingDir = java.io.File(baseDir, "project-sibling").apply { mkdirs() }
+        val siblingFile = java.io.File(siblingDir, "stolen.txt").apply { writeText("secret") }
+
+        try {
+            val project = Project(id = "safe-proj", name = "SafeProject", rootUri = projectDir.toURI().toString())
+            workspaceManager.openProject(project)
+
+            // Attempt to write to sibling directory which shares prefix with projectDir
+            val siblingFileUri = siblingFile.toURI().toString()
+            val writeResult = workspaceManager.writeFile(siblingFileUri, "attack")
+            assertTrue(writeResult.isFailure)
+            assertTrue(writeResult.toString().contains("Security error") || writeResult.toString().contains("escapes"))
+            assertEquals("secret", siblingFile.readText())
+
+            // Attempt to delete sibling file
+            val deleteResult = workspaceManager.delete(siblingFileUri)
+            assertTrue(deleteResult.isFailure)
+            assertTrue(siblingFile.exists())
+        } finally {
+            baseDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun createFile_rejects_null_bytes_and_path_separators_in_name() = runTest {
+        val tempDir = java.io.File.createTempFile("vibe_name_test_", "").apply {
+            delete()
+            mkdirs()
+        }
+        try {
+            val rootUri = tempDir.toURI().toString()
+            val project = Project(id = "name-proj", name = "NameTest", rootUri = rootUri)
+            workspaceManager.openProject(project)
+
+            val resNullByte = workspaceManager.createFile(rootUri, "evil\u0000file.py")
+            assertTrue(resNullByte.isFailure)
+
+            val resSlash = workspaceManager.createFile(rootUri, "../traversal.py")
+            assertTrue(resSlash.isFailure)
+
+            val resDotDot = workspaceManager.createFile(rootUri, "..")
+            assertTrue(resDotDot.isFailure)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun disk_operation_fails_when_no_active_project_is_open() = runTest {
+        workspaceManager.closeProject()
+        val tempFile = java.io.File.createTempFile("vibe_orphan_", ".txt")
+        try {
+            val res = workspaceManager.writeFile(tempFile.toURI().toString(), "data")
+            assertTrue(res.isFailure)
+            assertTrue(res.toString().contains("active project"))
+        } finally {
+            tempFile.delete()
+        }
+    }
 }

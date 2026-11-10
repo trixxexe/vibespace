@@ -147,11 +147,12 @@ class TerminalViewModel(
     }
 
     fun runActiveDocument(fileName: String, languageId: String) {
+        val escapedFile = "\"" + fileName.replace("\"", "\\\"").replace("$", "\\$") + "\""
         val command = when {
-            fileName.endsWith(".py") || languageId == "python" -> "python $fileName"
-            fileName.endsWith(".js") || fileName.endsWith(".ts") || languageId == "javascript" || languageId == "typescript" -> "node $fileName"
-            fileName.endsWith(".sh") || languageId == "shell" -> "sh $fileName"
-            else -> "echo Running $fileName"
+            fileName.endsWith(".py") || languageId == "python" -> "python $escapedFile"
+            fileName.endsWith(".js") || fileName.endsWith(".ts") || languageId == "javascript" || languageId == "typescript" -> "node $escapedFile"
+            fileName.endsWith(".sh") || languageId == "shell" -> "sh $escapedFile"
+            else -> "echo Running $escapedFile"
         }
         executeCommand(command)
     }

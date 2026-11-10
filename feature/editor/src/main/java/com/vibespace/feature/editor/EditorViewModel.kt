@@ -139,6 +139,13 @@ class EditorViewModel(
 
     fun closeTab(documentId: String) {
         viewModelScope.launch(dispatchers.default) {
+            val doc = editorEngine.documents.value.find { it.documentId == documentId }
+            if (doc != null) {
+                val client = lspClientProvider?.invoke(doc.language.id)
+                if (client != null && client.isRunning) {
+                    client.didClose(doc.uri)
+                }
+            }
             editorEngine.closeDocument(documentId)
         }
     }
@@ -226,6 +233,26 @@ class EditorViewModel(
 
     fun setEditorTheme(themeId: String) {
         _uiState.update { it.copy(themeId = themeId) }
+    }
+
+    fun updateEditorPreferences(
+        fontSizeSp: Float,
+        tabSize: Int,
+        showLineNumbers: Boolean,
+        wordWrap: Boolean,
+        themeId: String,
+        autoSave: Boolean
+    ) {
+        _uiState.update {
+            it.copy(
+                fontSizeSp = fontSizeSp,
+                tabSize = tabSize,
+                showLineNumbers = showLineNumbers,
+                wordWrap = wordWrap,
+                themeId = themeId,
+                autoSave = autoSave
+            )
+        }
     }
 
     fun requestHover(line: Int? = null, column: Int? = null) {

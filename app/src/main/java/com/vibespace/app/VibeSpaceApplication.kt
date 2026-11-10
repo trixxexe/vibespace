@@ -59,7 +59,11 @@ class VibeSpaceApplication : Application() {
     }
 
     val extensionManager: com.vibespace.core.editor.extension.ExtensionManager by lazy {
-        com.vibespace.core.editor.extension.DefaultExtensionManager(dispatchers = dispatchers)
+        val stateFile = java.io.File(filesDir, "installed_extensions.json")
+        com.vibespace.core.editor.extension.DefaultExtensionManager(
+            stateFile = stateFile,
+            dispatchers = dispatchers
+        )
     }
 
     val runnerManager: RunnerManager by lazy {

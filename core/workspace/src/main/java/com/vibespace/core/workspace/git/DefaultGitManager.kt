@@ -10,13 +10,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Mobile Git source control manager.
  * Tracks file modifications, staging, commits, branch management, and provides line diffs.
+ * Truthful: Remote operations fail closed with clear status explaining mobile sandbox boundaries.
  */
 class DefaultGitManager(
     private val workspaceManager: WorkspaceManager,
@@ -60,26 +62,123 @@ class DefaultGitManager(
         stagedPaths.clear()
         aheadCount = 0
         behindCount = 0
-        val allFiles = workspaceManager.getAllProjectFiles(rootUri).getOrNull() ?: emptyList()
-        for (f in allFiles) {
-            if (!f.isDirectory) {
-                val content = workspaceManager.readFile(f.uri).getOrNull() ?: ""
-                baselineFiles[f.uri] = content
-            }
+        branches.clear()
+        branches.add(GitBranch("main", isCurrent = true))
+        commits.clear()
+
+        // Attempt to load persisted git state
+        val stateUri = "$rootUri/.vibespace/git_state.json"
+        val stateRead = workspaceManager.readFile(stateUri)
+        var restoredFromState = false
+        if (stateRead is VibeResult.Success) {
+            try {
+                val json = JSONObject(stateRead.data)
+                aheadCount = json.optInt("aheadCount", 0)
+                behindCount = json.optInt("behindCount", 0)
+
+                val branchesArray = json.optJSONArray("branches")
+                if (branchesArray != null && branchesArray.length() > 0) {
+                    branches.clear()
+                    for (i in 0 until branchesArray.length()) {
+                        val bObj = branchesArray.getJSONObject(i)
+                        branches.add(
+                            GitBranch(
+                                name = bObj.getString("name"),
+                                isCurrent = bObj.optBoolean("isCurrent", false)
+                            )
+                        )
+                    }
+                }
+
+                val commitsArray = json.optJSONArray("commits")
+                if (commitsArray != null) {
+                    for (i in 0 until commitsArray.length()) {
+                        val cObj = commitsArray.getJSONObject(i)
+                        commits.add(
+                            GitCommit(
+                                id = cObj.getString("id"),
+                                shortId = cObj.optString("shortId", cObj.getString("id").take(7)),
+                                message = cObj.getString("message"),
+                                author = cObj.optString("author", "VibeSpace Developer"),
+                                timestamp = cObj.optLong("timestamp", System.currentTimeMillis())
+                            )
+                        )
+                    }
+                }
+
+                val baselineObj = json.optJSONObject("baseline")
+                if (baselineObj != null) {
+                    val keys = baselineObj.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        baselineFiles[key] = baselineObj.getString(key)
+                    }
+                }
+                restoredFromState = true
+            } catch (_: Throwable) {}
         }
 
-        if (commits.isEmpty()) {
-            val initCommit = GitCommit(
-                id = IdGenerator.shortId("commit"),
-                shortId = "init01",
-                message = "Initial workspace commit",
+        if (!restoredFromState) {
+            val allFiles = workspaceManager.getAllProjectFiles(rootUri).getOrNull() ?: emptyList()
+            for (f in allFiles) {
+                if (!f.isDirectory && !f.uri.contains(".vibespace/")) {
+                    val content = workspaceManager.readFile(f.uri).getOrNull() ?: ""
+                    baselineFiles[f.uri] = content
+                }
+            }
+
+            // Seed initial commit
+            val initialCommit = GitCommit(
+                id = "init-" + IdGenerator.shortId("commit"),
+                shortId = "0000001",
+                message = "Initial workspace snapshot",
                 author = "VibeSpace Developer",
                 timestamp = System.currentTimeMillis()
             )
-            commits.add(initCommit)
+            commits.add(initialCommit)
+            saveGitState(rootUri)
         }
 
         refreshStatusInternal(rootUri)
+    }
+
+    private suspend fun saveGitState(rootUri: String) = withContext(dispatchers.io) {
+        try {
+            val json = JSONObject()
+            json.put("aheadCount", aheadCount)
+            json.put("behindCount", behindCount)
+
+            val branchesArray = JSONArray()
+            for (b in branches) {
+                val bObj = JSONObject()
+                bObj.put("name", b.name)
+                bObj.put("isCurrent", b.isCurrent)
+                branchesArray.put(bObj)
+            }
+            json.put("branches", branchesArray)
+
+            val commitsArray = JSONArray()
+            for (c in commits) {
+                val cObj = JSONObject()
+                cObj.put("id", c.id)
+                cObj.put("shortId", c.shortId)
+                cObj.put("message", c.message)
+                cObj.put("author", c.author)
+                cObj.put("timestamp", c.timestamp)
+                commitsArray.put(cObj)
+            }
+            json.put("commits", commitsArray)
+
+            val baselineObj = JSONObject()
+            for ((k, v) in baselineFiles) {
+                if (!k.contains(".vibespace/")) {
+                    baselineObj.put(k, v)
+                }
+            }
+            json.put("baseline", baselineObj)
+
+            workspaceManager.writeFile("$rootUri/.vibespace/git_state.json", json.toString())
+        } catch (_: Throwable) {}
     }
 
     override suspend fun refreshStatus(): VibeResult<GitWorkspaceStatus> = withContext(dispatchers.io) {
@@ -93,7 +192,7 @@ class DefaultGitManager(
         val currentFiles = workspaceManager.getAllProjectFiles(rootUri).getOrNull() ?: emptyList()
         val currentFilesMap = mutableMapOf<String, String>()
         for (f in currentFiles) {
-            if (!f.isDirectory) {
+            if (!f.isDirectory && !f.uri.contains(".vibespace/")) {
                 val content = workspaceManager.readFile(f.uri).getOrNull() ?: ""
                 currentFilesMap[f.uri] = content
             }
@@ -129,7 +228,7 @@ class DefaultGitManager(
 
         // Check for deleted files
         for ((uri, _) in baselineFiles) {
-            if (!currentFilesMap.containsKey(uri)) {
+            if (!uri.contains(".vibespace/") && !currentFilesMap.containsKey(uri)) {
                 val fileName = uri.substringAfterLast('/')
                 allDetected.add(
                     GitFileStatus(
@@ -235,6 +334,11 @@ class DefaultGitManager(
         commits.add(0, newCommit)
         aheadCount++
 
+        val project = workspaceManager.currentProject.value
+        if (project != null) {
+            saveGitState(project.rootUri)
+        }
+
         refreshStatus()
         VibeResult.Success(newCommit)
     }
@@ -256,7 +360,7 @@ class DefaultGitManager(
         if (cleanName.isEmpty()) {
             return@withContext VibeResult.Error("Branch name cannot be empty")
         }
-        if (branches.any { it.name.equals(cleanName, ignoreCase = true) }) {
+        if (branches.any { it.name == cleanName }) {
             return@withContext VibeResult.Error("Branch '$cleanName' already exists")
         }
         for (i in branches.indices) {
@@ -269,7 +373,11 @@ class DefaultGitManager(
 
     override suspend fun getFileDiff(path: String): VibeResult<FileDiff> = withContext(dispatchers.io) {
         val oldContent = baselineFiles[path] ?: ""
-        val newContent = workspaceManager.readFile(path).getOrNull() ?: ""
+        val readResult = workspaceManager.readFile(path)
+        if (readResult is VibeResult.Error) {
+            return@withContext VibeResult.Error("Failed to read file for diff: ${readResult.message}", readResult.throwable)
+        }
+        val newContent = (readResult as VibeResult.Success).data
 
         val oldLines = if (oldContent.isEmpty()) emptyList() else oldContent.split("\n")
         val newLines = if (newContent.isEmpty()) emptyList() else newContent.split("\n")
@@ -289,38 +397,29 @@ class DefaultGitManager(
     }
 
     override suspend fun push(): VibeResult<String> = withContext(dispatchers.io) {
-        val project = workspaceManager.currentProject.value
-            ?: return@withContext VibeResult.Error("No active project to push")
         val branch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
-        val count = aheadCount
-        aheadCount = 0
-        refreshStatus()
-        if (count == 0) {
-            VibeResult.Success("Everything up-to-date on origin/$branch")
-        } else {
-            VibeResult.Success("Pushed $count commit(s) to origin/$branch")
-        }
+        VibeResult.Error("Remote Git push to origin/$branch is unavailable. Mobile sandbox lacks configured SSH/HTTPS remote transport; use Alpine PRoot or Termux runner with git push.")
     }
 
     override suspend fun pull(): VibeResult<String> = withContext(dispatchers.io) {
-        val project = workspaceManager.currentProject.value
-            ?: return@withContext VibeResult.Error("No active project to pull")
         val branch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
-        behindCount = 0
-        refreshStatus()
-        VibeResult.Success("Already up-to-date with origin/$branch")
+        VibeResult.Error("Remote Git pull from origin/$branch is unavailable. Mobile sandbox lacks configured SSH/HTTPS remote transport; use Alpine PRoot or Termux runner with git pull.")
     }
 
     private fun computeDiffLines(oldLines: List<String>, newLines: List<String>): List<DiffLine> {
-        val result = mutableListOf<DiffLine>()
-        val n = oldLines.size
-        val m = newLines.size
+        val maxLines = 1000
+        val isTruncated = oldLines.size > maxLines || newLines.size > maxLines
+        val boundedOld = if (oldLines.size > maxLines) oldLines.take(maxLines) else oldLines
+        val boundedNew = if (newLines.size > maxLines) newLines.take(maxLines) else newLines
 
-        // Longest Common Subsequence DP table
+        val n = boundedOld.size
+        val m = boundedNew.size
+
+        // Longest Common Subsequence DP table bounded to maxLines
         val dp = Array(n + 1) { IntArray(m + 1) }
         for (i in 0 until n) {
             for (j in 0 until m) {
-                if (oldLines[i] == newLines[j]) {
+                if (boundedOld[i] == boundedNew[j]) {
                     dp[i + 1][j + 1] = dp[i][j] + 1
                 } else {
                     dp[i + 1][j + 1] = maxOf(dp[i + 1][j], dp[i][j + 1])
@@ -333,13 +432,13 @@ class DefaultGitManager(
         val temp = mutableListOf<DiffLine>()
 
         while (i > 0 || j > 0) {
-            if (i > 0 && j > 0 && oldLines[i - 1] == newLines[j - 1]) {
+            if (i > 0 && j > 0 && boundedOld[i - 1] == boundedNew[j - 1]) {
                 temp.add(
                     DiffLine(
                         type = DiffLineType.EQUAL,
                         oldLineNumber = i,
                         newLineNumber = j,
-                        text = oldLines[i - 1]
+                        text = boundedOld[i - 1]
                     )
                 )
                 i--
@@ -350,7 +449,7 @@ class DefaultGitManager(
                         type = DiffLineType.INSERT,
                         oldLineNumber = null,
                         newLineNumber = j,
-                        text = newLines[j - 1]
+                        text = boundedNew[j - 1]
                     )
                 )
                 j--
@@ -360,7 +459,7 @@ class DefaultGitManager(
                         type = DiffLineType.DELETE,
                         oldLineNumber = i,
                         newLineNumber = null,
-                        text = oldLines[i - 1]
+                        text = boundedOld[i - 1]
                     )
                 )
                 i--
@@ -368,6 +467,16 @@ class DefaultGitManager(
         }
 
         temp.reverse()
+        if (isTruncated) {
+            temp.add(
+                DiffLine(
+                    type = DiffLineType.EQUAL,
+                    oldLineNumber = null,
+                    newLineNumber = null,
+                    text = "... [Diff truncated: file exceeds $maxLines lines to preserve mobile memory] ..."
+                )
+            )
+        }
         return temp
     }
 }

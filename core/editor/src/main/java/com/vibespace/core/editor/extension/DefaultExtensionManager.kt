@@ -20,8 +20,11 @@ import java.net.URLEncoder
  * and direct installation from .vsix files.
  */
 class DefaultExtensionManager(
+    private val stateFile: java.io.File? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : ExtensionManager {
+
+    constructor(dispatchers: DispatcherProvider) : this(null, dispatchers)
 
     private val curatedExtensions = listOf(
         ExtensionMetadata(
@@ -118,6 +121,66 @@ class DefaultExtensionManager(
     )
     override val installedExtensions: StateFlow<List<ExtensionMetadata>> = _installedExtensions.asStateFlow()
 
+    init {
+        loadPersistedState()
+    }
+
+    private fun loadPersistedState() {
+        if (stateFile != null && stateFile.exists()) {
+            try {
+                val jsonStr = stateFile.readText()
+                val array = org.json.JSONArray(jsonStr)
+                val loaded = mutableListOf<ExtensionMetadata>()
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    loaded.add(
+                        ExtensionMetadata(
+                            id = obj.getString("id"),
+                            name = obj.getString("name"),
+                            displayName = obj.getString("displayName"),
+                            publisher = obj.getString("publisher"),
+                            version = obj.getString("version"),
+                            description = obj.optString("description", ""),
+                            category = ExtensionCategory.valueOf(obj.optString("category", ExtensionCategory.THEME.name)),
+                            downloadUrl = obj.optString("downloadUrl").ifEmpty { null },
+                            downloadCount = obj.optLong("downloadCount", 0),
+                            isInstalled = true,
+                            isEnabled = obj.optBoolean("isEnabled", true),
+                            isBuiltIn = obj.optBoolean("isBuiltIn", false)
+                        )
+                    )
+                }
+                if (loaded.isNotEmpty()) {
+                    _installedExtensions.value = loaded
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
+    private fun savePersistedState() {
+        val file = stateFile ?: return
+        try {
+            val array = org.json.JSONArray()
+            for (ext in _installedExtensions.value) {
+                val obj = JSONObject().apply {
+                    put("id", ext.id)
+                    put("name", ext.name)
+                    put("displayName", ext.displayName)
+                    put("publisher", ext.publisher)
+                    put("version", ext.version)
+                    put("description", ext.description)
+                    put("category", ext.category.name)
+                    put("downloadUrl", ext.downloadUrl ?: "")
+                    put("downloadCount", ext.downloadCount)
+                    put("isEnabled", ext.isEnabled)
+                    put("isBuiltIn", ext.isBuiltIn)
+                }
+                array.put(obj)
+            }
+            file.writeText(array.toString())
+        } catch (_: Throwable) {}
+    }
+
     override suspend fun getCuratedExtensions(): VibeResult<List<ExtensionMetadata>> = withContext(dispatchers.default) {
         val installedMap = _installedExtensions.value.associateBy { it.id }
         val updated = curatedExtensions.map { ext ->
@@ -210,6 +273,7 @@ class DefaultExtensionManager(
         _installedExtensions.update { list ->
             listOf(updated) + list.filter { it.id != extension.id }
         }
+        savePersistedState()
         VibeResult.Success(Unit)
     }
 
@@ -288,6 +352,7 @@ class DefaultExtensionManager(
                 _installedExtensions.update { list ->
                     listOf(extension) + list.filter { it.id != extension.id }
                 }
+                savePersistedState()
                 VibeResult.Success(extension)
             }
             is VibeResult.Error -> VibeResult.Error(parseResult.message, parseResult.throwable)
@@ -299,6 +364,7 @@ class DefaultExtensionManager(
         _installedExtensions.update { list ->
             list.filter { it.id != extensionId }
         }
+        savePersistedState()
         VibeResult.Success(Unit)
     }
 
@@ -308,6 +374,7 @@ class DefaultExtensionManager(
                 if (it.id == extensionId) it.copy(isEnabled = enabled) else it
             }
         }
+        savePersistedState()
         VibeResult.Success(Unit)
     }
 }

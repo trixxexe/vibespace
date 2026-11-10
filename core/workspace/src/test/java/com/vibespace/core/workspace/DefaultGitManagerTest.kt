@@ -108,7 +108,7 @@ class DefaultGitManagerTest {
     }
 
     @Test
-    fun push_and_pull_sync_operates_correctly() = runTest {
+    fun push_and_pull_truthfully_report_unavailable_remote_transport() = runTest {
         val root = "vibe://projects/git-push"
         workspaceManager.openProject(Project("g6", "GitPush", root))
 
@@ -118,15 +118,44 @@ class DefaultGitManagerTest {
         gitManager.stageAll()
         gitManager.commit("Commit ahead")
 
-        assertEquals(1, gitManager.status.value.aheadCount)
-
         val pushResult = gitManager.push()
-        assertTrue(pushResult.isSuccess)
-        assertEquals(0, gitManager.status.value.aheadCount)
-        assertTrue(pushResult.getOrNull()!!.contains("Pushed 1 commit(s)"))
+        assertTrue(pushResult.isFailure)
+        assertTrue(pushResult.toString().contains("unavailable") || pushResult.toString().contains("sandbox"))
 
         val pullResult = gitManager.pull()
-        assertTrue(pullResult.isSuccess)
-        assertTrue(pullResult.getOrNull()!!.contains("Already up-to-date"))
+        assertTrue(pullResult.isFailure)
+        assertTrue(pullResult.toString().contains("unavailable") || pullResult.toString().contains("sandbox"))
+    }
+
+    @Test
+    fun getFileDiff_bounds_large_files_and_prevents_oom() = runTest {
+        val root = "vibe://projects/git-large-diff"
+        workspaceManager.openProject(Project("g7", "GitLargeDiff", root))
+
+        val bigFileUri = "$root/large.txt"
+        val largeContent = (1..1500).joinToString("\n") { "line $it" }
+        workspaceManager.writeFile(bigFileUri, largeContent)
+
+        // Seed baseline then modify
+        gitManager.stageAll()
+        gitManager.commit("Baseline large")
+
+        val modifiedContent = (1..1500).joinToString("\n") { "modified line $it" }
+        workspaceManager.writeFile(bigFileUri, modifiedContent)
+
+        val diffResult = gitManager.getFileDiff(bigFileUri)
+        assertTrue(diffResult.isSuccess)
+        val diff = diffResult.getOrNull()
+        assertNotNull(diff)
+        assertTrue(diff!!.lines.any { it.text.contains("Diff truncated") })
+    }
+
+    @Test
+    fun getFileDiff_propagates_read_errors_for_missing_files() = runTest {
+        val root = "vibe://projects/git-err-diff"
+        workspaceManager.openProject(Project("g8", "GitErrDiff", root))
+
+        val diffResult = gitManager.getFileDiff("vibe://projects/git-err-diff/does_not_exist.txt")
+        assertTrue(diffResult.isFailure)
     }
 }

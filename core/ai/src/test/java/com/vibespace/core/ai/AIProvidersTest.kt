@@ -25,7 +25,7 @@ class AIProvidersTest {
     }
 
     @Test
-    fun geminiProvider_with_fake_transport_parses_success_response() = runTest {
+    fun geminiProvider_with_fake_transport_parses_success_response_and_uses_header_transport() = runTest {
         val fakeJson = """
             {
                 "candidates": [
@@ -47,8 +47,12 @@ class AIProvidersTest {
             activeModel = "gemini-2.0-flash",
             httpTransport = { url, method, headers, body ->
                 assertTrue(url.contains("gemini-2.0-flash"))
-                assertTrue(url.contains("key=test-gemini-key"))
+                // API key is securely transported via header rather than query string
+                assertFalse(url.contains("key="))
+                assertEquals("test-gemini-key", headers["x-goog-api-key"])
                 assertEquals("POST", method)
+                assertTrue(body.contains("Explain this code"))
+                assertTrue(body.contains("Active File: main.py"))
                 Pair(200, fakeJson)
             }
         )
@@ -56,7 +60,11 @@ class AIProvidersTest {
         assertTrue(provider.isConfigured)
         val ctx = CodeContext("vibe://main.py", "main.py", "Python", fullContent = "print(1)")
         val request = AIRequest(
-            messages = listOf(AIMessage("1", AIRole.USER, "Explain this code")),
+            messages = listOf(
+                AIMessage("0", AIRole.USER, "Prior turn"),
+                AIMessage("1", AIRole.ASSISTANT, "Prior reply"),
+                AIMessage("2", AIRole.USER, "Explain this code")
+            ),
             codeContext = ctx
         )
 
@@ -85,16 +93,36 @@ class AIProvidersTest {
             activeModel = "gpt-4o",
             httpTransport = { url, method, headers, body ->
                 assertEquals("Bearer sk-test-key", headers["Authorization"])
+                assertTrue(body.contains("Prior message"))
+                assertTrue(body.contains("Hi"))
                 Pair(200, fakeJson)
             }
         )
 
         assertTrue(provider.isConfigured)
-        val request = AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+        val request = AIRequest(
+            messages = listOf(
+                AIMessage("0", AIRole.USER, "Prior message"),
+                AIMessage("1", AIRole.ASSISTANT, "Prior assistant response"),
+                AIMessage("2", AIRole.USER, "Hi")
+            )
+        )
         val result = provider.generateResponse(request)
 
         assertTrue(result.isSuccess)
         assertEquals("Hello from OpenAI GPT-4o!", result.getOrNull()!!.message.content)
+    }
+
+    @Test
+    fun openaiProvider_rejects_insecure_custom_endpoint() = runTest {
+        val provider = OpenAIAIProvider(
+            apiKey = "test-key",
+            customEndpoint = "http://remote-server.com/api"
+        )
+        val request = AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+        val result = provider.generateResponse(request)
+        assertTrue(result.isError)
+        assertTrue((result as com.vibespace.core.common.result.VibeResult.Error).message.contains("HTTPS"))
     }
 
     @Test

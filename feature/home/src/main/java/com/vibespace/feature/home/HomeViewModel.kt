@@ -1,10 +1,12 @@
 package com.vibespace.feature.home
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.id.IdGenerator
+import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.workspace.manager.WorkspaceManager
 import com.vibespace.core.workspace.model.Project
 import com.vibespace.core.workspace.repository.RecentProjectsRepository
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HomeViewModel(
     private val workspaceManager: WorkspaceManager,
@@ -48,20 +51,83 @@ class HomeViewModel(
                 name = name.trim().ifEmpty { "NewProject" },
                 rootUri = "vibe://projects/$projectId"
             )
-            workspaceManager.openProject(project)
-            recentProjectsRepository?.addRecentProject(project)
-            kotlinx.coroutines.withContext(dispatchers.main) {
-                onProjectReady(project)
+            val res = workspaceManager.openProject(project)
+            if (res is VibeResult.Success) {
+                recentProjectsRepository?.addRecentProject(res.data)
+                withContext(dispatchers.main) {
+                    onProjectReady(res.data)
+                }
+            } else if (res is VibeResult.Error) {
+                withContext(dispatchers.main) {
+                    _uiState.update { it.copy(errorMessage = res.message) }
+                }
             }
         }
     }
 
-    fun openProject(project: Project, onProjectReady: (Project) -> Unit) {
+    fun openDemoProject(onProjectReady: (Project) -> Unit) {
+        createNewProject("DemoProject", onProjectReady)
+    }
+
+    fun openSafTreeUri(
+        treeUri: Uri,
+        folderName: String,
+        onProjectReady: (Project) -> Unit,
+        onProjectError: (String) -> Unit
+    ) {
         viewModelScope.launch(dispatchers.io) {
-            workspaceManager.openProject(project)
-            kotlinx.coroutines.withContext(dispatchers.main) {
-                onProjectReady(project)
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val projectId = IdGenerator.shortId("saf")
+            val project = Project(
+                id = projectId,
+                name = folderName.trim().ifEmpty { "SAF Project" },
+                rootUri = treeUri.toString(),
+                isStorageAccessFramework = true
+            )
+            when (val res = workspaceManager.openProject(project)) {
+                is VibeResult.Success -> {
+                    recentProjectsRepository?.addRecentProject(res.data)
+                    withContext(dispatchers.main) {
+                        _uiState.update { it.copy(isLoading = false) }
+                        onProjectReady(res.data)
+                    }
+                }
+                is VibeResult.Error -> {
+                    withContext(dispatchers.main) {
+                        _uiState.update { it.copy(isLoading = false, errorMessage = res.message) }
+                        onProjectError(res.message)
+                    }
+                }
             }
         }
+    }
+
+    fun openProject(
+        project: Project,
+        onProjectReady: (Project) -> Unit,
+        onProjectError: ((String) -> Unit)? = null
+    ) {
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val res = workspaceManager.openProject(project)) {
+                is VibeResult.Success -> {
+                    recentProjectsRepository?.addRecentProject(res.data)
+                    withContext(dispatchers.main) {
+                        _uiState.update { it.copy(isLoading = false) }
+                        onProjectReady(res.data)
+                    }
+                }
+                is VibeResult.Error -> {
+                    withContext(dispatchers.main) {
+                        _uiState.update { it.copy(isLoading = false, errorMessage = res.message) }
+                        onProjectError?.invoke(res.message)
+                    }
+                }
+            }
+        }
+    }
+
+    fun dismissError() {
+        _uiState.update { it.copy(errorMessage = null) }
     }
 }

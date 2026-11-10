@@ -17,6 +17,7 @@ import java.net.URL
 /**
  * Real OpenAI-compatible AI Provider supporting OpenAI (GPT-4o, GPT-4o-mini), OpenRouter, Groq,
  * Ollama, or any custom compatible proxy.
+ * Validates endpoints before use and preserves conversational context.
  */
 class OpenAIAIProvider(
     var apiKey: String = "",
@@ -35,13 +36,17 @@ class OpenAIAIProvider(
             return VibeResult.Error("No OpenAI API key configured. Please enter your API key in Settings or AI Chat.")
         }
 
+        val endpoint = customEndpoint.trim().ifBlank { "https://api.openai.com/v1/chat/completions" }
+        if (!endpoint.startsWith("https://") && !endpoint.startsWith("http://localhost") && !endpoint.startsWith("http://127.0.0.1")) {
+            return VibeResult.Error("Invalid custom endpoint '$endpoint'. Endpoint must use HTTPS (or localhost for local proxies).")
+        }
+
         return try {
-            val endpoint = customEndpoint.ifBlank { "https://api.openai.com/v1/chat/completions" }
             val requestBody = buildRequestBody(request)
 
             val headers = mapOf(
                 "Content-Type" to "application/json",
-                "Authorization" to "Bearer $apiKey"
+                "Authorization" to "Bearer ${apiKey.trim()}"
             )
 
             val (statusCode, responseText) = executeHttp(endpoint, "POST", headers, requestBody)
@@ -118,23 +123,39 @@ class OpenAIAIProvider(
             systemObj.put("content", "You are VibeSpace AI, an expert mobile coding companion. Provide clear, concise, production-ready code. When suggesting terminal commands, wrap them in ```bash ... ``` code blocks.")
             messagesArray.put(systemObj)
 
-            val promptBuilder = StringBuilder()
-            request.codeContext?.let { ctx ->
-                promptBuilder.append("Active File: ${ctx.fileName} (${ctx.language})\n")
-                if (ctx.fullContent != null) {
-                    promptBuilder.append("```${ctx.language.lowercase()}\n")
-                    promptBuilder.append(ctx.fullContent)
-                    promptBuilder.append("\n```\n\n")
+            val history = request.messages.takeLast(15)
+            val lastUserMsg = history.lastOrNull { it.role == AIRole.USER }
+
+            for (msg in history) {
+                val role = when (msg.role) {
+                    AIRole.SYSTEM -> "system"
+                    AIRole.ASSISTANT -> "assistant"
+                    AIRole.USER -> "user"
                 }
+                val msgObj = JSONObject()
+                msgObj.put("role", role)
+
+                val contentBuilder = StringBuilder()
+                if (msg == lastUserMsg && request.codeContext != null) {
+                    val ctx = request.codeContext
+                    contentBuilder.append("Active File: ${ctx.fileName} (${ctx.language})\n")
+                    if (ctx.fullContent != null) {
+                        contentBuilder.append("```${ctx.language.lowercase()}\n")
+                        contentBuilder.append(ctx.fullContent)
+                        contentBuilder.append("\n```\n\n")
+                    }
+                }
+                contentBuilder.append(msg.content)
+                msgObj.put("content", contentBuilder.toString())
+                messagesArray.put(msgObj)
             }
 
-            val latestUserMessage = request.messages.lastOrNull { it.role == AIRole.USER }?.content ?: ""
-            promptBuilder.append(latestUserMessage)
-
-            val userObj = JSONObject()
-            userObj.put("role", "user")
-            userObj.put("content", promptBuilder.toString())
-            messagesArray.put(userObj)
+            if (messagesArray.length() <= 1) {
+                val userObj = JSONObject()
+                userObj.put("role", "user")
+                userObj.put("content", "Hello VibeSpace AI")
+                messagesArray.put(userObj)
+            }
 
             root.put("messages", messagesArray)
             root.toString()
@@ -161,23 +182,25 @@ class OpenAIAIProvider(
         }
     }
 
-    private fun fallbackExtractContent(raw: String): String {
-        val textMatch = Regex(""""content"\s*:\s*"((?:\\.|[^"\\])*)"""").find(raw)
-        return textMatch?.groupValues?.get(1)?.replace("\\n", "\n")?.replace("\\\"", "\"") ?: raw
+    private fun fallbackExtractContent(json: String): String {
+        val match = Regex(""""content"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
+        return match?.groupValues?.get(1)?.replace("\\n", "\n")?.replace("\\\"", "\"") ?: "No response from AI."
     }
 
-    private fun extractErrorMessage(statusCode: Int, errorBody: String): String {
+    private fun extractErrorMessage(statusCode: Int, responseText: String): String {
         return try {
-            val root = JSONObject(errorBody)
-            val errorObj = root.optJSONObject("error")
-            val message = errorObj?.optString("message")
+            val root = JSONObject(responseText)
+            val error = root.optJSONObject("error")
+            val message = error?.optString("message")
             if (!message.isNullOrBlank()) {
-                "OpenAI API Error ($statusCode): $message"
+                "OpenAI Error ($statusCode): $message"
             } else {
-                "OpenAI API Error: HTTP $statusCode"
+                "AI endpoint returned HTTP $statusCode"
             }
-        } catch (t: Throwable) {
-            if (errorBody.isNotBlank()) "OpenAI API Error ($statusCode): $errorBody" else "OpenAI API Error ($statusCode)"
+        } catch (_: Throwable) {
+            if (statusCode == 401) "Invalid API key or unauthorized."
+            else if (statusCode == 429) "Rate limit reached or quota exceeded."
+            else "AI endpoint request failed with HTTP $statusCode"
         }
     }
 }

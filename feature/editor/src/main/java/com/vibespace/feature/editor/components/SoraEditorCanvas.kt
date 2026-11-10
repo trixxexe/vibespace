@@ -30,6 +30,9 @@ fun SoraEditorCanvas(
     fontSizeSp: Float,
     onContentChange: (String) -> Unit,
     onCursorChange: (CursorPosition) -> Unit,
+    tabSize: Int = 4,
+    showLineNumbers: Boolean = true,
+    wordWrap: Boolean = false,
     theme: EditorThemeDefinition = EditorThemeDefinition.VIBE_DARK,
     controller: SoraEditorController = remember { SoraEditorController() },
     modifier: Modifier = Modifier
@@ -50,8 +53,9 @@ fun SoraEditorCanvas(
             CodeEditor(context).apply {
                 typefaceText = Typeface.MONOSPACE
                 colorScheme = VibeEditorColorScheme(theme)
-                isLineNumberEnabled = true
-                isWordwrap = false
+                isLineNumberEnabled = showLineNumbers
+                isWordwrap = wordWrap
+                tabWidth = tabSize
                 setTextSize(fontSizeSp)
 
                 // Set TextMate syntax highlighting for active language
@@ -81,6 +85,16 @@ fun SoraEditorCanvas(
         update = { editor ->
             // Update font size if changed externally
             editor.setTextSize(fontSizeSp)
+
+            if (editor.isLineNumberEnabled != showLineNumbers) {
+                editor.isLineNumberEnabled = showLineNumbers
+            }
+            if (editor.isWordwrap != wordWrap) {
+                editor.isWordwrap = wordWrap
+            }
+            if (editor.tabWidth != tabSize) {
+                editor.tabWidth = tabSize
+            }
 
             // Update color scheme if theme changed
             editor.colorScheme = VibeEditorColorScheme(theme)

@@ -17,6 +17,7 @@ import java.net.URL
 /**
  * Real Google Gemini AI Provider supporting Gemini 2.0 Flash, Gemini 1.5 Flash, and Gemini 1.5 Pro.
  * Users bring their own API key (BYOK) obtained from Google AI Studio (aistudio.google.com).
+ * Transports API keys securely via x-goog-api-key header and preserves conversational context.
  */
 class GeminiAIProvider(
     var apiKey: String = "",
@@ -35,10 +36,15 @@ class GeminiAIProvider(
         }
 
         return try {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$activeModel:generateContent?key=$apiKey"
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$activeModel:generateContent"
             val requestBody = buildRequestBody(request)
 
-            val (statusCode, responseText) = executeHttp(endpoint, "POST", mapOf("Content-Type" to "application/json"), requestBody)
+            val headers = mapOf(
+                "Content-Type" to "application/json",
+                "x-goog-api-key" to apiKey.trim()
+            )
+
+            val (statusCode, responseText) = executeHttp(endpoint, "POST", headers, requestBody)
 
             if (statusCode in 200..299) {
                 val parsedText = extractCandidateText(responseText)
@@ -102,48 +108,65 @@ class GeminiAIProvider(
     }
 
     private fun buildRequestBody(request: AIRequest): String {
-        val promptBuilder = StringBuilder()
-
-        // Include active code context if available
-        request.codeContext?.let { ctx ->
-            promptBuilder.append("Active File: ${ctx.fileName} (${ctx.language})\n")
-            if (ctx.fullContent != null) {
-                promptBuilder.append("```${ctx.language.lowercase()}\n")
-                promptBuilder.append(ctx.fullContent)
-                promptBuilder.append("\n```\n\n")
-            }
-        }
-
-        val latestUserMessage = request.messages.lastOrNull { it.role == AIRole.USER }?.content ?: ""
-        promptBuilder.append(latestUserMessage)
-
         val systemInstructionText = "You are VibeSpace AI, an expert mobile coding companion. Provide clear, concise, production-ready code. When suggesting terminal commands, wrap them in ```bash ... ``` code blocks."
 
         return try {
             val root = JSONObject()
             val contents = JSONArray()
-            val userContent = JSONObject()
-            userContent.put("role", "user")
-            val parts = JSONArray()
-            val part = JSONObject()
-            part.put("text", promptBuilder.toString())
-            parts.put(part)
-            userContent.put("parts", parts)
-            contents.put(userContent)
+
+            val history = request.messages.takeLast(15)
+            val lastUserMsg = history.lastOrNull { it.role == AIRole.USER }
+
+            for (msg in history) {
+                val role = if (msg.role == AIRole.ASSISTANT) "model" else "user"
+                val msgObj = JSONObject()
+                msgObj.put("role", role)
+
+                val parts = JSONArray()
+                val part = JSONObject()
+
+                val contentBuilder = StringBuilder()
+                // If this is the active user message, attach active code context
+                if (msg == lastUserMsg && request.codeContext != null) {
+                    val ctx = request.codeContext
+                    contentBuilder.append("Active File: ${ctx.fileName} (${ctx.language})\n")
+                    if (ctx.fullContent != null) {
+                        contentBuilder.append("```${ctx.language.lowercase()}\n")
+                        contentBuilder.append(ctx.fullContent)
+                        contentBuilder.append("\n```\n\n")
+                    }
+                }
+                contentBuilder.append(msg.content)
+
+                part.put("text", contentBuilder.toString())
+                parts.put(part)
+                msgObj.put("parts", parts)
+                contents.put(msgObj)
+            }
+
+            if (contents.length() == 0) {
+                val msgObj = JSONObject()
+                msgObj.put("role", "user")
+                val parts = JSONArray()
+                val part = JSONObject().apply { put("text", "Hello VibeSpace AI") }
+                parts.put(part)
+                msgObj.put("parts", parts)
+                contents.put(msgObj)
+            }
+
             root.put("contents", contents)
 
             val sysInstruction = JSONObject()
             val sysParts = JSONArray()
-            val sysPart = JSONObject()
-            sysPart.put("text", systemInstructionText)
+            val sysPart = JSONObject().apply { put("text", systemInstructionText) }
             sysParts.put(sysPart)
             sysInstruction.put("parts", sysParts)
             root.put("systemInstruction", sysInstruction)
 
             root.toString()
         } catch (t: Throwable) {
-            // Regex/string fallback
-            val escapedPrompt = promptBuilder.toString().replace("\"", "\\\"").replace("\n", "\\n")
+            val fallbackPrompt = request.messages.lastOrNull()?.content ?: "Hello"
+            val escapedPrompt = fallbackPrompt.replace("\"", "\\\"").replace("\n", "\\n")
             """{"contents":[{"role":"user","parts":[{"text":"$escapedPrompt"}]}]}"""
         }
     }
@@ -166,23 +189,25 @@ class GeminiAIProvider(
         }
     }
 
-    private fun fallbackExtractText(raw: String): String {
-        val textMatch = Regex(""""text"\s*:\s*"((?:\\.|[^"\\])*)"""").find(raw)
-        return textMatch?.groupValues?.get(1)?.replace("\\n", "\n")?.replace("\\\"", "\"") ?: raw
+    private fun fallbackExtractText(json: String): String {
+        val match = Regex(""""text"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
+        return match?.groupValues?.get(1)?.replace("\\n", "\n")?.replace("\\\"", "\"") ?: "No response from Gemini."
     }
 
-    private fun extractErrorMessage(statusCode: Int, errorBody: String): String {
+    private fun extractErrorMessage(statusCode: Int, responseText: String): String {
         return try {
-            val root = JSONObject(errorBody)
-            val errorObj = root.optJSONObject("error")
-            val message = errorObj?.optString("message")
+            val root = JSONObject(responseText)
+            val error = root.optJSONObject("error")
+            val message = error?.optString("message")
             if (!message.isNullOrBlank()) {
                 "Gemini API Error ($statusCode): $message"
             } else {
-                "Gemini API Error: HTTP $statusCode"
+                "Gemini API returned HTTP $statusCode"
             }
-        } catch (t: Throwable) {
-            if (errorBody.isNotBlank()) "Gemini API Error ($statusCode): $errorBody" else "Gemini API Error ($statusCode)"
+        } catch (_: Throwable) {
+            if (statusCode == 400) "Invalid request or API key."
+            else if (statusCode == 403) "Gemini API key is invalid or quota exceeded."
+            else "Gemini API request failed with HTTP $statusCode"
         }
     }
 }

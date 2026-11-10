@@ -56,20 +56,26 @@ class DefaultAlpineProcessExecutor : AlpineProcessExecutor {
         pb.environment().putAll(environment)
         val process = pb.start()
 
-        val stdoutJob = CoroutineScope(Dispatchers.IO).launch {
-            process.inputStream.bufferedReader().useLines { lines ->
-                lines.forEach { onOutputLine(it, false) }
+        try {
+            kotlinx.coroutines.coroutineScope {
+                val stdoutJob = launch {
+                    process.inputStream.bufferedReader().useLines { lines ->
+                        lines.forEach { onOutputLine(it, false) }
+                    }
+                }
+                val stderrJob = launch {
+                    process.errorStream.bufferedReader().useLines { lines ->
+                        lines.forEach { onOutputLine(it, true) }
+                    }
+                }
+                val exitCode = process.waitFor()
+                stdoutJob.join()
+                stderrJob.join()
+                exitCode
             }
+        } finally {
+            process.destroyForcibly()
         }
-        val stderrJob = CoroutineScope(Dispatchers.IO).launch {
-            process.errorStream.bufferedReader().useLines { lines ->
-                lines.forEach { onOutputLine(it, true) }
-            }
-        }
-        val exitCode = process.waitFor()
-        stdoutJob.join()
-        stderrJob.join()
-        exitCode
     }
 }
 
@@ -194,7 +200,12 @@ class AlpineLinuxRunner(
 
     private fun extractTarGz(tarGzFile: File, destDir: File) {
         destDir.mkdirs()
-        val canonicalDestPath = destDir.canonicalPath
+        val destNorm = destDir.toPath().normalize().toAbsolutePath()
+        val maxTotalBytes = 300 * 1024 * 1024L // 300 MB total limit
+        val maxEntryBytes = 100 * 1024 * 1024L // 100 MB per file
+        val maxEntries = 10000
+        var totalBytesRead = 0L
+        var entryCount = 0
 
         GZIPInputStream(FileInputStream(tarGzFile)).use { gzis ->
             val header = ByteArray(512)
@@ -204,6 +215,11 @@ class AlpineLinuxRunner(
                 // Tar EOF marker is two consecutive 512 zero blocks
                 if (header.all { it == 0.toByte() }) break
 
+                entryCount++
+                if (entryCount > maxEntries) {
+                    throw IllegalStateException("Archive exceeds maximum entry limit ($maxEntries entries).")
+                }
+
                 val name = String(header, 0, 100, Charsets.US_ASCII).trim('\u0000', ' ')
                 if (name.isEmpty()) continue
 
@@ -211,9 +227,14 @@ class AlpineLinuxRunner(
                 val fileSize = if (sizeStr.isNotEmpty()) sizeStr.toLongOrNull(8) ?: 0L else 0L
                 val typeFlag = header[156].toInt().toChar()
 
+                if (fileSize > maxEntryBytes) {
+                    throw IllegalStateException("Archive entry '$name' exceeds per-entry limit of $maxEntryBytes bytes.")
+                }
+
                 val entryFile = File(destDir, name)
-                // Tar Slip security protection
-                if (!entryFile.canonicalPath.startsWith(canonicalDestPath)) {
+                val entryNorm = entryFile.toPath().normalize().toAbsolutePath()
+                // Component-based path containment
+                if (!entryNorm.startsWith(destNorm)) {
                     val pad = (512 - (fileSize % 512)) % 512
                     val toSkip = fileSize + if (pad == 512L) 0L else pad
                     gzis.skip(toSkip)
@@ -222,7 +243,7 @@ class AlpineLinuxRunner(
 
                 if (typeFlag == '5' || name.endsWith("/")) {
                     entryFile.mkdirs()
-                } else {
+                } else if (typeFlag == '0' || typeFlag == '\u0000') {
                     entryFile.parentFile?.mkdirs()
                     FileOutputStream(entryFile).use { fos ->
                         var remaining = fileSize
@@ -233,8 +254,18 @@ class AlpineLinuxRunner(
                             if (r <= 0) break
                             fos.write(buffer, 0, r)
                             remaining -= r
+                            totalBytesRead += r
+                            if (totalBytesRead > maxTotalBytes) {
+                                throw IllegalStateException("Total uncompressed size exceeds limit of $maxTotalBytes bytes.")
+                            }
                         }
                     }
+                } else {
+                    // Skip unsupported archive entry types (fifos, block/char devices, etc.)
+                    val pad = (512 - (fileSize % 512)) % 512
+                    val toSkip = fileSize + if (pad == 512L) 0L else pad
+                    gzis.skip(toSkip)
+                    continue
                 }
 
                 // Skip padding to 512-byte boundary

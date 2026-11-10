@@ -81,8 +81,7 @@ class StreamLspTransport(
                         inputStream.read(buffer)
                     }
                     if (read == -1) break
-                    val chunk = String(buffer, 0, read, Charsets.UTF_8)
-                    val messages = decoder.feed(chunk)
+                    val messages = decoder.feed(buffer, 0, read)
                     for (msg in messages) {
                         incomingChannel.send(msg)
                     }

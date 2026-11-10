@@ -1,5 +1,9 @@
 package com.vibespace.feature.home
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +34,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import com.vibespace.core.designsystem.components.VibeCard
 import com.vibespace.core.designsystem.components.VibeDialog
 import com.vibespace.core.designsystem.components.VibeEmptyState
@@ -50,9 +56,30 @@ fun HomeScreen(
     onNavigateToExtensions: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var newProjectName by remember { mutableStateOf("") }
+
+    val openTreeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri: Uri? ->
+        if (treeUri != null) {
+            try {
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(treeUri, flags)
+            } catch (_: Throwable) {}
+
+            val folderDoc = DocumentFile.fromTreeUri(context, treeUri)
+            val folderName = folderDoc?.name ?: "Workspace"
+            viewModel.openSafTreeUri(
+                treeUri = treeUri,
+                folderName = folderName,
+                onProjectReady = { onNavigateToEditor() },
+                onProjectError = {}
+            )
+        }
+    }
 
     if (showNewProjectDialog) {
         VibeDialog(
@@ -84,6 +111,21 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+    }
+
+    if (uiState.errorMessage != null) {
+        VibeDialog(
+            title = "Project Error",
+            onDismissRequest = { viewModel.dismissError() },
+            confirmButtonText = "OK",
+            onConfirm = { viewModel.dismissError() }
+        ) {
+            Text(
+                text = uiState.errorMessage ?: "Unknown error occurred",
+                style = MaterialTheme.typography.bodyMedium,
+                color = VibeTheme.colors.statusError
+            )
         }
     }
 
@@ -143,13 +185,9 @@ fun HomeScreen(
                 QuickActionCard(
                     icon = VibeIcons.FolderOpen,
                     title = "Open Project",
-                    subtitle = "Browse workspace",
+                    subtitle = "Browse device folder (SAF)",
                     modifier = Modifier.weight(1f),
-                    onClick = {
-                        viewModel.createNewProject("DemoProject") {
-                            onNavigateToEditor()
-                        }
-                    }
+                    onClick = { openTreeLauncher.launch(null) }
                 )
             }
 
@@ -160,17 +198,36 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 QuickActionCard(
+                    icon = VibeIcons.Editor,
+                    title = "Try Demo Project",
+                    subtitle = "Explore sample codebase",
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        viewModel.openDemoProject {
+                            onNavigateToEditor()
+                        }
+                    }
+                )
+                QuickActionCard(
                     icon = VibeIcons.Extension,
                     title = "Extensions",
                     subtitle = "Themes & plugins",
                     modifier = Modifier.weight(1f),
                     onClick = { onNavigateToExtensions?.invoke() ?: onNavigateToSettings() }
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 QuickActionCard(
                     icon = VibeIcons.Settings,
                     title = "Settings",
                     subtitle = "Preferences & about",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     onClick = onNavigateToSettings
                 )
             }
@@ -212,9 +269,10 @@ fun HomeScreen(
                 RecentProjectItem(
                     project = project,
                     onClick = {
-                        viewModel.openProject(project) {
-                            onNavigateToEditor()
-                        }
+                        viewModel.openProject(
+                            project = project,
+                            onProjectReady = { onNavigateToEditor() }
+                        )
                     }
                 )
             }

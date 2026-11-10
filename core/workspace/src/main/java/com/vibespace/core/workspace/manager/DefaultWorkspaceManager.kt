@@ -3,6 +3,7 @@ package com.vibespace.core.workspace.manager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.result.VibeResult
@@ -40,17 +41,27 @@ class DefaultWorkspaceManager(
     override suspend fun openProject(project: Project): VibeResult<Project> = withContext(dispatchers.io) {
         val normalizedRoot = normalizeUri(project.rootUri)
         val normalizedProject = project.copy(rootUri = normalizedRoot)
-        _currentProject.value = normalizedProject
-        recentProjectsRepository?.addRecentProject(normalizedProject)
 
-        // Persist SAF URI permissions where applicable
+        // Persist SAF URI permissions and verify accessibility
         if (project.isStorageAccessFramework && project.rootUri.startsWith("content://") && context != null) {
             try {
                 val uri = Uri.parse(project.rootUri)
                 val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 context.contentResolver.takePersistableUriPermission(uri, flags)
             } catch (_: Throwable) {}
+
+            try {
+                val doc = DocumentFile.fromTreeUri(context, Uri.parse(project.rootUri))
+                if (doc != null && !doc.canRead()) {
+                    return@withContext VibeResult.Error("Storage permission revoked or project folder missing for '${project.name}'.")
+                }
+            } catch (e: Throwable) {
+                return@withContext VibeResult.Error("Cannot access SAF project: ${e.message}", e)
+            }
         }
+
+        _currentProject.value = normalizedProject
+        recentProjectsRepository?.addRecentProject(normalizedProject)
 
         // Keep seeded demo workspaces clearly separate from real user projects
         val rootUri = normalizedRoot
@@ -146,17 +157,34 @@ class DefaultWorkspaceManager(
         return VibeResult.Success(Unit)
     }
 
+    /**
+     * Enforces strict workspace containment comparing canonical path components.
+     * Prevents symlink escapes, sibling directory prefix bypasses, and operations escaping the project root.
+     */
     private fun validateWithinProjectRoot(targetFile: File, rootDir: File): VibeResult<Unit> {
-        try {
-            val canonicalTarget = targetFile.canonicalPath
-            val canonicalRoot = rootDir.canonicalPath
-            if (!canonicalTarget.startsWith(canonicalRoot)) {
-                return VibeResult.Error("Security error: Target path '$canonicalTarget' escapes project root '$canonicalRoot'.")
+        return try {
+            val targetNorm = targetFile.toPath().normalize().toAbsolutePath()
+            val rootNorm = rootDir.toPath().normalize().toAbsolutePath()
+
+            if (!targetNorm.startsWith(rootNorm)) {
+                return VibeResult.Error("Security error: Target path '$targetNorm' escapes project root '$rootNorm'.")
             }
+
+            if (rootDir.exists()) {
+                val rootCanonical = rootDir.canonicalFile.toPath()
+                val existingTarget = if (targetFile.exists()) targetFile else targetFile.parentFile
+                if (existingTarget != null && existingTarget.exists()) {
+                    val canonicalTarget = existingTarget.canonicalFile.toPath()
+                    if (!canonicalTarget.startsWith(rootCanonical)) {
+                        return VibeResult.Error("Security error: Canonical target '$canonicalTarget' escapes canonical project root '$rootCanonical'.")
+                    }
+                }
+            }
+
+            VibeResult.Success(Unit)
         } catch (e: Exception) {
-            return VibeResult.Error("Failed to validate path traversal: ${e.message}", e)
+            VibeResult.Error("Failed to validate path containment: ${e.message}", e)
         }
-        return VibeResult.Success(Unit)
     }
 
     private val ignoredDirectories = setOf(
@@ -166,6 +194,36 @@ class DefaultWorkspaceManager(
     override suspend fun listFiles(parentDirectoryUri: String): VibeResult<List<VirtualFile>> =
         withContext(dispatchers.io) {
             val normParent = normalizeUri(parentDirectoryUri)
+
+            // Support SAF DocumentFile listing
+            if (normParent.startsWith("content://") && context != null) {
+                try {
+                    val treeUri = Uri.parse(normParent)
+                    val doc = DocumentFile.fromTreeUri(context, treeUri)
+                    if (doc != null && doc.isDirectory) {
+                        val children = doc.listFiles().filter { f ->
+                            val n = f.name ?: ""
+                            !ignoredDirectories.contains(n)
+                        }.map { f ->
+                            VirtualFile(
+                                uri = f.uri.toString(),
+                                name = f.name ?: "unnamed",
+                                nodeType = if (f.isDirectory) FileNodeType.DIRECTORY else FileNodeType.FILE,
+                                parentUri = normParent,
+                                sizeBytes = if (f.isFile) f.length() else 0L,
+                                lastModifiedTimestamp = f.lastModified()
+                            )
+                        }
+                        directoryChildren[normParent] = children.toMutableList()
+                        return@withContext VibeResult.Success(children.sortedWith(compareBy({ it.isFile }, { it.name })))
+                    } else if (doc != null && !doc.canRead()) {
+                        return@withContext VibeResult.Error("SAF permission revoked for directory '$normParent'")
+                    }
+                } catch (e: Throwable) {
+                    return@withContext VibeResult.Error("Failed to list SAF directory: ${e.message}", e)
+                }
+            }
+
             val inMemory = directoryChildren[normParent]
             if (inMemory != null && inMemory.isNotEmpty()) {
                 return@withContext VibeResult.Success(inMemory.sortedWith(compareBy({ it.isFile }, { it.name })))
@@ -257,6 +315,40 @@ class DefaultWorkspaceManager(
                 }
             }
 
+            // Also check if target is a SAF directory
+            if (targetRoot.startsWith("content://") && context != null) {
+                try {
+                    val rootDoc = DocumentFile.fromTreeUri(context, Uri.parse(targetRoot))
+                    if (rootDoc != null && rootDoc.isDirectory) {
+                        val docQueue = ArrayDeque<DocumentFile>()
+                        docQueue.add(rootDoc)
+                        while (docQueue.isNotEmpty()) {
+                            val cur = docQueue.removeFirst()
+                            val list = cur.listFiles()
+                            for (f in list) {
+                                val name = f.name ?: continue
+                                if (!ignoredDirectories.contains(name)) {
+                                    val vf = VirtualFile(
+                                        uri = f.uri.toString(),
+                                        name = name,
+                                        nodeType = if (f.isDirectory) FileNodeType.DIRECTORY else FileNodeType.FILE,
+                                        parentUri = cur.uri.toString(),
+                                        sizeBytes = if (f.isFile) f.length() else 0L,
+                                        lastModifiedTimestamp = f.lastModified()
+                                    )
+                                    if (resultList.none { it.uri == vf.uri }) {
+                                        resultList.add(vf)
+                                    }
+                                    if (f.isDirectory) {
+                                        docQueue.add(f)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
             VibeResult.Success(resultList.sortedWith(compareBy({ it.isFile }, { it.name })))
         }
 
@@ -308,17 +400,23 @@ class DefaultWorkspaceManager(
             }
 
             val diskFile = toPhysicalFile(fileUri)
-            val project = _currentProject.value
-            val diskRoot = project?.rootUri?.let { toPhysicalFile(normalizeUri(it)) }
-
-            if (diskFile != null && diskRoot != null && diskRoot.exists()) {
+            if (diskFile != null) {
+                val project = _currentProject.value
+                    ?: return@withContext VibeResult.Error("Security error: No active project root to validate file containment.")
+                val diskRoot = toPhysicalFile(normalizeUri(project.rootUri))
+                    ?: return@withContext VibeResult.Error("Security error: Project root cannot be resolved to physical path.")
                 val rootCheck = validateWithinProjectRoot(diskFile, diskRoot)
                 if (rootCheck is VibeResult.Error) return@withContext rootCheck
-            }
 
-            if (diskFile != null) {
                 try {
-                    diskFile.parentFile?.mkdirs()
+                    diskFile.parentFile?.let { p ->
+                        if (!p.exists()) {
+                            val created = p.mkdirs()
+                            if (!created && !p.exists()) {
+                                return@withContext VibeResult.Error("Failed to create parent directories on disk for '${diskFile.absolutePath}'.")
+                            }
+                        }
+                    }
                     diskFile.writeText(content)
                 } catch (e: Exception) {
                     return@withContext VibeResult.Error("Failed to write to disk: ${e.message}", e)
@@ -355,23 +453,58 @@ class DefaultWorkspaceManager(
         if (nameValidation is VibeResult.Error) return@withContext nameValidation
 
         val normParent = normalizeUri(parentDirectoryUri)
-        val fileUri = "$normParent/$fileName"
-        val diskParent = toPhysicalFile(normParent)
-        val project = _currentProject.value
-        val diskRoot = project?.rootUri?.let { toPhysicalFile(normalizeUri(it)) }
 
-        val diskFile = if (diskParent != null) File(diskParent, fileName) else null
-        if (diskFile != null && diskRoot != null && diskRoot.exists()) {
-            val rootCheck = validateWithinProjectRoot(diskFile, diskRoot)
-            if (rootCheck is VibeResult.Error) return@withContext rootCheck
+        // Support SAF document creation
+        if (normParent.startsWith("content://") && context != null) {
+            try {
+                val parentDoc = DocumentFile.fromTreeUri(context, Uri.parse(normParent))
+                    ?: return@withContext VibeResult.Error("SAF parent directory unavailable: $normParent")
+                val mimeType = if (fileName.endsWith(".json")) "application/json" else "text/plain"
+                val newDoc = parentDoc.createFile(mimeType, fileName)
+                    ?: return@withContext VibeResult.Error("Failed to create SAF document '$fileName' in $normParent")
+
+                context.contentResolver.openOutputStream(newDoc.uri, "wt")?.use { out ->
+                    out.write(initialContent.toByteArray(StandardCharsets.UTF_8))
+                }
+                val newFile = VirtualFile(
+                    uri = newDoc.uri.toString(),
+                    name = fileName,
+                    nodeType = FileNodeType.FILE,
+                    parentUri = normParent,
+                    sizeBytes = initialContent.toByteArray().size.toLong()
+                )
+                directoryChildren.getOrPut(normParent) { mutableListOf() }.add(newFile)
+                fileContents[newFile.uri] = initialContent
+                return@withContext VibeResult.Success(newFile)
+            } catch (e: Throwable) {
+                return@withContext VibeResult.Error("Failed to create SAF file: ${e.message}", e)
+            }
         }
 
+        val fileUri = "$normParent/$fileName"
+        val diskParent = toPhysicalFile(normParent)
+        val diskFile = if (diskParent != null) File(diskParent, fileName) else null
+
         if (diskFile != null) {
+            val project = _currentProject.value
+                ?: return@withContext VibeResult.Error("Security error: No active project root to validate file containment.")
+            val diskRoot = toPhysicalFile(normalizeUri(project.rootUri))
+                ?: return@withContext VibeResult.Error("Security error: Project root cannot be resolved to physical path.")
+            val rootCheck = validateWithinProjectRoot(diskFile, diskRoot)
+            if (rootCheck is VibeResult.Error) return@withContext rootCheck
+
+            if (diskFile.exists()) {
+                return@withContext VibeResult.Error("A file with name '$fileName' already exists.")
+            }
             try {
-                if (diskFile.exists()) {
-                    return@withContext VibeResult.Error("A file with name '$fileName' already exists.")
+                diskFile.parentFile?.let { p ->
+                    if (!p.exists()) {
+                        val created = p.mkdirs()
+                        if (!created && !p.exists()) {
+                            return@withContext VibeResult.Error("Failed to create parent directory for '${diskFile.absolutePath}'.")
+                        }
+                    }
                 }
-                diskFile.parentFile?.mkdirs()
                 diskFile.writeText(initialContent)
             } catch (e: Exception) {
                 return@withContext VibeResult.Error("Failed to create file on disk: ${e.message}", e)
@@ -405,25 +538,46 @@ class DefaultWorkspaceManager(
         if (nameValidation is VibeResult.Error) return@withContext nameValidation
 
         val normParent = normalizeUri(parentDirectoryUri)
-        val dirUri = "$normParent/$directoryName"
-        val diskParent = toPhysicalFile(normParent)
-        val project = _currentProject.value
-        val diskRoot = project?.rootUri?.let { toPhysicalFile(normalizeUri(it)) }
 
-        val diskDir = if (diskParent != null) File(diskParent, directoryName) else null
-        if (diskDir != null && diskRoot != null && diskRoot.exists()) {
-            val rootCheck = validateWithinProjectRoot(diskDir, diskRoot)
-            if (rootCheck is VibeResult.Error) return@withContext rootCheck
+        // Support SAF directory creation
+        if (normParent.startsWith("content://") && context != null) {
+            try {
+                val parentDoc = DocumentFile.fromTreeUri(context, Uri.parse(normParent))
+                    ?: return@withContext VibeResult.Error("SAF parent directory unavailable: $normParent")
+                val newDoc = parentDoc.createDirectory(directoryName)
+                    ?: return@withContext VibeResult.Error("Failed to create SAF directory '$directoryName'")
+                val newDir = VirtualFile(
+                    uri = newDoc.uri.toString(),
+                    name = directoryName,
+                    nodeType = FileNodeType.DIRECTORY,
+                    parentUri = normParent
+                )
+                directoryChildren.getOrPut(normParent) { mutableListOf() }.add(newDir)
+                directoryChildren[newDir.uri] = mutableListOf()
+                return@withContext VibeResult.Success(newDir)
+            } catch (e: Throwable) {
+                return@withContext VibeResult.Error("Failed to create SAF directory: ${e.message}", e)
+            }
         }
 
+        val dirUri = "$normParent/$directoryName"
+        val diskParent = toPhysicalFile(normParent)
+        val diskDir = if (diskParent != null) File(diskParent, directoryName) else null
+
         if (diskDir != null) {
-            try {
-                if (diskDir.exists()) {
-                    return@withContext VibeResult.Error("A directory with name '$directoryName' already exists.")
-                }
-                diskDir.mkdirs()
-            } catch (e: Exception) {
-                return@withContext VibeResult.Error("Failed to create directory on disk: ${e.message}", e)
+            val project = _currentProject.value
+                ?: return@withContext VibeResult.Error("Security error: No active project root to validate file containment.")
+            val diskRoot = toPhysicalFile(normalizeUri(project.rootUri))
+                ?: return@withContext VibeResult.Error("Security error: Project root cannot be resolved to physical path.")
+            val rootCheck = validateWithinProjectRoot(diskDir, diskRoot)
+            if (rootCheck is VibeResult.Error) return@withContext rootCheck
+
+            if (diskDir.exists()) {
+                return@withContext VibeResult.Error("A directory with name '$directoryName' already exists.")
+            }
+            val created = diskDir.mkdirs()
+            if (!created && !diskDir.exists()) {
+                return@withContext VibeResult.Error("Failed to create directory on disk at '${diskDir.absolutePath}'.")
             }
         }
 
@@ -447,17 +601,33 @@ class DefaultWorkspaceManager(
 
     override suspend fun delete(targetUri: String): VibeResult<Unit> = withContext(dispatchers.io) {
         val normTarget = normalizeUri(targetUri)
-        val project = _currentProject.value
-        val diskRoot = project?.rootUri?.let { toPhysicalFile(normalizeUri(it)) }
-        val diskTarget = toPhysicalFile(normTarget)
 
-        if (diskTarget != null && diskRoot != null && diskTarget.exists()) {
+        // Support SAF document deletion
+        if (normTarget.startsWith("content://") && context != null) {
+            try {
+                val uri = Uri.parse(normTarget)
+                val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
+                val deleted = doc?.delete() ?: false
+                if (!deleted) {
+                    return@withContext VibeResult.Error("Failed to delete SAF document at $normTarget")
+                }
+            } catch (e: Throwable) {
+                return@withContext VibeResult.Error("Failed to delete SAF document: ${e.message}", e)
+            }
+        }
+
+        val diskTarget = toPhysicalFile(normTarget)
+        if (diskTarget != null && diskTarget.exists()) {
+            val project = _currentProject.value
+                ?: return@withContext VibeResult.Error("Security error: No active project root to validate file containment.")
+            val diskRoot = toPhysicalFile(normalizeUri(project.rootUri))
+                ?: return@withContext VibeResult.Error("Security error: Project root cannot be resolved to physical path.")
             val rootCheck = validateWithinProjectRoot(diskTarget, diskRoot)
             if (rootCheck is VibeResult.Error) return@withContext rootCheck
-            try {
-                diskTarget.deleteRecursively()
-            } catch (e: Exception) {
-                return@withContext VibeResult.Error("Failed to delete from disk: ${e.message}", e)
+
+            val deleted = diskTarget.deleteRecursively()
+            if (!deleted && diskTarget.exists()) {
+                return@withContext VibeResult.Error("Failed to delete physical path '${diskTarget.absolutePath}'.")
             }
         }
 
@@ -484,26 +654,40 @@ class DefaultWorkspaceManager(
             if (nameValidation is VibeResult.Error) return@withContext nameValidation
 
             val normTarget = normalizeUri(targetUri)
-            val project = _currentProject.value
-            val diskRoot = project?.rootUri?.let { toPhysicalFile(normalizeUri(it)) }
+
+            // Support SAF document rename
+            if (normTarget.startsWith("content://") && context != null) {
+                try {
+                    val uri = Uri.parse(normTarget)
+                    val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
+                    val renamed = doc?.renameTo(newName) ?: false
+                    if (!renamed) {
+                        return@withContext VibeResult.Error("Failed to rename SAF document to '$newName'")
+                    }
+                } catch (e: Throwable) {
+                    return@withContext VibeResult.Error("Failed to rename SAF document: ${e.message}", e)
+                }
+            }
+
             val diskTarget = toPhysicalFile(normTarget)
             val diskDest = if (diskTarget != null && diskTarget.parentFile != null) {
                 File(diskTarget.parentFile, newName)
             } else null
 
-            if (diskTarget != null && diskRoot != null && diskTarget.exists() && diskDest != null) {
+            if (diskTarget != null && diskTarget.exists() && diskDest != null) {
+                val project = _currentProject.value
+                    ?: return@withContext VibeResult.Error("Security error: No active project root to validate file containment.")
+                val diskRoot = toPhysicalFile(normalizeUri(project.rootUri))
+                    ?: return@withContext VibeResult.Error("Security error: Project root cannot be resolved to physical path.")
                 val rootCheck = validateWithinProjectRoot(diskDest, diskRoot)
                 if (rootCheck is VibeResult.Error) return@withContext rootCheck
+
                 if (diskDest.exists()) {
                     return@withContext VibeResult.Error("A file or directory named '$newName' already exists.")
                 }
-                try {
-                    val renamed = diskTarget.renameTo(diskDest)
-                    if (!renamed) {
-                        return@withContext VibeResult.Error("Failed to rename disk file to '$newName'")
-                    }
-                } catch (e: Exception) {
-                    return@withContext VibeResult.Error("Failed to rename on disk: ${e.message}", e)
+                val renamed = diskTarget.renameTo(diskDest)
+                if (!renamed) {
+                    return@withContext VibeResult.Error("Failed to rename disk file to '$newName'")
                 }
             }
 
@@ -522,7 +706,7 @@ class DefaultWorkspaceManager(
                         val content = fileContents.remove(targetUri) ?: fileContents.remove(normTarget) ?: ""
                         fileContents[newUri] = content
                     } else {
-                        // Directory rename: update all nested descendants in directoryChildren and fileContents!
+                        // Directory rename: update all nested descendants in directoryChildren and fileContents
                         val oldPrefix = "$normTarget/"
                         val newPrefix = "$newUri/"
 

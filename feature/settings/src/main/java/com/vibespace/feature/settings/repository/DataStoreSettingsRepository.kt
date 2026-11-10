@@ -71,15 +71,20 @@ class DataStoreSettingsRepository(
 
                         val rawApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: ""
                         val decryptedApiKey = if (rawApiKey.isNotBlank()) {
-                            secretStorage.decrypt(rawApiKey)
+                            when (val res = secretStorage.decrypt(rawApiKey)) {
+                                is VibeResult.Success -> res.data
+                                is VibeResult.Error -> ""
+                            }
                         } else ""
 
-                        // Auto-migrate legacy plaintext key to encrypted format
+                        // Auto-migrate legacy plaintext key to encrypted format ONLY after successful encryption
                         if (rawApiKey.isNotBlank() && !rawApiKey.startsWith("enc:")) {
                             migrationScope.launch {
                                 try {
-                                    val encrypted = secretStorage.encrypt(rawApiKey)
-                                    context.settingsDataStore.edit { it[PreferencesKeys.AI_API_KEY] = encrypted }
+                                    val encRes = secretStorage.encrypt(rawApiKey)
+                                    if (encRes is VibeResult.Success) {
+                                        context.settingsDataStore.edit { it[PreferencesKeys.AI_API_KEY] = encRes.data }
+                                    }
                                 } catch (_: Throwable) {}
                             }
                         }
@@ -112,7 +117,13 @@ class DataStoreSettingsRepository(
 
     override suspend fun updateSettings(settings: UserSettings): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
-            val encryptedKey = if (settings.aiApiKey.isNotBlank()) secretStorage.encrypt(settings.aiApiKey.trim()) else ""
+            val encryptedKey = if (settings.aiApiKey.isNotBlank()) {
+                val encRes = secretStorage.encrypt(settings.aiApiKey.trim())
+                if (encRes is VibeResult.Error) {
+                    return@withContext VibeResult.Error("Failed to encrypt API key: ${encRes.message}", encRes.throwable)
+                }
+                (encRes as VibeResult.Success).data
+            } else ""
             context.settingsDataStore.edit { preferences ->
                 preferences[PreferencesKeys.THEME_MODE] = settings.themeMode.name
                 preferences[PreferencesKeys.EDITOR_THEME_ID] = settings.editorThemeId
@@ -176,7 +187,13 @@ class DataStoreSettingsRepository(
     ): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
             val trimmedKey = apiKey.trim()
-            val encryptedKey = if (trimmedKey.isNotBlank()) secretStorage.encrypt(trimmedKey) else ""
+            val encryptedKey = if (trimmedKey.isNotBlank()) {
+                val encRes = secretStorage.encrypt(trimmedKey)
+                if (encRes is VibeResult.Error) {
+                    return@withContext VibeResult.Error("Failed to encrypt API key: ${encRes.message}", encRes.throwable)
+                }
+                (encRes as VibeResult.Success).data
+            } else ""
             context.settingsDataStore.edit {
                 it[PreferencesKeys.AI_PROVIDER_ID] = providerId
                 it[PreferencesKeys.AI_API_KEY] = encryptedKey

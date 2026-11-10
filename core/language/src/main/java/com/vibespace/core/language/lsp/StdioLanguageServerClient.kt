@@ -16,21 +16,21 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Standard Language Server Protocol (LSP) 3.17 stdio client.
  * Connects to background language servers (pyright, typescript-language-server, rust-analyzer, etc.)
- * via JSON-RPC 2.0 messages framed over stdin/stdout.
+ * via JSON-RPC 2.0 messages parsed with standard org.json.JSONObject.
  */
 class StdioLanguageServerClient(
     override val languageId: String,
@@ -99,22 +99,21 @@ class StdioLanguageServerClient(
         } catch (_: Exception) {}
         _isRunning = false
         listenJob?.cancel()
-        transport.close()
         pendingRequests.values.forEach { it.cancel() }
         pendingRequests.clear()
-        scope.cancel()
+        transport.close()
         VibeResult.Success(Unit)
     }
 
     override suspend fun didOpen(documentUri: String, text: String): VibeResult<Unit> = withContext(dispatchers.default) {
-        val escaped = escapeJson(text)
+        val escapedText = JSONObject.quote(text)
         val params = """
             {
                 "textDocument": {
                     "uri": "$documentUri",
                     "languageId": "$languageId",
                     "version": 1,
-                    "text": "$escaped"
+                    "text": $escapedText
                 }
             }
         """.trimIndent()
@@ -123,7 +122,7 @@ class StdioLanguageServerClient(
     }
 
     override suspend fun didChange(documentUri: String, newText: String, version: Int): VibeResult<Unit> = withContext(dispatchers.default) {
-        val escaped = escapeJson(newText)
+        val escapedText = JSONObject.quote(newText)
         val params = """
             {
                 "textDocument": {
@@ -131,7 +130,9 @@ class StdioLanguageServerClient(
                     "version": $version
                 },
                 "contentChanges": [
-                    {"text": "$escaped"}
+                    {
+                        "text": $escapedText
+                    }
                 ]
             }
         """.trimIndent()
@@ -140,15 +141,20 @@ class StdioLanguageServerClient(
     }
 
     override suspend fun didClose(documentUri: String): VibeResult<Unit> = withContext(dispatchers.default) {
-        val params = """{"textDocument": {"uri": "$documentUri"}}"""
+        val params = """
+            {
+                "textDocument": {
+                    "uri": "$documentUri"
+                }
+            }
+        """.trimIndent()
         sendNotification("textDocument/didClose", params)
+        diagnosticsFlows.remove(documentUri)
         VibeResult.Success(Unit)
     }
 
     override fun observeDiagnostics(documentUri: String): Flow<List<Diagnostic>> {
-        return diagnosticsFlows.getOrPut(documentUri) {
-            MutableStateFlow(emptyList())
-        }.asStateFlow()
+        return diagnosticsFlows.getOrPut(documentUri) { MutableStateFlow(emptyList()) }.asStateFlow()
     }
 
     override suspend fun requestHover(
@@ -156,17 +162,19 @@ class StdioLanguageServerClient(
         line: Int,
         column: Int
     ): VibeResult<HoverInfo?> = withContext(dispatchers.default) {
+        if (!_isRunning) {
+            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
+        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
-                "position": {"line": $line, "character": $column}
+                "position": {"line": ${line - 1}, "character": $column}
             }
         """.trimIndent()
 
         when (val result = sendRequest("textDocument/hover", params)) {
             is VibeResult.Success -> {
-                val json = result.data
-                val hoverInfo = parseHoverResponse(json)
+                val hoverInfo = parseHoverResponse(result.data)
                 VibeResult.Success(hoverInfo)
             }
             is VibeResult.Error -> VibeResult.Error(result.message)
@@ -179,17 +187,20 @@ class StdioLanguageServerClient(
         line: Int,
         column: Int
     ): VibeResult<List<DefinitionLocation>> = withContext(dispatchers.default) {
+        if (!_isRunning) {
+            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
+        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
-                "position": {"line": $line, "character": $column}
+                "position": {"line": ${line - 1}, "character": $column}
             }
         """.trimIndent()
 
         when (val result = sendRequest("textDocument/definition", params)) {
             is VibeResult.Success -> {
-                val locations = parseDefinitionResponse(result.data)
-                VibeResult.Success(locations)
+                val locs = parseDefinitionResponse(result.data)
+                VibeResult.Success(locs)
             }
             is VibeResult.Error -> VibeResult.Error(result.message)
             else -> VibeResult.Success(emptyList())
@@ -201,10 +212,13 @@ class StdioLanguageServerClient(
         line: Int,
         column: Int
     ): VibeResult<List<CompletionItem>> = withContext(dispatchers.default) {
+        if (!_isRunning) {
+            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
+        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
-                "position": {"line": $line, "character": $column}
+                "position": {"line": ${line - 1}, "character": $column}
             }
         """.trimIndent()
 
@@ -219,6 +233,9 @@ class StdioLanguageServerClient(
     }
 
     override suspend fun formatDocument(documentUri: String): VibeResult<String> = withContext(dispatchers.default) {
+        if (!_isRunning) {
+            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
+        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
@@ -228,7 +245,6 @@ class StdioLanguageServerClient(
 
         when (val result = sendRequest("textDocument/formatting", params)) {
             is VibeResult.Success -> {
-                // If formatting text edits returned, extract newText
                 val formattedText = extractFormattedText(result.data)
                 VibeResult.Success(formattedText)
             }
@@ -261,56 +277,61 @@ class StdioLanguageServerClient(
     }
 
     private fun handleIncomingMessage(rawJson: String) {
-        // Check if message is a response (has "id")
-        val idMatch = Regex(""""id"\s*:\s*(\d+)""").find(rawJson)
-        if (idMatch != null) {
-            val id = idMatch.groupValues[1].toLongOrNull()
-            if (id != null) {
+        try {
+            val json = JSONObject(rawJson)
+
+            // Handle response
+            if (json.has("id") && !json.isNull("id")) {
+                val id = json.getLong("id")
                 val deferred = pendingRequests.remove(id)
                 if (deferred != null) {
-                    val errorMatch = Regex(""""error"\s*:\s*\{([^}]+)\}""").find(rawJson)
-                    if (errorMatch != null) {
-                        deferred.completeExceptionally(RuntimeException("LSP Error: ${errorMatch.groupValues[1]}"))
+                    if (json.has("error") && !json.isNull("error")) {
+                        val errObj = json.getJSONObject("error")
+                        val errMsg = errObj.optString("message", "Unknown LSP error")
+                        deferred.completeExceptionally(RuntimeException("LSP Error: $errMsg"))
                     } else {
                         deferred.complete(rawJson)
                     }
                     return
                 }
             }
-        }
 
-        // Check if message is a notification
-        val methodMatch = Regex(""""method"\s*:\s*"([^"]+)"""").find(rawJson)
-        if (methodMatch != null) {
-            val method = methodMatch.groupValues[1]
-            if (method == "textDocument/publishDiagnostics") {
-                parseAndPublishDiagnostics(rawJson)
+            // Handle notification
+            if (json.has("method")) {
+                val method = json.getString("method")
+                if (method == "textDocument/publishDiagnostics") {
+                    parseAndPublishDiagnostics(json)
+                }
             }
-        }
+        } catch (_: Throwable) {}
     }
 
-    private fun parseAndPublishDiagnostics(rawJson: String) {
-        val uriMatch = Regex(""""uri"\s*:\s*"([^"]+)"""").find(rawJson) ?: return
-        val uri = uriMatch.groupValues[1]
+    private fun parseAndPublishDiagnostics(json: JSONObject) {
+        val params = json.optJSONObject("params") ?: return
+        val uri = params.optString("uri", "")
+        if (uri.isEmpty()) return
 
+        val diagsArray = params.optJSONArray("diagnostics") ?: JSONArray()
         val diagnosticsList = mutableListOf<Diagnostic>()
 
-        val messageMatches = Regex(""""message"\s*:\s*"((?:[^"\\]|\\.)*)"""").findAll(rawJson).toList()
-        val severityMatches = Regex(""""severity"\s*:\s*(\d+)""").findAll(rawJson).toList()
-        val lineMatches = Regex(""""line"\s*:\s*(\d+)""").findAll(rawJson).toList()
-        val charMatches = Regex(""""character"\s*:\s*(\d+)""").findAll(rawJson).toList()
-
-        for (i in messageMatches.indices) {
-            val message = unescapeJson(messageMatches[i].groupValues[1])
-            val severityInt = severityMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        for (i in 0 until diagsArray.length()) {
+            val dObj = diagsArray.optJSONObject(i) ?: continue
+            val message = dObj.optString("message", "")
+            val severityInt = dObj.optInt("severity", 1)
             val severity = when (severityInt) {
                 1 -> DiagnosticSeverity.ERROR
                 2 -> DiagnosticSeverity.WARNING
                 3 -> DiagnosticSeverity.INFORMATION
                 else -> DiagnosticSeverity.HINT
             }
-            val line = lineMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-            val col = charMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val rangeObj = dObj.optJSONObject("range")
+            val startObj = rangeObj?.optJSONObject("start")
+            val endObj = rangeObj?.optJSONObject("end")
+
+            val startLine = startObj?.optInt("line", 0) ?: 0
+            val startChar = startObj?.optInt("character", 0) ?: 0
+            val endLine = endObj?.optInt("line", startLine) ?: startLine
+            val endChar = endObj?.optInt("character", startChar + 1) ?: (startChar + 1)
 
             diagnosticsList.add(
                 Diagnostic(
@@ -318,8 +339,8 @@ class StdioLanguageServerClient(
                     message = message,
                     severity = severity,
                     range = DiagnosticRange(
-                        start = DiagnosticPosition(line, col),
-                        end = DiagnosticPosition(line, col + 1)
+                        start = DiagnosticPosition(startLine, startChar),
+                        end = DiagnosticPosition(endLine, endChar)
                     ),
                     source = languageId
                 )
@@ -329,75 +350,110 @@ class StdioLanguageServerClient(
         diagnosticsFlows.getOrPut(uri) { MutableStateFlow(emptyList()) }.value = diagnosticsList
     }
 
-    private fun parseHoverResponse(json: String): HoverInfo? {
-        val valueMatch = Regex(""""value"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
-        if (valueMatch != null) {
-            return HoverInfo(contents = unescapeJson(valueMatch.groupValues[1]))
+    private fun parseHoverResponse(rawJson: String): HoverInfo? {
+        return try {
+            val json = JSONObject(rawJson)
+            val result = json.opt("result") ?: return null
+            if (result == JSONObject.NULL) return null
+
+            val text = when (result) {
+                is String -> result
+                is JSONObject -> {
+                    val contents = result.opt("contents")
+                    when (contents) {
+                        is String -> contents
+                        is JSONObject -> contents.optString("value", contents.toString())
+                        is JSONArray -> {
+                            (0 until contents.length()).joinToString("\n") { idx ->
+                                val item = contents.opt(idx)
+                                if (item is JSONObject) item.optString("value", "") else item.toString()
+                            }
+                        }
+                        else -> contents?.toString() ?: ""
+                    }
+                }
+                else -> result.toString()
+            }
+            if (text.isNotBlank()) HoverInfo(contents = text) else null
+        } catch (_: Throwable) {
+            null
         }
-        val contentsMatch = Regex(""""contents"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
-        if (contentsMatch != null) {
-            return HoverInfo(contents = unescapeJson(contentsMatch.groupValues[1]))
-        }
-        return null
     }
 
-    private fun parseDefinitionResponse(json: String): List<DefinitionLocation> {
+    private fun parseDefinitionResponse(rawJson: String): List<DefinitionLocation> {
         val list = mutableListOf<DefinitionLocation>()
-        val uriMatches = Regex(""""(?:targetUri|uri)"\s*:\s*"((?:[^"\\]|\\.)*)"""").findAll(json).toList()
-        val lineMatch = Regex(""""line"\s*:\s*(\d+)""").find(json)
-        val charMatch = Regex(""""character"\s*:\s*(\d+)""").find(json)
-        val targetLine = lineMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val targetCol = charMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        try {
+            val json = JSONObject(rawJson)
+            val result = json.opt("result") ?: return emptyList()
+            if (result == JSONObject.NULL) return emptyList()
 
-        for (uriMatch in uriMatches) {
-            val uri = uriMatch.groupValues[1]
-            list.add(
-                DefinitionLocation(
-                    uri = uri,
-                    line = targetLine,
-                    column = targetCol
-                )
-            )
-        }
+            val locs = when (result) {
+                is JSONArray -> result
+                is JSONObject -> JSONArray().apply { put(result) }
+                else -> return emptyList()
+            }
+
+            for (i in 0 until locs.length()) {
+                val loc = locs.optJSONObject(i) ?: continue
+                val targetUri = loc.optString("targetUri", loc.optString("uri", ""))
+                val range = loc.optJSONObject("targetRange") ?: loc.optJSONObject("range")
+                val start = range?.optJSONObject("start")
+                val line = (start?.optInt("line", 0) ?: 0) + 1
+                val col = (start?.optInt("character", 0) ?: 0) + 1
+
+                if (targetUri.isNotEmpty()) {
+                    list.add(DefinitionLocation(uri = targetUri, line = line, column = col))
+                }
+            }
+        } catch (_: Throwable) {}
         return list
     }
 
-    private fun parseCompletionResponse(json: String): List<CompletionItem> {
+    private fun parseCompletionResponse(rawJson: String): List<CompletionItem> {
         val items = mutableListOf<CompletionItem>()
-        val labelRegex = Regex(""""label"\s*:\s*"((?:[^"\\]|\\.)*)"""")
-        for (match in labelRegex.findAll(json)) {
-            val label = unescapeJson(match.groupValues[1])
-            items.add(
-                CompletionItem(
-                    label = label,
-                    kind = CompletionItemKind.FUNCTION,
-                    insertText = label
-                )
-            )
-        }
+        try {
+            val json = JSONObject(rawJson)
+            val result = json.opt("result") ?: return emptyList()
+            if (result == JSONObject.NULL) return emptyList()
+
+            val array = when (result) {
+                is JSONArray -> result
+                is JSONObject -> result.optJSONArray("items") ?: JSONArray()
+                else -> JSONArray()
+            }
+
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val label = item.optString("label", "")
+                val insertText = item.optString("insertText", label)
+                val kindInt = item.optInt("kind", 3)
+                val kind = when (kindInt) {
+                    1 -> CompletionItemKind.TEXT
+                    2 -> CompletionItemKind.METHOD
+                    3 -> CompletionItemKind.FUNCTION
+                    6 -> CompletionItemKind.VARIABLE
+                    7 -> CompletionItemKind.CLASS
+                    14 -> CompletionItemKind.KEYWORD
+                    15 -> CompletionItemKind.SNIPPET
+                    else -> CompletionItemKind.FUNCTION
+                }
+                if (label.isNotEmpty()) {
+                    items.add(CompletionItem(label = label, kind = kind, insertText = insertText))
+                }
+            }
+        } catch (_: Throwable) {}
         return items
     }
 
-    private fun extractFormattedText(json: String): String {
-        val textMatch = Regex(""""newText"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
-        return textMatch?.groupValues?.get(1)?.let { unescapeJson(it) } ?: ""
-    }
-
-    private fun escapeJson(input: String): String {
-        return input.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\b", "\\b")
-            .replace("\u000C", "\\f")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
-    }
-
-    private fun unescapeJson(input: String): String {
-        return input.replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
-            .replace("\\\"", "\"")
-            .replace("\\\\", "\\")
+    private fun extractFormattedText(rawJson: String): String {
+        return try {
+            val json = JSONObject(rawJson)
+            val result = json.optJSONArray("result") ?: return ""
+            if (result.length() > 0) {
+                result.getJSONObject(0).optString("newText", "")
+            } else ""
+        } catch (_: Throwable) {
+            ""
+        }
     }
 }
