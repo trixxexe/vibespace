@@ -54,6 +54,7 @@ fun HomeScreen(
     onNavigateToEditor: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToExtensions: (() -> Unit)? = null,
+    onNavigateToOnboarding: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -227,8 +228,15 @@ fun HomeScreen(
                     icon = VibeIcons.Settings,
                     title = "Settings",
                     subtitle = "Preferences & about",
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     onClick = onNavigateToSettings
+                )
+                QuickActionCard(
+                    icon = VibeIcons.Logo,
+                    title = "Guided Tour",
+                    subtitle = "IDE setup & walkthrough",
+                    modifier = Modifier.weight(1f),
+                    onClick = { onNavigateToOnboarding?.invoke() }
                 )
             }
         }

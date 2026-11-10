@@ -22,7 +22,9 @@ data class UserSettings(
     val aiProviderId: String = "gemini",
     val aiApiKey: String = "",
     val aiModel: String = "gemini-2.0-flash",
-    val aiCustomEndpoint: String = ""
+    val aiCustomEndpoint: String = "",
+    val hasCompletedOnboarding: Boolean = false,
+    val onboardingStep: Int = 0
 )
 
 interface SettingsRepository {
@@ -33,6 +35,8 @@ interface SettingsRepository {
     suspend fun setEditorFontSize(fontSizeSp: Float): VibeResult<Unit>
     suspend fun setTabSize(spaces: Int): VibeResult<Unit>
     suspend fun setAiConfig(providerId: String, apiKey: String, model: String, customEndpoint: String = ""): VibeResult<Unit>
+    suspend fun setOnboardingCompleted(completed: Boolean): VibeResult<Unit>
+    suspend fun setOnboardingStep(step: Int): VibeResult<Unit>
 }
 
 class InMemorySettingsRepository(
@@ -80,6 +84,16 @@ class InMemorySettingsRepository(
             aiModel = model.trim(),
             aiCustomEndpoint = customEndpoint.trim()
         )
+        return VibeResult.Success(Unit)
+    }
+
+    override suspend fun setOnboardingCompleted(completed: Boolean): VibeResult<Unit> {
+        _settings.value = _settings.value.copy(hasCompletedOnboarding = completed)
+        return VibeResult.Success(Unit)
+    }
+
+    override suspend fun setOnboardingStep(step: Int): VibeResult<Unit> {
+        _settings.value = _settings.value.copy(onboardingStep = step)
         return VibeResult.Success(Unit)
     }
 }

@@ -194,11 +194,20 @@ fun GitSourceControlPanel(
 
             if (uiState.syncMessage != null) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "✓ ${uiState.syncMessage}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = VibeTheme.colors.statusSuccess
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = VibeIcons.Checkmark,
+                        contentDescription = "Success",
+                        tint = VibeTheme.colors.statusSuccess,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = uiState.syncMessage ?: "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VibeTheme.colors.statusSuccess
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -310,11 +319,20 @@ fun GitSourceControlPanel(
                                 .padding(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "Working tree is clean ✓",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = VibeTheme.colors.textMuted
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = VibeIcons.Checkmark,
+                                    contentDescription = null,
+                                    tint = VibeTheme.colors.statusSuccess,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Working tree is clean",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = VibeTheme.colors.textMuted
+                                )
+                            }
                         }
                     }
                 } else {

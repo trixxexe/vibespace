@@ -80,7 +80,7 @@ class AIService(
                 val errorMsg = AIMessage(
                     id = IdGenerator.shortId("msg"),
                     role = AIRole.ASSISTANT,
-                    content = "⚠️ ${responseResult.message}"
+                    content = "[Error] ${responseResult.message}"
                 )
                 _messages.value = _messages.value + errorMsg
                 VibeResult.Error(responseResult.message, responseResult.throwable)

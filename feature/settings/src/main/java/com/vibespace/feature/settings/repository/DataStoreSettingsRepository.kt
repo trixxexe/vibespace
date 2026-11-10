@@ -55,6 +55,8 @@ class DataStoreSettingsRepository(
         val AI_API_KEY = stringPreferencesKey("ai_api_key")
         val AI_MODEL = stringPreferencesKey("ai_model")
         val AI_CUSTOM_ENDPOINT = stringPreferencesKey("ai_custom_endpoint")
+        val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
+        val ONBOARDING_STEP = intPreferencesKey("onboarding_step")
     }
 
     override fun observeSettings(): Flow<UserSettings> {
@@ -100,7 +102,9 @@ class DataStoreSettingsRepository(
                             aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini",
                             aiApiKey = decryptedApiKey,
                             aiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.0-flash",
-                            aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: ""
+                            aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: "",
+                            hasCompletedOnboarding = preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] ?: false,
+                            onboardingStep = preferences[PreferencesKeys.ONBOARDING_STEP] ?: 0
                         )
                     } catch (_: Throwable) {
                         UserSettings()
@@ -136,6 +140,8 @@ class DataStoreSettingsRepository(
                 preferences[PreferencesKeys.AI_API_KEY] = encryptedKey
                 preferences[PreferencesKeys.AI_MODEL] = settings.aiModel
                 preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] = settings.aiCustomEndpoint
+                preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] = settings.hasCompletedOnboarding
+                preferences[PreferencesKeys.ONBOARDING_STEP] = settings.onboardingStep
             }
             VibeResult.Success(Unit)
         } catch (e: Throwable) {
@@ -203,6 +209,24 @@ class DataStoreSettingsRepository(
             VibeResult.Success(Unit)
         } catch (e: Throwable) {
             VibeResult.Error("Failed to update AI configuration: ${e.message}", e)
+        }
+    }
+
+    override suspend fun setOnboardingCompleted(completed: Boolean): VibeResult<Unit> = withContext(dispatchers.io) {
+        try {
+            context.settingsDataStore.edit { it[PreferencesKeys.HAS_COMPLETED_ONBOARDING] = completed }
+            VibeResult.Success(Unit)
+        } catch (e: Throwable) {
+            VibeResult.Error("Failed to update onboarding status: ${e.message}", e)
+        }
+    }
+
+    override suspend fun setOnboardingStep(step: Int): VibeResult<Unit> = withContext(dispatchers.io) {
+        try {
+            context.settingsDataStore.edit { it[PreferencesKeys.ONBOARDING_STEP] = step }
+            VibeResult.Success(Unit)
+        } catch (e: Throwable) {
+            VibeResult.Error("Failed to update onboarding step: ${e.message}", e)
         }
     }
 }

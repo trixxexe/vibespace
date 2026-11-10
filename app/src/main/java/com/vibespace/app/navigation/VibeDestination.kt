@@ -8,4 +8,5 @@ sealed class VibeDestination(val route: String) {
     data object Editor : VibeDestination("editor")
     data object Settings : VibeDestination("settings")
     data object Extensions : VibeDestination("extensions")
+    data object Onboarding : VibeDestination("onboarding")
 }

@@ -253,7 +253,8 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         RuntimeOptionRow(
-                            badge = "⚡ Instant",
+                            icon = VibeIcons.RunnerInstant,
+                            badge = "Instant",
                             title = "Instant Embedded",
                             subtitle = "Zero download. Pre-bundled JS, Python, HTML & Shell."
                         )
@@ -261,7 +262,8 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         RuntimeOptionRow(
-                            badge = "🐧 In-App",
+                            icon = VibeIcons.RunnerAlpine,
+                            badge = "Alpine PRoot",
                             title = "Alpine Linux Subsystem",
                             subtitle = "PRoot container inside app. Real apk, pip install, and npm install."
                         )
@@ -269,7 +271,8 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         RuntimeOptionRow(
-                            badge = "🚀 Bridge",
+                            icon = VibeIcons.RunnerTermux,
+                            badge = "Termux Bridge",
                             title = "Termux Bridge",
                             subtitle = "Direct bridge to Termux app for hardware-accelerated binaries."
                         )
@@ -301,14 +304,25 @@ fun SettingsScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.statusSuccess.copy(alpha = 0.15f) else VibeTheme.colors.statusWarning.copy(alpha = 0.15f)
                             ) {
-                                Text(
-                                    text = if (settings.aiApiKey.isNotBlank()) "✓ Active" else "⚠ Key Needed",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.statusSuccess else VibeTheme.colors.statusWarning,
-                                        fontWeight = FontWeight.Bold
-                                    ),
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
+                                ) {
+                                    Icon(
+                                        imageVector = if (settings.aiApiKey.isNotBlank()) VibeIcons.Checkmark else VibeIcons.Warning,
+                                        contentDescription = null,
+                                        tint = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.statusSuccess else VibeTheme.colors.statusWarning,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (settings.aiApiKey.isNotBlank()) "Configured" else "Key Required",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.statusSuccess else VibeTheme.colors.statusWarning,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
                             }
                         }
 
@@ -527,6 +541,7 @@ private fun ThemeOptionRow(
 
 @Composable
 private fun RuntimeOptionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     badge: String,
     title: String,
     subtitle: String
@@ -543,7 +558,16 @@ private fun RuntimeOptionRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = VibeTheme.colors.accentPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                }
                 Text(badge, style = VibeCodeTypography.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold), color = VibeTheme.colors.accentPrimary)
             }
             Spacer(modifier = Modifier.height(2.dp))

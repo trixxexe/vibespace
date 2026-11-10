@@ -126,10 +126,11 @@ private fun CompletionPill(
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = if (isSnippet) "⚡" else "λ",
-                style = VibeCodeTypography.copy(fontSize = 11.sp),
-                color = if (isSnippet) VibeTheme.colors.accentPrimary else VibeTheme.colors.accentSecondary
+            Icon(
+                imageVector = if (isSnippet) com.vibespace.core.designsystem.components.VibeIcons.Snippet else com.vibespace.core.designsystem.components.VibeIcons.Editor,
+                contentDescription = if (isSnippet) "Snippet" else "Symbol",
+                tint = if (isSnippet) VibeTheme.colors.accentPrimary else VibeTheme.colors.accentSecondary,
+                modifier = Modifier.size(12.dp)
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(

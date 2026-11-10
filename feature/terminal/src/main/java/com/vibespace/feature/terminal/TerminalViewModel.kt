@@ -189,7 +189,7 @@ class TerminalViewModel(
 
     fun launchTerminalAgent(agentName: String = "AI Agent") {
         viewModelScope.launch(dispatchers.default) {
-            val title = "🤖 $agentName"
+            val title = "Agent: $agentName"
             val result = terminalService.createSession(title, "~")
             if (result is VibeResult.Success) {
                 val sessionId = result.data.sessionId

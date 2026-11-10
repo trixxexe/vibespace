@@ -158,4 +158,30 @@ class DefaultGitManagerTest {
         val diffResult = gitManager.getFileDiff("vibe://projects/git-err-diff/does_not_exist.txt")
         assertTrue(diffResult.isError)
     }
+
+    @Test
+    fun local_git_history_branches_and_staging_persist_across_project_reloads() = runTest {
+        val root = "vibe://projects/git-persist"
+        val project = Project("g9", "GitPersist", root)
+        workspaceManager.openProject(project)
+
+        workspaceManager.writeFile("$root/code.py", "print(1)")
+        gitManager.createBranch("feature-persist")
+        gitManager.stageAll()
+        val commitRes = gitManager.commit("Commit to persist")
+        assertTrue(commitRes.isSuccess)
+
+        workspaceManager.writeFile("$root/next.py", "print(2)")
+        gitManager.stageFile("$root/next.py")
+
+        // Simulate app restart / reopen project with a brand new GitManager instance
+        val newGitManager = DefaultGitManager(workspaceManager, dispatchers)
+        workspaceManager.openProject(project)
+
+        val restoredStatus = newGitManager.status.value
+        assertEquals("feature-persist", restoredStatus.currentBranch)
+        assertTrue(restoredStatus.branches.any { it.name == "feature-persist" && it.isCurrent })
+        assertTrue(restoredStatus.commits.any { it.message == "Commit to persist" })
+        assertTrue(restoredStatus.stagedFiles.any { it.path == "$root/next.py" })
+    }
 }

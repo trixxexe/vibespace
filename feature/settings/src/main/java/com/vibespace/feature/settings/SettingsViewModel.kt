@@ -81,4 +81,16 @@ class SettingsViewModel(
             repository.setAiConfig(providerId, apiKey, model, customEndpoint)
         }
     }
+
+    fun setOnboardingCompleted(completed: Boolean) {
+        viewModelScope.launch(dispatchers.default) {
+            repository.setOnboardingCompleted(completed)
+        }
+    }
+
+    fun setOnboardingStep(step: Int) {
+        viewModelScope.launch(dispatchers.default) {
+            repository.setOnboardingStep(step)
+        }
+    }
 }

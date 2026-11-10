@@ -1,11 +1,19 @@
 package com.vibespace.app.navigation
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.documentfile.provider.DocumentFile
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +25,7 @@ import com.vibespace.feature.editor.EditorViewModel
 import com.vibespace.feature.explorer.ExplorerViewModel
 import com.vibespace.feature.home.HomeScreen
 import com.vibespace.feature.home.HomeViewModel
+import com.vibespace.feature.home.onboarding.OnboardingScreen
 import com.vibespace.feature.search.SearchViewModel
 import com.vibespace.feature.settings.SettingsScreen
 import com.vibespace.feature.settings.SettingsViewModel
@@ -75,6 +84,16 @@ fun VibeNavigation(
         )
     }
 
+    var onboardingNavigated by remember { mutableStateOf(false) }
+    LaunchedEffect(settingsState.settings.hasCompletedOnboarding) {
+        if (!settingsState.settings.hasCompletedOnboarding && !onboardingNavigated) {
+            onboardingNavigated = true
+            navController.navigate(VibeDestination.Onboarding.route) {
+                popUpTo(VibeDestination.Home.route) { inclusive = false }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = VibeDestination.Home.route,
@@ -91,6 +110,82 @@ fun VibeNavigation(
                 },
                 onNavigateToExtensions = {
                     navController.navigate(VibeDestination.Extensions.route)
+                },
+                onNavigateToOnboarding = {
+                    navController.navigate(VibeDestination.Onboarding.route)
+                }
+            )
+        }
+
+        composable(VibeDestination.Onboarding.route) {
+            val context = LocalContext.current
+            val openTreeLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocumentTree()
+            ) { treeUri: Uri? ->
+                if (treeUri != null) {
+                    try {
+                        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        context.contentResolver.takePersistableUriPermission(treeUri, flags)
+                    } catch (_: Throwable) {}
+
+                    val folderDoc = DocumentFile.fromTreeUri(context, treeUri)
+                    val folderName = folderDoc?.name ?: "Workspace"
+                    homeViewModel.openSafTreeUri(
+                        treeUri = treeUri,
+                        folderName = folderName,
+                        onProjectReady = {
+                            settingsViewModel.setOnboardingCompleted(true)
+                            navController.navigate(VibeDestination.Editor.route) {
+                                popUpTo(VibeDestination.Home.route) { inclusive = false }
+                            }
+                        },
+                        onProjectError = {}
+                    )
+                }
+            }
+
+            OnboardingScreen(
+                currentStep = settingsState.settings.onboardingStep,
+                onStepChange = { step ->
+                    settingsViewModel.setOnboardingStep(step)
+                },
+                onFinish = {
+                    settingsViewModel.setOnboardingCompleted(true)
+                    navController.navigate(VibeDestination.Home.route) {
+                        popUpTo(VibeDestination.Onboarding.route) { inclusive = true }
+                    }
+                },
+                onSkip = {
+                    settingsViewModel.setOnboardingCompleted(true)
+                    navController.navigate(VibeDestination.Home.route) {
+                        popUpTo(VibeDestination.Onboarding.route) { inclusive = true }
+                    }
+                },
+                onOpenSafPicker = {
+                    openTreeLauncher.launch(null)
+                },
+                onCreateNewProject = { name ->
+                    homeViewModel.createNewProject(name) {
+                        settingsViewModel.setOnboardingCompleted(true)
+                        navController.navigate(VibeDestination.Editor.route) {
+                            popUpTo(VibeDestination.Home.route) { inclusive = false }
+                        }
+                    }
+                },
+                onTrySampleProject = {
+                    homeViewModel.openDemoProject {
+                        settingsViewModel.setOnboardingCompleted(true)
+                        navController.navigate(VibeDestination.Editor.route) {
+                            popUpTo(VibeDestination.Home.route) { inclusive = false }
+                        }
+                    }
+                },
+                currentTheme = settingsState.settings.themeMode,
+                onSelectTheme = { themeMode ->
+                    settingsViewModel.setThemeMode(themeMode)
+                },
+                onConfigureAi = { provider, key, model ->
+                    settingsViewModel.setAiConfig(provider, key, model)
                 }
             )
         }

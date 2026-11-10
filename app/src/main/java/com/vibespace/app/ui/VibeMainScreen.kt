@@ -242,10 +242,11 @@ fun VibeMainScreen(
                             }
                         },
                         icon = {
-                            Text(
-                                text = if (splitOrientation == SplitOrientation.HORIZONTAL) "◫" else "⬒",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (splitOrientation == SplitOrientation.HORIZONTAL) MaterialTheme.colorScheme.primary else VibeTheme.colors.textSecondary
+                            Icon(
+                                imageVector = if (splitOrientation == SplitOrientation.HORIZONTAL) VibeIcons.SplitHorizontal else VibeIcons.SplitVertical,
+                                contentDescription = if (splitOrientation == SplitOrientation.HORIZONTAL) "Side by Side Split" else "Stacked Split",
+                                tint = if (splitOrientation == SplitOrientation.HORIZONTAL) MaterialTheme.colorScheme.primary else VibeTheme.colors.textSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
                         },
                         label = { Text(if (splitOrientation == SplitOrientation.HORIZONTAL) "Side" else "Stack") }
@@ -485,60 +486,60 @@ fun VibeMainScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .height(48.dp)
                         .background(VibeTheme.colors.gutterBackground)
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
                         onClick = onNavigateToHome,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(VibeIcons.Home, contentDescription = "Home", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                        Icon(VibeIcons.Home, contentDescription = "Home", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(20.dp))
                     }
 
                     IconButton(
                         onClick = { scope.launch { drawerState.open() } },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(VibeIcons.Explorer, contentDescription = "Explorer", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                        Icon(VibeIcons.Explorer, contentDescription = "Explorer", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(20.dp))
                     }
 
                     Text(
                         text = "VibeSpace",
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         color = VibeTheme.colors.textPrimary,
-                        modifier = Modifier.padding(start = 8.dp).weight(1f)
+                        modifier = Modifier.padding(start = 6.dp).weight(1f)
                     )
 
                     IconButton(
                         onClick = { isCommandPaletteVisible = true },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = "Palette", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                        Icon(VibeIcons.Search, contentDescription = "Command Palette", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(20.dp))
                     }
 
                     IconButton(
                         onClick = { isAiChatVisible = true },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(VibeIcons.AI, contentDescription = "AI", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Icon(VibeIcons.AI, contentDescription = "AI Assistant", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
 
                     if (onNavigateToExtensions != null) {
                         IconButton(
                             onClick = onNavigateToExtensions,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(44.dp)
                         ) {
-                            Icon(VibeIcons.Extension, contentDescription = "Extensions", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                            Icon(VibeIcons.Extension, contentDescription = "Extensions", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(20.dp))
                         }
                     }
 
                     IconButton(
                         onClick = onNavigateToSettings,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(VibeIcons.Settings, contentDescription = "Settings", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                        Icon(VibeIcons.Settings, contentDescription = "Settings", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(20.dp))
                     }
                 }
 

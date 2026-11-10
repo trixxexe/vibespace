@@ -54,8 +54,15 @@ fun TemplateBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    imageVector = com.vibespace.core.designsystem.components.VibeIcons.Snippet,
+                    contentDescription = null,
+                    tint = VibeTheme.colors.accentPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "⚡ Code Templates ($languageName)",
+                    text = "Code Templates ($languageName)",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = VibeTheme.colors.textPrimary
                 )

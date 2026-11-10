@@ -61,4 +61,28 @@ class SettingsViewModelTest {
         assertEquals("AIzaSyTest123", viewModel.uiState.value.settings.aiApiKey)
         assertEquals("gemini-2.0-flash", viewModel.uiState.value.settings.aiModel)
     }
+
+    @Test
+    fun setOnboardingCompleted_updates_state() = runTest {
+        val viewModel = SettingsViewModel(
+            repository = repository,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertEquals(false, viewModel.uiState.value.settings.hasCompletedOnboarding)
+        viewModel.setOnboardingCompleted(true)
+        assertEquals(true, viewModel.uiState.value.settings.hasCompletedOnboarding)
+    }
+
+    @Test
+    fun setOnboardingStep_updates_state() = runTest {
+        val viewModel = SettingsViewModel(
+            repository = repository,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertEquals(0, viewModel.uiState.value.settings.onboardingStep)
+        viewModel.setOnboardingStep(2)
+        assertEquals(2, viewModel.uiState.value.settings.onboardingStep)
+    }
 }

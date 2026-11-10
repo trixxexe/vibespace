@@ -33,70 +33,70 @@ fun EditorToolbar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .height(48.dp)
             .background(VibeTheme.colors.gutterBackground)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
             onClick = onSaveClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.Save,
                 contentDescription = "Save file",
                 tint = if (isDocumentDirty) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
         IconButton(
             onClick = onUndoClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.Undo,
                 contentDescription = "Undo",
                 tint = VibeTheme.colors.textSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
         IconButton(
             onClick = onRedoClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.Redo,
                 contentDescription = "Redo",
                 tint = VibeTheme.colors.textSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
         if (onFormatClick != null) {
             IconButton(
                 onClick = onFormatClick,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = VibeIcons.Editor,
                     contentDescription = "Format Document",
                     tint = VibeTheme.colors.textSecondary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
 
         IconButton(
             onClick = onSearchClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.Search,
                 contentDescription = "Find and Replace",
                 tint = VibeTheme.colors.textSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -104,13 +104,13 @@ fun EditorToolbar(
 
         IconButton(
             onClick = onAiAssistantClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.AI,
                 contentDescription = "AI Assistant",
                 tint = VibeTheme.colors.accentPrimary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -118,13 +118,13 @@ fun EditorToolbar(
 
         IconButton(
             onClick = onToggleTerminalClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.Terminal,
                 contentDescription = "Terminal Panel",
                 tint = VibeTheme.colors.textSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -132,7 +132,7 @@ fun EditorToolbar(
 
         IconButton(
             onClick = onRunClick,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = VibeIcons.Run,

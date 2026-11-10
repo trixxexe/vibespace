@@ -12,13 +12,15 @@ class NavigationTest {
             VibeDestination.Home.route,
             VibeDestination.Editor.route,
             VibeDestination.Settings.route,
-            VibeDestination.Extensions.route
+            VibeDestination.Extensions.route,
+            VibeDestination.Onboarding.route
         )
 
-        assertEquals(4, routes.distinct().size)
+        assertEquals(5, routes.distinct().size)
         assertEquals("home", VibeDestination.Home.route)
         assertEquals("editor", VibeDestination.Editor.route)
         assertEquals("settings", VibeDestination.Settings.route)
         assertEquals("extensions", VibeDestination.Extensions.route)
+        assertEquals("onboarding", VibeDestination.Onboarding.route)
     }
 }

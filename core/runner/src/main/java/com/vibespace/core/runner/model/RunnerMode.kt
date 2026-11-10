@@ -16,7 +16,7 @@ enum class RunnerMode(
     EMBEDDED(
         id = "embedded",
         displayName = "Instant Script Evaluator",
-        shortBadge = "⚡ Instant",
+        shortBadge = "Instant",
         description = "Lightweight offline script evaluator for Python, JS, and Shell builtins. Zero download."
     ),
 
@@ -27,7 +27,7 @@ enum class RunnerMode(
     ALPINE(
         id = "alpine",
         displayName = "Alpine Linux Subsystem",
-        shortBadge = "🐧 Alpine",
+        shortBadge = "Alpine PRoot",
         description = "In-app Linux container. Supports pip install, npm install, and apk packages."
     ),
 
@@ -38,7 +38,7 @@ enum class RunnerMode(
     TERMUX(
         id = "termux",
         displayName = "Termux Bridge",
-        shortBadge = "🚀 Termux",
+        shortBadge = "Termux Bridge",
         description = "External Termux bridge. Hardware-accelerated native Android environment."
     )
 }

@@ -90,6 +90,13 @@ class DefaultGitManager(
                     }
                 }
 
+                val stagedArray = json.optJSONArray("staged")
+                if (stagedArray != null) {
+                    for (i in 0 until stagedArray.length()) {
+                        stagedPaths.add(stagedArray.getString(i))
+                    }
+                }
+
                 val commitsArray = json.optJSONArray("commits")
                 if (commitsArray != null) {
                     for (i in 0 until commitsArray.length()) {
@@ -116,6 +123,26 @@ class DefaultGitManager(
                 }
                 restoredFromState = true
             } catch (_: Throwable) {}
+        }
+
+        // Detect real .git repository HEAD if present
+        val gitHeadRead = workspaceManager.readFile("$rootUri/.git/HEAD")
+        if (gitHeadRead is VibeResult.Success) {
+            val headText = gitHeadRead.data.trim()
+            if (headText.startsWith("ref: refs/heads/")) {
+                val branchFromHead = headText.removePrefix("ref: refs/heads/").trim()
+                if (branchFromHead.isNotEmpty()) {
+                    for (i in branches.indices) {
+                        branches[i] = branches[i].copy(isCurrent = false)
+                    }
+                    val existingIdx = branches.indexOfFirst { it.name == branchFromHead }
+                    if (existingIdx != -1) {
+                        branches[existingIdx] = branches[existingIdx].copy(isCurrent = true)
+                    } else {
+                        branches.add(GitBranch(name = branchFromHead, isCurrent = true))
+                    }
+                }
+            }
         }
 
         if (!restoredFromState) {
@@ -156,6 +183,12 @@ class DefaultGitManager(
                 branchesArray.put(bObj)
             }
             json.put("branches", branchesArray)
+
+            val stagedArray = JSONArray()
+            for (s in stagedPaths) {
+                stagedArray.put(s)
+            }
+            json.put("staged", stagedArray)
 
             val commitsArray = JSONArray()
             for (c in commits) {
@@ -262,12 +295,14 @@ class DefaultGitManager(
 
     override suspend fun stageFile(path: String): VibeResult<Unit> = withContext(dispatchers.io) {
         stagedPaths.add(path)
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }
 
     override suspend fun unstageFile(path: String): VibeResult<Unit> = withContext(dispatchers.io) {
         stagedPaths.remove(path)
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }
@@ -278,12 +313,14 @@ class DefaultGitManager(
         for (f in unstaged) {
             stagedPaths.add(f.path)
         }
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }
 
     override suspend fun unstageAll(): VibeResult<Unit> = withContext(dispatchers.io) {
         stagedPaths.clear()
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }
@@ -296,6 +333,7 @@ class DefaultGitManager(
             workspaceManager.delete(path)
         }
         stagedPaths.remove(path)
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }
@@ -351,6 +389,7 @@ class DefaultGitManager(
         for (i in branches.indices) {
             branches[i] = branches[i].copy(isCurrent = branches[i].name == branchName)
         }
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }
@@ -367,6 +406,7 @@ class DefaultGitManager(
             branches[i] = branches[i].copy(isCurrent = false)
         }
         branches.add(GitBranch(name = cleanName, isCurrent = true))
+        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
         refreshStatus()
         VibeResult.Success(Unit)
     }

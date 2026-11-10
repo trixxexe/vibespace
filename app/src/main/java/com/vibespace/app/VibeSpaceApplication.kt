@@ -87,11 +87,19 @@ class VibeSpaceApplication : Application() {
     private val lspClients = java.util.concurrent.ConcurrentHashMap<String, com.vibespace.core.language.lsp.LanguageServerClient>()
 
     fun registerLspClient(languageId: String, client: com.vibespace.core.language.lsp.LanguageServerClient) {
-        lspClients[languageId] = client
+        val normalized = languageId.trim().lowercase()
+        lspClients[normalized] = client
     }
 
     fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? {
-        return lspClients[languageId]
+        val normalized = languageId.trim().lowercase()
+        if (normalized.isEmpty()) return null
+        return lspClients.getOrPut(normalized) {
+            val transport = com.vibespace.core.language.lsp.InMemoryLspTransport()
+            val responder = com.vibespace.core.language.lsp.LocalLspServerResponder(normalized, transport, dispatchers)
+            responder.start()
+            com.vibespace.core.language.lsp.StdioLanguageServerClient(normalized, transport, dispatchers)
+        }
     }
 
     override fun onCreate() {

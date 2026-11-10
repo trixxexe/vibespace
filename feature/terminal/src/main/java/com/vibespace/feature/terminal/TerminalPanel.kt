@@ -289,8 +289,15 @@ fun TerminalPanel(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(
+                                    imageVector = VibeIcons.TerminalAgent,
+                                    contentDescription = null,
+                                    tint = VibeTheme.colors.accentPrimary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "🤖 Pair Agent",
+                                    text = "Pair Agent",
                                     style = VibeCodeTypography.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                                     color = VibeTheme.colors.accentPrimary
                                 )
@@ -322,7 +329,12 @@ fun TerminalPanel(
                                 is AlpineInstallationState.Downloading -> {
                                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("🐧", fontSize = 14.sp)
+                                            Icon(
+                                                imageVector = VibeIcons.RunnerAlpine,
+                                                contentDescription = null,
+                                                tint = VibeTheme.colors.accentPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = "Downloading Alpine Linux aarch64 (${(state.progress * 100).toInt()}%)...",
@@ -342,7 +354,12 @@ fun TerminalPanel(
                                 is AlpineInstallationState.Extracting -> {
                                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("📦", fontSize = 14.sp)
+                                            Icon(
+                                                imageVector = VibeIcons.Package,
+                                                contentDescription = null,
+                                                tint = VibeTheme.colors.accentPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = "Unpacking rootfs into app storage...",
@@ -366,7 +383,12 @@ fun TerminalPanel(
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("⚠️", fontSize = 14.sp)
+                                        Icon(
+                                            imageVector = VibeIcons.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
@@ -390,7 +412,12 @@ fun TerminalPanel(
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("🐧", fontSize = 14.sp)
+                                        Icon(
+                                            imageVector = VibeIcons.RunnerAlpine,
+                                            contentDescription = null,
+                                            tint = VibeTheme.colors.accentPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
@@ -475,11 +502,20 @@ fun TerminalPanel(
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No problems detected in workspace ✓",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = VibeTheme.colors.statusSuccess
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = VibeIcons.Checkmark,
+                                contentDescription = null,
+                                tint = VibeTheme.colors.statusSuccess,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "No problems detected in workspace",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = VibeTheme.colors.statusSuccess
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -495,9 +531,11 @@ fun TerminalPanel(
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) "❌" else "⚠️",
-                                    fontSize = 14.sp
+                                Icon(
+                                    imageVector = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) VibeIcons.Error else VibeIcons.Warning,
+                                    contentDescription = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) "Error" else "Warning",
+                                    tint = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) VibeTheme.colors.statusError else VibeTheme.colors.statusWarning,
+                                    modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
