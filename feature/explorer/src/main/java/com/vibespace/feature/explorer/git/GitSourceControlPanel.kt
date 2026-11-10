@@ -18,14 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -112,7 +104,7 @@ fun GitSourceControlPanel(
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
+                        imageVector = VibeIcons.ArrowDown,
                         contentDescription = "Switch Branch",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(12.dp)
@@ -146,7 +138,7 @@ fun GitSourceControlPanel(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
+                    imageVector = VibeIcons.Refresh,
                     contentDescription = "Refresh",
                     tint = VibeTheme.colors.textSecondary,
                     modifier = Modifier.size(18.dp)
@@ -159,7 +151,7 @@ fun GitSourceControlPanel(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Clear,
+                        imageVector = VibeIcons.Close,
                         contentDescription = "Close",
                         tint = VibeTheme.colors.textSecondary,
                         modifier = Modifier.size(18.dp)
@@ -227,7 +219,7 @@ fun GitSourceControlPanel(
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Check,
+                        imageVector = VibeIcons.Checkmark,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -279,7 +271,7 @@ fun GitSourceControlPanel(
                         isExpanded = isStagedExpanded,
                         onToggle = { isStagedExpanded = !isStagedExpanded },
                         onAction = { viewModel.unstageAll() },
-                        actionIcon = Icons.Default.Clear,
+                        actionIcon = VibeIcons.Close,
                         actionTooltip = "Unstage All"
                     )
                 }
@@ -290,7 +282,7 @@ fun GitSourceControlPanel(
                             file = file,
                             onItemClick = { viewModel.openDiff(file.path) },
                             onPrimaryAction = { viewModel.unstageFile(file.path) },
-                            primaryIcon = Icons.Default.Clear,
+                            primaryIcon = VibeIcons.Close,
                             primaryTooltip = "Unstage"
                         )
                     }
@@ -305,7 +297,7 @@ fun GitSourceControlPanel(
                     isExpanded = isUnstagedExpanded,
                     onToggle = { isUnstagedExpanded = !isUnstagedExpanded },
                     onAction = { viewModel.stageAll() },
-                    actionIcon = Icons.Default.Add,
+                    actionIcon = VibeIcons.Add,
                     actionTooltip = "Stage All"
                 )
             }
@@ -341,10 +333,10 @@ fun GitSourceControlPanel(
                             file = file,
                             onItemClick = { viewModel.openDiff(file.path) },
                             onPrimaryAction = { viewModel.stageFile(file.path) },
-                            primaryIcon = Icons.Default.Add,
+                            primaryIcon = VibeIcons.Add,
                             primaryTooltip = "Stage",
                             onSecondaryAction = { viewModel.discardChanges(file.path) },
-                            secondaryIcon = Icons.Default.Restore,
+                            secondaryIcon = VibeIcons.Undo,
                             secondaryTooltip = "Discard Changes"
                         )
                     }
@@ -510,7 +502,7 @@ private fun SectionHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+            imageVector = if (isExpanded) VibeIcons.ArrowDown else VibeIcons.ArrowRight,
             contentDescription = null,
             tint = VibeTheme.colors.textSecondary,
             modifier = Modifier.size(18.dp)

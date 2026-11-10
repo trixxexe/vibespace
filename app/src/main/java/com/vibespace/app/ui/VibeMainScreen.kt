@@ -18,16 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -198,7 +188,7 @@ fun VibeMainScreen(
                 NavigationRailItem(
                     selected = false,
                     onClick = { isCommandPaletteVisible = true },
-                    icon = { Icon(Icons.Default.Search, contentDescription = "Palette", modifier = Modifier.size(20.dp)) },
+                    icon = { Icon(VibeIcons.Search, contentDescription = "Palette", modifier = Modifier.size(20.dp)) },
                     label = { Text("Palette") }
                 )
                 NavigationRailItem(

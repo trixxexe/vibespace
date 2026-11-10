@@ -74,10 +74,27 @@ fun OnboardingScreen(
     onSelectTheme: (OnboardingThemeMode) -> Unit,
     currentTheme: OnboardingThemeMode,
     onConfigureAi: ((provider: String, key: String, model: String) -> Unit)? = null,
+    errorMessage: String? = null,
+    onDismissError: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val totalSteps = 4
     val safeStep = currentStep.coerceIn(0, totalSteps - 1)
+
+    if (errorMessage != null) {
+        com.vibespace.core.designsystem.components.VibeDialog(
+            title = "Setup Notice",
+            onDismissRequest = onDismissError,
+            confirmButtonText = "OK",
+            onConfirm = onDismissError
+        ) {
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = VibeTheme.colors.statusError
+            )
+        }
+    }
 
     Column(
         modifier = modifier

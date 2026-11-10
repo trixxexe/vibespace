@@ -85,4 +85,14 @@ class SettingsViewModelTest {
         viewModel.setOnboardingStep(2)
         assertEquals(2, viewModel.uiState.value.settings.onboardingStep)
     }
+
+    @Test
+    fun isInitialized_flips_to_true_after_observing_settings() = runTest {
+        val viewModel = SettingsViewModel(
+            repository = repository,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertTrue(viewModel.uiState.value.isInitialized)
+    }
 }

@@ -21,13 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Search
+import com.vibespace.core.designsystem.components.VibeIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -100,14 +94,14 @@ fun ExtensionsScreen(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = VibeIcons.Back,
                     contentDescription = "Back",
                     tint = VibeTheme.colors.textPrimary
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = Icons.Default.Extension,
+                imageVector = VibeIcons.Extension,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
@@ -126,7 +120,7 @@ fun ExtensionsScreen(
                 modifier = Modifier.height(34.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.FolderOpen,
+                    imageVector = VibeIcons.FolderOpen,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp)
                 )
@@ -148,7 +142,7 @@ fun ExtensionsScreen(
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Search,
+                        imageVector = VibeIcons.Search,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
@@ -390,7 +384,7 @@ private fun ExtensionCard(
                             modifier = Modifier.height(44.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Download,
+                                imageVector = VibeIcons.Download,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )

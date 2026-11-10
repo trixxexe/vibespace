@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -105,7 +103,7 @@ fun VibeTabBar(
                         modifier = Modifier.size(20.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = VibeIcons.Close,
                             contentDescription = "Close ${tab.title}",
                             tint = textColor.copy(alpha = 0.7f),
                             modifier = Modifier.size(12.dp)

@@ -21,15 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,6 +48,7 @@ import com.vibespace.core.ai.model.AIMessage
 import com.vibespace.core.ai.model.AIRole
 import com.vibespace.core.designsystem.components.VibeCard
 import com.vibespace.core.designsystem.components.VibeEmptyState
+import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeShapes
 import com.vibespace.core.designsystem.theme.VibeTheme
@@ -93,7 +85,7 @@ fun AIChatScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.AutoAwesome,
+                imageVector = VibeIcons.AI,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
@@ -129,7 +121,7 @@ fun AIChatScreen(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Clear,
+                        imageVector = VibeIcons.Close,
                         contentDescription = "Clear chat",
                         tint = VibeTheme.colors.textSecondary,
                         modifier = Modifier.size(16.dp)
@@ -143,7 +135,7 @@ fun AIChatScreen(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Settings,
+                        imageVector = VibeIcons.Settings,
                         contentDescription = "AI Settings",
                         tint = VibeTheme.colors.textSecondary,
                         modifier = Modifier.size(16.dp)
@@ -157,7 +149,7 @@ fun AIChatScreen(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = VibeIcons.Close,
                         contentDescription = "Close",
                         tint = VibeTheme.colors.textSecondary,
                         modifier = Modifier.size(16.dp)
@@ -176,7 +168,7 @@ fun AIChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Code,
+                    imageVector = VibeIcons.Editor,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp)
@@ -203,7 +195,7 @@ fun AIChatScreen(
                 var keyInput by remember { mutableStateOf("") }
                 Column(modifier = Modifier.padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Key, contentDescription = null, tint = VibeTheme.colors.accentPrimary, modifier = Modifier.size(16.dp))
+                        Icon(VibeIcons.Key, contentDescription = null, tint = VibeTheme.colors.accentPrimary, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Connect Your API Key (BYOK)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
                     }
@@ -258,7 +250,7 @@ fun AIChatScreen(
                     verticalArrangement = Arrangement.Center
                 ) {
                     VibeEmptyState(
-                        icon = Icons.Default.AutoAwesome,
+                        icon = VibeIcons.AI,
                         title = "How can I help you code today?",
                         subtitle = "Select an active file to attach context, or ask any programming question."
                     )
@@ -329,7 +321,7 @@ fun AIChatScreen(
                 modifier = Modifier.size(44.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Send,
+                    imageVector = VibeIcons.Send,
                     contentDescription = "Send",
                     tint = if (uiState.inputPrompt.isNotBlank()) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted
                 )
@@ -428,7 +420,7 @@ private fun CodeBlockItem(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                                imageVector = VibeIcons.Run,
                                 contentDescription = "Run in Terminal",
                                 tint = VibeTheme.colors.accentPrimary,
                                 modifier = Modifier.size(12.dp)

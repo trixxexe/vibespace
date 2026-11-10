@@ -332,4 +332,50 @@ object VibeIcons {
         moveTo(7f, 10f); lineTo(10f, 12f); lineTo(7f, 14f)
         moveTo(12f, 14f); lineTo(16f, 14f)
     }
+
+    val ArrowUp: ImageVector = strokeIcon("ArrowUp") {
+        moveTo(6f, 15f); lineTo(12f, 9f); lineTo(18f, 15f)
+    }
+
+    val Key: ImageVector = strokeIcon("Key") {
+        moveTo(14f, 8f)
+        arcTo(4f, 4f, 0f, isMoreThanHalf = true, isPositiveArc = true, 18f, 12f)
+        arcTo(4f, 4f, 0f, isMoreThanHalf = true, isPositiveArc = true, 14f, 16f)
+        arcTo(4f, 4f, 0f, isMoreThanHalf = false, isPositiveArc = true, 10.5f, 13.5f)
+        lineTo(4f, 20f); lineTo(4f, 17f); lineTo(7f, 17f); lineTo(7f, 14f); lineTo(10f, 14f)
+        lineTo(10.5f, 13.5f)
+        arcTo(4f, 4f, 0f, isMoreThanHalf = false, isPositiveArc = true, 14f, 8f)
+        close()
+        moveTo(14.5f, 11.5f)
+        arcTo(1f, 1f, 0f, isMoreThanHalf = true, isPositiveArc = true, 15.5f, 11.5f)
+        arcTo(1f, 1f, 0f, isMoreThanHalf = true, isPositiveArc = true, 14.5f, 11.5f)
+        close()
+    }
+
+    val Download: ImageVector = strokeIcon("Download") {
+        moveTo(12f, 3f); lineTo(12f, 15f)
+        moveTo(7f, 11f); lineTo(12f, 16f); lineTo(17f, 11f)
+        moveTo(4f, 20f); lineTo(20f, 20f)
+    }
+
+    val Visibility: ImageVector = strokeIcon("Visibility") {
+        moveTo(2f, 12f)
+        arcTo(10f, 7f, 0f, isMoreThanHalf = false, isPositiveArc = true, 22f, 12f)
+        arcTo(10f, 7f, 0f, isMoreThanHalf = false, isPositiveArc = true, 2f, 12f)
+        close()
+        moveTo(12f, 15f)
+        arcTo(3f, 3f, 0f, isMoreThanHalf = true, isPositiveArc = true, 12f, 9f)
+        arcTo(3f, 3f, 0f, isMoreThanHalf = true, isPositiveArc = true, 12f, 15f)
+        close()
+    }
+
+    val VisibilityOff: ImageVector = strokeIcon("VisibilityOff") {
+        moveTo(3f, 3f); lineTo(21f, 21f)
+        moveTo(10.5f, 10.5f)
+        arcTo(3f, 3f, 0f, isMoreThanHalf = false, isPositiveArc = false, 13.5f, 13.5f)
+        moveTo(2f, 12f)
+        arcTo(10f, 7f, 0f, isMoreThanHalf = false, isPositiveArc = true, 9.88f, 7.3f)
+        moveTo(14.12f, 16.7f)
+        arcTo(10f, 7f, 0f, isMoreThanHalf = false, isPositiveArc = false, 2f, 12f)
+    }
 }

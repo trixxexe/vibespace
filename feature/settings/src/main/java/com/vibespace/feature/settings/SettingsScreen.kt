@@ -18,12 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -79,7 +73,7 @@ fun SettingsScreen(
         ) {
             IconButton(onClick = onNavigateBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = VibeIcons.Back,
                     contentDescription = "Back",
                     tint = VibeTheme.colors.textPrimary
                 )
@@ -405,7 +399,7 @@ fun SettingsScreen(
                             trailingIcon = {
                                 IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
                                     Icon(
-                                        imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        imageVector = if (isKeyVisible) VibeIcons.VisibilityOff else VibeIcons.Visibility,
                                         contentDescription = "Toggle visibility",
                                         tint = VibeTheme.colors.textSecondary
                                     )

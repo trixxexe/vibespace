@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val settings: UserSettings = UserSettings(),
+    val isInitialized: Boolean = false,
     val appVersion: String = "0.1.0-alpha",
     val buildNumber: String = "1",
     val kotlinVersion: String = "2.0.21"
@@ -35,7 +36,7 @@ class SettingsViewModel(
     private fun observeSettings() {
         viewModelScope.launch(dispatchers.default) {
             repository.observeSettings().collect { userSettings ->
-                _uiState.update { it.copy(settings = userSettings) }
+                _uiState.update { it.copy(settings = userSettings, isInitialized = true) }
             }
         }
     }

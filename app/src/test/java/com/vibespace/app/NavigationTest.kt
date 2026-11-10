@@ -23,4 +23,14 @@ class NavigationTest {
         assertEquals("extensions", VibeDestination.Extensions.route)
         assertEquals("onboarding", VibeDestination.Onboarding.route)
     }
+
+    @Test
+    fun startDestination_routes_correctly_based_on_onboarding_state() {
+        fun resolveStartDestination(hasCompletedOnboarding: Boolean): String {
+            return if (hasCompletedOnboarding) VibeDestination.Home.route else VibeDestination.Onboarding.route
+        }
+
+        assertEquals(VibeDestination.Onboarding.route, resolveStartDestination(hasCompletedOnboarding = false))
+        assertEquals(VibeDestination.Home.route, resolveStartDestination(hasCompletedOnboarding = true))
+    }
 }

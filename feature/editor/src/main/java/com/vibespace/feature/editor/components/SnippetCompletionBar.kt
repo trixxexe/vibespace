@@ -15,9 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.vibespace.core.designsystem.components.VibeIcons
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,7 +78,7 @@ fun SnippetCompletionBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.AutoAwesome,
+                    imageVector = VibeIcons.Snippet,
                     contentDescription = "Templates",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp)
@@ -127,7 +125,7 @@ private fun CompletionPill(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = if (isSnippet) com.vibespace.core.designsystem.components.VibeIcons.Snippet else com.vibespace.core.designsystem.components.VibeIcons.Editor,
+                imageVector = if (isSnippet) VibeIcons.Snippet else VibeIcons.Editor,
                 contentDescription = if (isSnippet) "Snippet" else "Symbol",
                 tint = if (isSnippet) VibeTheme.colors.accentPrimary else VibeTheme.colors.accentSecondary,
                 modifier = Modifier.size(12.dp)

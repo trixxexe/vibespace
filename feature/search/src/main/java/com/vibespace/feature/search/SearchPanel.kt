@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vibespace.core.designsystem.components.VibeButton
 import com.vibespace.core.designsystem.components.VibeButtonStyle
+import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeShapes
 import com.vibespace.core.designsystem.theme.VibeTheme
 
@@ -76,7 +73,7 @@ fun SearchPanel(
                 modifier = Modifier.size(28.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
+                    imageVector = VibeIcons.ArrowUp,
                     contentDescription = "Previous match",
                     tint = VibeTheme.colors.textSecondary,
                     modifier = Modifier.size(18.dp)
@@ -89,7 +86,7 @@ fun SearchPanel(
                 modifier = Modifier.size(28.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
+                    imageVector = VibeIcons.ArrowDown,
                     contentDescription = "Next match",
                     tint = VibeTheme.colors.textSecondary,
                     modifier = Modifier.size(18.dp)
@@ -101,7 +98,7 @@ fun SearchPanel(
                 modifier = Modifier.size(28.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = VibeIcons.Close,
                     contentDescription = "Close search",
                     tint = VibeTheme.colors.textMuted,
                     modifier = Modifier.size(16.dp)

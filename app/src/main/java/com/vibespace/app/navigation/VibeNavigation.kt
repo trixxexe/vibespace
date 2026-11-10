@@ -84,19 +84,35 @@ fun VibeNavigation(
         )
     }
 
-    var onboardingNavigated by remember { mutableStateOf(false) }
-    LaunchedEffect(settingsState.settings.hasCompletedOnboarding) {
-        if (!settingsState.settings.hasCompletedOnboarding && !onboardingNavigated) {
-            onboardingNavigated = true
-            navController.navigate(VibeDestination.Onboarding.route) {
-                popUpTo(VibeDestination.Home.route) { inclusive = false }
+    if (!settingsState.isInitialized) {
+        androidx.compose.material3.Surface(
+            modifier = modifier.fillMaxSize(),
+            color = androidx.compose.material3.MaterialTheme.colorScheme.background
+        ) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                androidx.compose.material3.Icon(
+                    imageVector = com.vibespace.core.designsystem.components.VibeIcons.Logo,
+                    contentDescription = "VibeSpace",
+                    tint = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(64.dp)
+                )
             }
         }
+        return
+    }
+
+    val startDestination = if (settingsState.settings.hasCompletedOnboarding) {
+        VibeDestination.Home.route
+    } else {
+        VibeDestination.Onboarding.route
     }
 
     NavHost(
         navController = navController,
-        startDestination = VibeDestination.Home.route,
+        startDestination = startDestination,
         modifier = modifier
     ) {
         composable(VibeDestination.Home.route) {
@@ -119,6 +135,7 @@ fun VibeNavigation(
 
         composable(VibeDestination.Onboarding.route) {
             val context = LocalContext.current
+            var onboardingError by remember { mutableStateOf<String?>(null) }
             val openTreeLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.OpenDocumentTree()
             ) { treeUri: Uri? ->
@@ -126,10 +143,21 @@ fun VibeNavigation(
                     try {
                         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                         context.contentResolver.takePersistableUriPermission(treeUri, flags)
-                    } catch (_: Throwable) {}
+                    } catch (e: SecurityException) {
+                        onboardingError = "Storage Access Framework permission error: ${e.message}"
+                        return@rememberLauncherForActivityResult
+                    } catch (t: Throwable) {
+                        onboardingError = "Failed to access folder: ${t.message}"
+                        return@rememberLauncherForActivityResult
+                    }
 
                     val folderDoc = DocumentFile.fromTreeUri(context, treeUri)
-                    val folderName = folderDoc?.name ?: "Workspace"
+                    if (folderDoc == null || !folderDoc.canRead()) {
+                        onboardingError = "Selected folder cannot be read or permission was denied."
+                        return@rememberLauncherForActivityResult
+                    }
+
+                    val folderName = folderDoc.name ?: "Workspace"
                     homeViewModel.openSafTreeUri(
                         treeUri = treeUri,
                         folderName = folderName,
@@ -139,7 +167,9 @@ fun VibeNavigation(
                                 popUpTo(VibeDestination.Home.route) { inclusive = false }
                             }
                         },
-                        onProjectError = {}
+                        onProjectError = { err ->
+                            onboardingError = err
+                        }
                     )
                 }
             }
@@ -195,7 +225,9 @@ fun VibeNavigation(
                 },
                 onConfigureAi = { provider, key, model ->
                     settingsViewModel.setAiConfig(provider, key, model)
-                }
+                },
+                errorMessage = onboardingError,
+                onDismissError = { onboardingError = null }
             )
         }
 

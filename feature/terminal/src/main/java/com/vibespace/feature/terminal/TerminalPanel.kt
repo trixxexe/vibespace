@@ -22,12 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -145,7 +139,7 @@ fun TerminalPanel(
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
+                            imageVector = VibeIcons.ArrowDown,
                             contentDescription = "Switch Runner Mode",
                             tint = VibeTheme.colors.accentPrimary,
                             modifier = Modifier.size(14.dp)
@@ -189,7 +183,7 @@ fun TerminalPanel(
                 modifier = Modifier.size(26.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Clear,
+                    imageVector = VibeIcons.Close,
                     contentDescription = "Clear terminal",
                     tint = VibeTheme.colors.textMuted,
                     modifier = Modifier.size(14.dp)
@@ -201,7 +195,7 @@ fun TerminalPanel(
                 modifier = Modifier.size(26.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = VibeIcons.Close,
                     contentDescription = "Close panel",
                     tint = VibeTheme.colors.textMuted,
                     modifier = Modifier.size(14.dp)
@@ -251,7 +245,7 @@ fun TerminalPanel(
                                         if (uiState.sessions.size > 1 && isSelected) {
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Icon(
-                                                imageVector = Icons.Default.Close,
+                                                imageVector = VibeIcons.Close,
                                                 contentDescription = "Close session",
                                                 tint = VibeTheme.colors.textMuted,
                                                 modifier = Modifier
@@ -270,7 +264,7 @@ fun TerminalPanel(
                             modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Add,
+                                imageVector = VibeIcons.Add,
                                 contentDescription = "New Terminal",
                                 tint = VibeTheme.colors.textSecondary,
                                 modifier = Modifier.size(16.dp)
@@ -473,7 +467,7 @@ fun TerminalPanel(
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                imageVector = VibeIcons.Send,
                                 contentDescription = "Send command",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)

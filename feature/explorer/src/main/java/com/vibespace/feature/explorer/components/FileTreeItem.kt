@@ -10,14 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeShapes
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.workspace.git.GitStatusType
@@ -62,14 +55,14 @@ fun FileTreeItem(
     ) {
         if (file.isDirectory) {
             Icon(
-                imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                imageVector = if (isExpanded) VibeIcons.ArrowDown else VibeIcons.ArrowRight,
                 contentDescription = null,
                 tint = VibeTheme.colors.textSecondary,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
-                imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
+                imageVector = if (isExpanded) VibeIcons.FolderOpen else VibeIcons.Explorer,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
@@ -119,7 +112,7 @@ fun FileTreeItem(
                 modifier = Modifier.size(24.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.MoreVert,
+                    imageVector = VibeIcons.More,
                     contentDescription = "Options",
                     tint = VibeTheme.colors.textMuted,
                     modifier = Modifier.size(14.dp)
@@ -131,8 +124,8 @@ fun FileTreeItem(
 
 private fun getFileIcon(extension: String): ImageVector {
     return when (extension.lowercase()) {
-        "kt", "kts", "java", "py", "js", "ts", "rs", "go", "c", "cpp" -> Icons.Default.Code
-        else -> Icons.Default.Description
+        "kt", "kts", "java", "py", "js", "ts", "rs", "go", "c", "cpp" -> VibeIcons.Editor
+        else -> VibeIcons.File
     }
 }
 

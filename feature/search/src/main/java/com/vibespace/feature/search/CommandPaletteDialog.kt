@@ -14,14 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.workspace.model.VirtualFile
@@ -78,14 +71,14 @@ fun CommandPaletteDialog(
         CommandAction(
             title = "Run Active File",
             subtitle = "Execute current file via Tri-Mode Runner",
-            icon = Icons.Default.PlayArrow,
+            icon = VibeIcons.Run,
             shortcut = "Ctrl+Enter",
             action = onRunScript
         ),
         CommandAction(
             title = "Save Document",
             subtitle = "Save changes to storage",
-            icon = Icons.Default.Save,
+            icon = VibeIcons.Save,
             shortcut = "Ctrl+S",
             action = onSaveFile
         ),
@@ -93,7 +86,7 @@ fun CommandPaletteDialog(
             CommandAction(
                 title = "Format Document",
                 subtitle = "Format active file via Language Server (LSP)",
-                icon = Icons.Default.Code,
+                icon = VibeIcons.Editor,
                 shortcut = "Shift+Alt+F",
                 action = it
             )
@@ -102,7 +95,7 @@ fun CommandPaletteDialog(
             CommandAction(
                 title = "Show Documentation",
                 subtitle = "Semantic hover docs for symbol at cursor",
-                icon = Icons.Default.Description,
+                icon = VibeIcons.File,
                 shortcut = "Ctrl+K Ctrl+I",
                 action = it
             )
@@ -111,7 +104,7 @@ fun CommandPaletteDialog(
             CommandAction(
                 title = "Go to Definition",
                 subtitle = "Jump to declaration/definition of symbol",
-                icon = Icons.Default.PlayArrow,
+                icon = VibeIcons.Run,
                 shortcut = "F12",
                 action = it
             )
@@ -119,21 +112,21 @@ fun CommandPaletteDialog(
         CommandAction(
             title = "Find in Document",
             subtitle = "Search and replace text",
-            icon = Icons.Default.Search,
+            icon = VibeIcons.Search,
             shortcut = "Ctrl+F",
             action = onOpenSearch
         ),
         CommandAction(
             title = "Ask AI Assistant",
             subtitle = "Open AI coding assistant with code context",
-            icon = Icons.Default.AutoAwesome,
+            icon = VibeIcons.AI,
             shortcut = null,
             action = onOpenAi
         ),
         CommandAction(
             title = "Open Preferences",
             subtitle = "Theme, fonts, and execution settings",
-            icon = Icons.Default.Settings,
+            icon = VibeIcons.Settings,
             shortcut = null,
             action = onOpenSettings
         )
@@ -189,7 +182,7 @@ fun CommandPaletteDialog(
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Search,
+                            imageVector = VibeIcons.Search,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -233,7 +226,7 @@ fun CommandPaletteDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Description,
+                                        imageVector = VibeIcons.File,
                                         contentDescription = null,
                                         tint = VibeTheme.colors.accentSecondary,
                                         modifier = Modifier.size(18.dp)

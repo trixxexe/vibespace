@@ -104,6 +104,16 @@ class VibeSpaceApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        val processName = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            Application.getProcessName()
+        } else {
+            packageName
+        }
+        if (processName.endsWith(":crash")) {
+            return
+        }
+
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             logger.e(TAG, "Uncaught exception on thread ${thread.name}: ${throwable.message}", throwable)
@@ -118,6 +128,9 @@ class VibeSpaceApplication : Application() {
                     putExtra("stack_trace", throwable.stackTraceToString())
                 }
                 startActivity(intent)
+                try {
+                    Thread.sleep(300)
+                } catch (_: InterruptedException) {}
                 android.os.Process.killProcess(android.os.Process.myPid())
                 System.exit(10)
             } catch (_: Throwable) {

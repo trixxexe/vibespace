@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.workspace.git.DiffLine
 import com.vibespace.core.workspace.git.DiffLineType
@@ -90,7 +89,7 @@ fun MobileDiffViewerDialog(
 
                     IconButton(onClick = onDismiss) {
                         Icon(
-                            imageVector = Icons.Default.Close,
+                            imageVector = VibeIcons.Close,
                             contentDescription = "Close",
                             tint = VibeTheme.colors.textSecondary
                         )
