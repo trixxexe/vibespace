@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.result.VibeResult
+import com.vibespace.core.language.model.Diagnostic
 import com.vibespace.core.runner.alpine.AlpineInstallationState
 import com.vibespace.core.runner.alpine.AlpineLinuxRunner
 import com.vibespace.core.runner.manager.RunnerManager
@@ -80,6 +81,15 @@ class TerminalViewModel(
 
     fun selectTab(tab: BottomPanelTab) {
         _uiState.update { it.copy(activeTab = tab) }
+    }
+
+    fun updateDiagnostics(diagnosticsList: List<Diagnostic>) {
+        _uiState.update {
+            it.copy(
+                diagnostics = diagnosticsList,
+                problemsCount = diagnosticsList.size
+            )
+        }
     }
 
     fun switchRunnerMode(mode: RunnerMode) {

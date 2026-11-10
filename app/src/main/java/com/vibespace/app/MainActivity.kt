@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.vibespace.app.navigation.VibeNavigation
 import com.vibespace.core.designsystem.theme.VibeSpaceTheme
@@ -27,16 +28,13 @@ class MainActivity : ComponentActivity() {
         val app = application as VibeSpaceApplication
 
         setContent {
-            val settingsState by app.settingsRepository.observeSettings().collectAsState(
+            val settingsFlow = remember { app.settingsRepository.observeSettings() }
+            val settingsState by settingsFlow.collectAsState(
                 initial = com.vibespace.feature.settings.repository.UserSettings()
             )
 
             val isSystemDark = isSystemInDarkTheme()
-            val useDarkTheme = when (settingsState.themeMode) {
-                ThemeMode.DARK -> true
-                ThemeMode.LIGHT -> false
-                ThemeMode.SYSTEM -> isSystemDark
-            }
+            val useDarkTheme = settingsState.themeMode == ThemeMode.DARK || (settingsState.themeMode == ThemeMode.SYSTEM && isSystemDark)
 
             VibeSpaceTheme(darkTheme = useDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {

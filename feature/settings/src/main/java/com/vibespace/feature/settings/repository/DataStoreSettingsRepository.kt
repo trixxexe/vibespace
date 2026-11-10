@@ -46,37 +46,37 @@ class DataStoreSettingsRepository(
     }
 
     override fun observeSettings(): Flow<UserSettings> {
-        return context.settingsDataStore.data
-            .catch { exception ->
-                if (exception is IOException) {
+        return try {
+            context.settingsDataStore.data
+                .catch { exception ->
                     emit(emptyPreferences())
-                } else {
-                    throw exception
                 }
-            }
-            .map { preferences ->
-                val themeModeStr = preferences[PreferencesKeys.THEME_MODE] ?: ThemeMode.DARK.name
-                val themeMode = try {
-                    ThemeMode.valueOf(themeModeStr)
-                } catch (e: Exception) {
-                    ThemeMode.DARK
-                }
+                .map { preferences ->
+                    val themeModeStr = preferences[PreferencesKeys.THEME_MODE] ?: ThemeMode.DARK.name
+                    val themeMode = try {
+                        ThemeMode.valueOf(themeModeStr)
+                    } catch (e: Exception) {
+                        ThemeMode.DARK
+                    }
 
-                UserSettings(
-                    themeMode = themeMode,
-                    editorThemeId = preferences[PreferencesKeys.EDITOR_THEME_ID] ?: "vibe_dark",
-                    editorFontSizeSp = preferences[PreferencesKeys.EDITOR_FONT_SIZE] ?: 13f,
-                    tabSizeSpaces = preferences[PreferencesKeys.TAB_SIZE] ?: 4,
-                    showLineNumbers = preferences[PreferencesKeys.SHOW_LINE_NUMBERS] ?: true,
-                    wordWrap = preferences[PreferencesKeys.WORD_WRAP] ?: false,
-                    autoSave = preferences[PreferencesKeys.AUTO_SAVE] ?: true,
-                    aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini",
-                    aiApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: "",
-                    aiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.0-flash",
-                    aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: ""
-                )
-            }
-            .flowOn(dispatchers.io)
+                    UserSettings(
+                        themeMode = themeMode,
+                        editorThemeId = preferences[PreferencesKeys.EDITOR_THEME_ID] ?: "vibe_dark",
+                        editorFontSizeSp = preferences[PreferencesKeys.EDITOR_FONT_SIZE] ?: 13f,
+                        tabSizeSpaces = preferences[PreferencesKeys.TAB_SIZE] ?: 4,
+                        showLineNumbers = preferences[PreferencesKeys.SHOW_LINE_NUMBERS] ?: true,
+                        wordWrap = preferences[PreferencesKeys.WORD_WRAP] ?: false,
+                        autoSave = preferences[PreferencesKeys.AUTO_SAVE] ?: true,
+                        aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini",
+                        aiApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: "",
+                        aiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.0-flash",
+                        aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: ""
+                    )
+                }
+                .flowOn(dispatchers.io)
+        } catch (t: Throwable) {
+            kotlinx.coroutines.flow.flowOf(UserSettings())
+        }
     }
 
     override suspend fun updateSettings(settings: UserSettings): VibeResult<Unit> = withContext(dispatchers.io) {

@@ -100,7 +100,7 @@ fun TerminalPanel(
                 onClick = { viewModel.selectTab(BottomPanelTab.OUTPUT) }
             )
             PanelTabButton(
-                title = "PROBLEMS (0)",
+                title = "PROBLEMS (${uiState.problemsCount})",
                 isSelected = uiState.activeTab == BottomPanelTab.PROBLEMS,
                 onClick = { viewModel.selectTab(BottomPanelTab.PROBLEMS) }
             )
@@ -459,16 +459,53 @@ fun TerminalPanel(
                 }
             }
             BottomPanelTab.PROBLEMS -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "No problems detected in workspace.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = VibeTheme.colors.statusSuccess
-                    )
+                if (uiState.diagnostics.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No problems detected in workspace ✓",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = VibeTheme.colors.statusSuccess
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        items(uiState.diagnostics, key = { it.id }) { diag ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) "❌" else "⚠️",
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = diag.message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = VibeTheme.colors.textPrimary
+                                    )
+                                    Text(
+                                        text = "Line ${diag.range.start.line}, Col ${diag.range.start.column} [${diag.source ?: "lint"}]",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VibeTheme.colors.textMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             BottomPanelTab.CONSOLE -> {

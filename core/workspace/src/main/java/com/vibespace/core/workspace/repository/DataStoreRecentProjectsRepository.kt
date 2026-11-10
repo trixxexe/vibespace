@@ -36,19 +36,19 @@ class DataStoreRecentProjectsRepository(
     }
 
     override fun getRecentProjects(): Flow<List<Project>> {
-        return context.recentProjectsDataStore.data
-            .catch { exception ->
-                if (exception is IOException) {
+        return try {
+            context.recentProjectsDataStore.data
+                .catch { exception ->
                     emit(emptyPreferences())
-                } else {
-                    throw exception
                 }
-            }
-            .map { preferences ->
-                val jsonStr = preferences[PreferencesKeys.RECENT_PROJECTS_JSON] ?: "[]"
-                parseProjectsJson(jsonStr)
-            }
-            .flowOn(dispatchers.io)
+                .map { preferences ->
+                    val jsonStr = preferences[PreferencesKeys.RECENT_PROJECTS_JSON] ?: "[]"
+                    parseProjectsJson(jsonStr)
+                }
+                .flowOn(dispatchers.io)
+        } catch (t: Throwable) {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
     }
 
     override suspend fun addRecentProject(project: Project): VibeResult<Unit> = withContext(dispatchers.io) {

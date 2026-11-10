@@ -50,4 +50,8 @@ object VibeIcons {
     val ArrowDown: ImageVector = Icons.Default.KeyboardArrowDown
     val ArrowRight: ImageVector = Icons.Default.KeyboardArrowRight
     val Send: ImageVector = Icons.Default.Send
+    val SourceControl: ImageVector = Icons.Default.CallSplit
+    val Extension: ImageVector = Icons.Default.Extension
+    val Check: ImageVector = Icons.Default.Check
+    val Diff: ImageVector = Icons.Default.Difference
 }

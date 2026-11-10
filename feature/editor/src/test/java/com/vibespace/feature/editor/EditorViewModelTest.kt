@@ -102,4 +102,30 @@ class EditorViewModelTest {
         viewModel.setEditorTheme("dracula")
         assertEquals("dracula", viewModel.uiState.value.themeId)
     }
+
+    @Test
+    fun onContentChanged_generates_diagnostics_and_completions() = runTest {
+        val root = "vibe://projects/test-diag"
+        workspaceManager.createFile(root, "test.py", "def broken(\n")
+
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val file = VirtualFile(
+            uri = "$root/test.py",
+            name = "test.py",
+            nodeType = FileNodeType.FILE,
+            parentUri = root
+        )
+
+        viewModel.openFile(file)
+        viewModel.onContentChanged("def broken(\n")
+
+        val state = viewModel.uiState.value
+        assertTrue(state.diagnostics.isNotEmpty())
+    }
 }

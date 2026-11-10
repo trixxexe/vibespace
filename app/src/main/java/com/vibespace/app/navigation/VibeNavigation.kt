@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -27,46 +28,74 @@ fun VibeNavigation(
     navController: NavHostController = rememberNavController(),
     modifier: Modifier = Modifier
 ) {
-    // Instantiate view models connected to application dependencies
-    val homeViewModel = HomeViewModel(
-        workspaceManager = app.workspaceManager,
-        recentProjectsRepository = app.recentProjectsRepository,
-        dispatchers = app.dispatchers
-    )
+    // Instantiate view models connected to application dependencies, remembered across recompositions
+    val homeViewModel = remember {
+        HomeViewModel(
+            workspaceManager = app.workspaceManager,
+            recentProjectsRepository = app.recentProjectsRepository,
+            dispatchers = app.dispatchers
+        )
+    }
 
-    val editorViewModel = EditorViewModel(
-        editorEngine = app.editorEngine,
-        workspaceManager = app.workspaceManager,
-        languageDetector = app.languageDetector,
-        dispatchers = app.dispatchers
-    )
+    val editorViewModel = remember {
+        EditorViewModel(
+            editorEngine = app.editorEngine,
+            workspaceManager = app.workspaceManager,
+            languageDetector = app.languageDetector,
+            dispatchers = app.dispatchers
+        )
+    }
 
-    val explorerViewModel = ExplorerViewModel(
-        workspaceManager = app.workspaceManager,
-        dispatchers = app.dispatchers
-    )
+    val explorerViewModel = remember {
+        ExplorerViewModel(
+            workspaceManager = app.workspaceManager,
+            dispatchers = app.dispatchers
+        )
+    }
 
-    val terminalViewModel = TerminalViewModel(
-        terminalService = app.terminalService,
-        runnerManager = app.runnerManager,
-        dispatchers = app.dispatchers
-    )
+    val terminalViewModel = remember {
+        TerminalViewModel(
+            terminalService = app.terminalService,
+            runnerManager = app.runnerManager,
+            dispatchers = app.dispatchers
+        )
+    }
 
-    val aiChatViewModel = AIChatViewModel(
-        aiService = app.aiService,
-        editorEngine = app.editorEngine,
-        dispatchers = app.dispatchers
-    )
+    val aiChatViewModel = remember {
+        AIChatViewModel(
+            aiService = app.aiService,
+            editorEngine = app.editorEngine,
+            dispatchers = app.dispatchers
+        )
+    }
 
-    val searchViewModel = SearchViewModel(
-        editorEngine = app.editorEngine,
-        dispatchers = app.dispatchers
-    )
+    val searchViewModel = remember {
+        SearchViewModel(
+            editorEngine = app.editorEngine,
+            dispatchers = app.dispatchers
+        )
+    }
 
-    val settingsViewModel = SettingsViewModel(
-        repository = app.settingsRepository,
-        dispatchers = app.dispatchers
-    )
+    val settingsViewModel = remember {
+        SettingsViewModel(
+            repository = app.settingsRepository,
+            dispatchers = app.dispatchers
+        )
+    }
+
+    val gitViewModel = remember {
+        com.vibespace.feature.explorer.git.GitViewModel(
+            gitManager = app.gitManager,
+            dispatchers = app.dispatchers
+        )
+    }
+
+    val extensionsViewModel = remember {
+        com.vibespace.feature.settings.extensions.ExtensionsViewModel(
+            extensionManager = app.extensionManager,
+            dispatchers = app.dispatchers
+        )
+    }
 
     val settingsState by settingsViewModel.uiState.collectAsState()
     LaunchedEffect(settingsState.settings.editorThemeId) {
@@ -102,6 +131,9 @@ fun VibeNavigation(
                 },
                 onNavigateToSettings = {
                     navController.navigate(VibeDestination.Settings.route)
+                },
+                onNavigateToExtensions = {
+                    navController.navigate("extensions")
                 }
             )
         }
@@ -113,11 +145,15 @@ fun VibeNavigation(
                 terminalViewModel = terminalViewModel,
                 aiChatViewModel = aiChatViewModel,
                 searchViewModel = searchViewModel,
+                gitViewModel = gitViewModel,
                 onNavigateToHome = {
                     navController.navigate(VibeDestination.Home.route)
                 },
                 onNavigateToSettings = {
                     navController.navigate(VibeDestination.Settings.route)
+                },
+                onNavigateToExtensions = {
+                    navController.navigate("extensions")
                 }
             )
         }
@@ -125,6 +161,15 @@ fun VibeNavigation(
         composable(VibeDestination.Settings.route) {
             SettingsScreen(
                 viewModel = settingsViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable("extensions") {
+            com.vibespace.feature.settings.extensions.ExtensionsScreen(
+                viewModel = extensionsViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

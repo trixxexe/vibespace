@@ -8,7 +8,10 @@ import com.vibespace.core.common.result.getOrDefault
 import com.vibespace.core.editor.engine.EditorEngine
 import com.vibespace.core.editor.model.CursorPosition
 import com.vibespace.core.editor.model.EditorDocument
+import com.vibespace.core.language.autocomplete.AutocompleteEngine
 import com.vibespace.core.language.detector.LanguageDetector
+import com.vibespace.core.language.diagnostics.SyntaxDiagnosticsValidator
+import com.vibespace.core.language.model.CompletionItem
 import com.vibespace.core.workspace.manager.WorkspaceManager
 import com.vibespace.core.workspace.model.VirtualFile
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,10 +43,19 @@ class EditorViewModel(
         }
         viewModelScope.launch(dispatchers.default) {
             editorEngine.activeDocument.collect { activeDoc ->
+                val diags = if (activeDoc != null) {
+                    SyntaxDiagnosticsValidator.validate(activeDoc.content, activeDoc.language.id)
+                } else emptyList()
+                val suggestions = if (activeDoc != null) {
+                    AutocompleteEngine.getSuggestions(activeDoc.content, "", activeDoc.language.id)
+                } else emptyList()
+
                 _uiState.update {
                     it.copy(
                         activeDocument = activeDoc,
-                        cursorPosition = activeDoc?.cursorPosition ?: CursorPosition(1, 1, 0)
+                        cursorPosition = activeDoc?.cursorPosition ?: CursorPosition(1, 1, 0),
+                        diagnostics = diags,
+                        completions = suggestions
                     )
                 }
             }
@@ -100,7 +112,33 @@ class EditorViewModel(
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
             editorEngine.updateDocument(activeDoc.documentId, newContent)
+            val diags = SyntaxDiagnosticsValidator.validate(newContent, activeDoc.language.id)
+            val suggestions = AutocompleteEngine.getSuggestions(newContent, "", activeDoc.language.id)
+            _uiState.update { it.copy(diagnostics = diags, completions = suggestions) }
         }
+    }
+
+    fun updateCompletions(prefix: String) {
+        val activeDoc = _uiState.value.activeDocument ?: return
+        viewModelScope.launch(dispatchers.default) {
+            val suggestions = AutocompleteEngine.getSuggestions(activeDoc.content, prefix, activeDoc.language.id)
+            _uiState.update { it.copy(completions = suggestions) }
+        }
+    }
+
+    fun insertCompletion(item: CompletionItem) {
+        val activeDoc = _uiState.value.activeDocument ?: return
+        val currentContent = activeDoc.content
+        val insertText = item.insertText
+        val newContent = if (currentContent.isEmpty()) {
+            insertText
+        } else if (currentContent.endsWith(" ") || currentContent.endsWith("\n")) {
+            currentContent + insertText
+        } else {
+            val lastSpace = maxOf(currentContent.lastIndexOf(' '), currentContent.lastIndexOf('\n'))
+            if (lastSpace == -1) insertText else currentContent.substring(0, lastSpace + 1) + insertText
+        }
+        onContentChanged(newContent)
     }
 
     fun onCursorPositionChanged(cursor: CursorPosition) {

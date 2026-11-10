@@ -44,10 +44,21 @@ class VibeSpaceApplication : Application() {
         )
     }
 
+    val gitManager: com.vibespace.core.workspace.git.GitManager by lazy {
+        com.vibespace.core.workspace.git.DefaultGitManager(
+            workspaceManager = workspaceManager,
+            dispatchers = dispatchers
+        )
+    }
+
     val languageDetector: LanguageDetector by lazy { DefaultLanguageDetector() }
 
     val editorEngine: EditorEngine by lazy {
         DefaultEditorEngine(dispatchers = dispatchers)
+    }
+
+    val extensionManager: com.vibespace.core.editor.extension.ExtensionManager by lazy {
+        com.vibespace.core.editor.extension.DefaultExtensionManager(dispatchers = dispatchers)
     }
 
     val runnerManager: RunnerManager by lazy {
@@ -70,6 +81,15 @@ class VibeSpaceApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            logger.e(TAG, "Uncaught exception on thread ${thread.name}: ${throwable.message}", throwable)
+            try {
+                val crashFile = java.io.File(filesDir, "crash_log.txt")
+                crashFile.writeText("CRASH: ${throwable::class.java.name}: ${throwable.message}\n${throwable.stackTraceToString()}")
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
         logger.i(TAG, "VibeSpace Application Initialized v0.1.0")
     }
 

@@ -86,15 +86,24 @@ fun VibeMainScreen(
     searchViewModel: SearchViewModel,
     onNavigateToHome: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    gitViewModel: com.vibespace.feature.explorer.git.GitViewModel? = null,
+    onNavigateToExtensions: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val adaptiveInfo = rememberVibeAdaptiveInfo()
     val isTablet = adaptiveInfo.isTabletOrExpanded
 
+    val editorUiState by editorViewModel.uiState.collectAsState()
+    LaunchedEffect(editorUiState.diagnostics) {
+        terminalViewModel.updateDiagnostics(editorUiState.diagnostics)
+    }
+
     var isTerminalVisible by remember { mutableStateOf(false) }
     var isAiChatVisible by remember { mutableStateOf(false) }
     var isSearchVisible by remember { mutableStateOf(false) }
     var isExplorerVisibleOnTablet by remember { mutableStateOf(true) }
+    var isSourceControlVisible by remember { mutableStateOf(false) }
+    var phoneDrawerTab by remember { mutableStateOf(0) } // 0: Explorer, 1: Git
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -164,9 +173,21 @@ fun VibeMainScreen(
                 )
                 NavigationRailItem(
                     selected = isExplorerVisibleOnTablet,
-                    onClick = { isExplorerVisibleOnTablet = !isExplorerVisibleOnTablet },
+                    onClick = {
+                        isExplorerVisibleOnTablet = !isExplorerVisibleOnTablet
+                        if (isExplorerVisibleOnTablet) isSourceControlVisible = false
+                    },
                     icon = { Icon(VibeIcons.Explorer, contentDescription = "Explorer", modifier = Modifier.size(20.dp)) },
                     label = { Text("Files") }
+                )
+                NavigationRailItem(
+                    selected = isSourceControlVisible,
+                    onClick = {
+                        isSourceControlVisible = !isSourceControlVisible
+                        if (isSourceControlVisible) isExplorerVisibleOnTablet = false
+                    },
+                    icon = { Icon(VibeIcons.SourceControl, contentDescription = "Git", modifier = Modifier.size(20.dp)) },
+                    label = { Text("Git") }
                 )
                 NavigationRailItem(
                     selected = isSearchVisible,
@@ -189,6 +210,15 @@ fun VibeMainScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
+                if (onNavigateToExtensions != null) {
+                    NavigationRailItem(
+                        selected = false,
+                        onClick = onNavigateToExtensions,
+                        icon = { Icon(VibeIcons.Extension, contentDescription = "Extensions", modifier = Modifier.size(20.dp)) },
+                        label = { Text("Plugins") }
+                    )
+                }
+
                 NavigationRailItem(
                     selected = false,
                     onClick = onNavigateToSettings,
@@ -197,7 +227,7 @@ fun VibeMainScreen(
                 )
             }
 
-            // Optional Explorer Sidebar (260dp)
+            // Optional Explorer or Git Sidebar (260dp-280dp)
             if (isExplorerVisibleOnTablet) {
                 Box(
                     modifier = Modifier
@@ -210,6 +240,18 @@ fun VibeMainScreen(
                         onOpenFile = { file ->
                             editorViewModel.openFile(file)
                         }
+                    )
+                }
+            } else if (isSourceControlVisible && gitViewModel != null) {
+                Box(
+                    modifier = Modifier
+                        .width(280.dp)
+                        .fillMaxHeight()
+                        .border(1.dp, VibeTheme.colors.borderSubtle)
+                ) {
+                    com.vibespace.feature.explorer.git.GitSourceControlPanel(
+                        viewModel = gitViewModel,
+                        onClose = { isSourceControlVisible = false }
                     )
                 }
             }
@@ -290,13 +332,66 @@ fun VibeMainScreen(
                     drawerContainerColor = VibeTheme.colors.gutterBackground,
                     modifier = Modifier.width(300.dp)
                 ) {
-                    ExplorerScreen(
-                        viewModel = explorerViewModel,
-                        onOpenFile = { file ->
-                            editorViewModel.openFile(file)
-                            scope.launch { drawerState.close() }
+                    // Drawer Header with Tabs: Files vs Git
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .background(VibeTheme.colors.panelBackground)
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (phoneDrawerTab == 0) VibeTheme.colors.activeLineBackground else Color.Transparent,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clickable { phoneDrawerTab = 0 }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Files",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (phoneDrawerTab == 0) VibeTheme.colors.accentPrimary else VibeTheme.colors.textSecondary
+                                )
+                            }
                         }
-                    )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (phoneDrawerTab == 1) VibeTheme.colors.activeLineBackground else Color.Transparent,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clickable { phoneDrawerTab = 1 }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Git",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (phoneDrawerTab == 1) VibeTheme.colors.accentPrimary else VibeTheme.colors.textSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    if (phoneDrawerTab == 0) {
+                        ExplorerScreen(
+                            viewModel = explorerViewModel,
+                            onOpenFile = { file ->
+                                editorViewModel.openFile(file)
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+                    } else if (gitViewModel != null) {
+                        com.vibespace.feature.explorer.git.GitSourceControlPanel(
+                            viewModel = gitViewModel,
+                            onClose = { scope.launch { drawerState.close() } }
+                        )
+                    }
                 }
             }
         ) {
@@ -346,6 +441,15 @@ fun VibeMainScreen(
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(VibeIcons.AI, contentDescription = "AI", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    }
+
+                    if (onNavigateToExtensions != null) {
+                        IconButton(
+                            onClick = onNavigateToExtensions,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(VibeIcons.Extension, contentDescription = "Extensions", tint = VibeTheme.colors.textSecondary, modifier = Modifier.size(18.dp))
+                        }
                     }
 
                     IconButton(

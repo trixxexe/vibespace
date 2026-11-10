@@ -47,6 +47,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onNavigateToEditor: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToExtensions: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -159,11 +160,11 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 QuickActionCard(
-                    icon = VibeIcons.AI,
-                    title = "AI Coding",
-                    subtitle = "Coding assistant",
+                    icon = VibeIcons.Extension,
+                    title = "Extensions",
+                    subtitle = "Themes & plugins",
                     modifier = Modifier.weight(1f),
-                    onClick = onNavigateToEditor
+                    onClick = { onNavigateToExtensions?.invoke() ?: onNavigateToSettings() }
                 )
                 QuickActionCard(
                     icon = VibeIcons.Settings,

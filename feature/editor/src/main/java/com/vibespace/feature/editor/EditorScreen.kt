@@ -27,6 +27,7 @@ import com.vibespace.feature.editor.components.SnippetCompletionBar
 import com.vibespace.feature.editor.components.SoraEditorCanvas
 import com.vibespace.feature.editor.components.SoraEditorController
 import com.vibespace.feature.editor.components.TemplateBottomSheet
+import com.vibespace.feature.editor.ui.MobileAutocompleteBar
 
 @Composable
 fun EditorScreen(
@@ -130,6 +131,16 @@ fun EditorScreen(
                 suggestions = suggestions,
                 onSelectSnippet = { soraController.insertSymbol(it) },
                 onOpenTemplates = { showTemplateSheet = true }
+            )
+        }
+
+        // Touchscreen Autocomplete Suggestion Bar
+        if (activeDoc != null && uiState.completions.isNotEmpty()) {
+            MobileAutocompleteBar(
+                completions = uiState.completions,
+                onSelectCompletion = { item ->
+                    soraController.insertSymbol(item.insertText)
+                }
             )
         }
 

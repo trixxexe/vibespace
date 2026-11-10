@@ -113,4 +113,26 @@ class TerminalViewModelTest {
         assertTrue(active!!.title.contains("Code Agent"))
         assertTrue(active.lines.any { it.text.contains("VibeSpace AI Terminal Agent") })
     }
+
+    @Test
+    fun updateDiagnostics_updates_problems_count() {
+        val viewModel = TerminalViewModel(
+            terminalService = terminalService,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val diag = com.vibespace.core.language.model.Diagnostic(
+            id = "d1",
+            message = "Syntax error",
+            severity = com.vibespace.core.language.model.DiagnosticSeverity.ERROR,
+            range = com.vibespace.core.language.model.DiagnosticRange(
+                start = com.vibespace.core.language.model.DiagnosticPosition(1, 1),
+                end = com.vibespace.core.language.model.DiagnosticPosition(1, 5)
+            )
+        )
+
+        viewModel.updateDiagnostics(listOf(diag))
+        assertEquals(1, viewModel.uiState.value.problemsCount)
+        assertEquals(1, viewModel.uiState.value.diagnostics.size)
+    }
 }
