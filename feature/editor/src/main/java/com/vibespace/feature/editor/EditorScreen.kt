@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.vibespace.core.designsystem.components.VibeEmptyState
 import com.vibespace.core.designsystem.components.VibeIcons
@@ -16,8 +18,10 @@ import com.vibespace.core.designsystem.components.VibeStatusBar
 import com.vibespace.core.designsystem.components.VibeTabBar
 import com.vibespace.core.designsystem.components.VibeTabItem
 import com.vibespace.core.designsystem.theme.VibeTheme
-import com.vibespace.feature.editor.components.CodeEditingCanvas
 import com.vibespace.feature.editor.components.EditorToolbar
+import com.vibespace.feature.editor.components.MobileSymbolBar
+import com.vibespace.feature.editor.components.SoraEditorCanvas
+import com.vibespace.feature.editor.components.SoraEditorController
 
 @Composable
 fun EditorScreen(
@@ -31,6 +35,7 @@ fun EditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val activeDoc = uiState.activeDocument
+    val soraController = remember { SoraEditorController() }
 
     Column(
         modifier = modifier
@@ -56,8 +61,14 @@ fun EditorScreen(
         // Toolbar
         EditorToolbar(
             onSaveClick = { viewModel.saveActiveDocument() },
-            onUndoClick = { viewModel.undo() },
-            onRedoClick = { viewModel.redo() },
+            onUndoClick = {
+                soraController.undo()
+                viewModel.undo()
+            },
+            onRedoClick = {
+                soraController.redo()
+                viewModel.redo()
+            },
             onSearchClick = onSearchClick,
             onRunClick = onRunClick,
             onAiAssistantClick = onAiAssistantClick,
@@ -72,11 +83,13 @@ fun EditorScreen(
                 .weight(1f)
         ) {
             if (activeDoc != null) {
-                CodeEditingCanvas(
+                SoraEditorCanvas(
                     content = activeDoc.content,
+                    language = activeDoc.language,
+                    fontSizeSp = uiState.fontSizeSp,
                     onContentChange = { viewModel.onContentChanged(it) },
                     onCursorChange = { viewModel.onCursorPositionChanged(it) },
-                    fontSizeSp = uiState.fontSizeSp
+                    controller = soraController
                 )
             } else {
                 VibeEmptyState(
@@ -87,6 +100,18 @@ fun EditorScreen(
                     onActionClick = onOpenExplorerClick
                 )
             }
+        }
+
+        // Mobile Virtual Symbol Accessory Bar
+        if (activeDoc != null) {
+            MobileSymbolBar(
+                onInsertSymbol = { soraController.insertSymbol(it) },
+                onMoveCursorLeft = { soraController.moveCursorLeft() },
+                onMoveCursorRight = { soraController.moveCursorRight() },
+                onUndo = { soraController.undo() },
+                onRedo = { soraController.redo() },
+                modifier = Modifier.imePadding()
+            )
         }
 
         // Bottom Status Bar

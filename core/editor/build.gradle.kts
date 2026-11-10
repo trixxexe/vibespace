@@ -31,6 +31,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
 
+    api(libs.sora.editor.core)
+    api(libs.sora.editor.textmate)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

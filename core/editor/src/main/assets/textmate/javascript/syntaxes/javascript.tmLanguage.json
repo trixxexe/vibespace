@@ -1,0 +1,70 @@
+{
+  "name": "JavaScript",
+  "scopeName": "source.js",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.js",
+      "match": "//.*$"
+    },
+    {
+      "name": "comment.block.js",
+      "begin": "/\\*",
+      "end": "\\*/"
+    },
+    {
+      "name": "string.quoted.double.js",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.js",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.js",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "name": "constant.character.escape.js",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "string.template.js",
+      "begin": "`",
+      "end": "`"
+    },
+    {
+      "name": "keyword.control.js",
+      "match": "\\b(if|else|switch|case|default|for|while|do|break|continue|return|throw|try|catch|finally|yield|await)\\b"
+    },
+    {
+      "name": "keyword.other.js",
+      "match": "\\b(const|let|var|function|class|extends|new|this|super|import|export|from|as|default|static|async)\\b"
+    },
+    {
+      "name": "constant.language.js",
+      "match": "\\b(true|false|null|undefined|NaN|Infinity)\\b"
+    },
+    {
+      "name": "support.function.console.js",
+      "match": "\\b(console|window|document|process|global|require|module|exports)\\b"
+    },
+    {
+      "name": "constant.numeric.js",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+    },
+    {
+      "name": "entity.name.function.js",
+      "match": "(?<=function\\s+)[a-zA-Z_$][a-zA-Z0-9_$]*"
+    },
+    {
+      "name": "entity.name.type.class.js",
+      "match": "(?<=class\\s+)[a-zA-Z_$][a-zA-Z0-9_$]*"
+    }
+  ]
+}

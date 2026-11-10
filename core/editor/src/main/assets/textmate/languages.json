@@ -1,0 +1,44 @@
+{
+  "languages": [
+    {
+      "name": "python",
+      "scopeName": "source.python",
+      "grammar": "textmate/python/syntaxes/python.tmLanguage.json"
+    },
+    {
+      "name": "javascript",
+      "scopeName": "source.js",
+      "grammar": "textmate/javascript/syntaxes/javascript.tmLanguage.json"
+    },
+    {
+      "name": "typescript",
+      "scopeName": "source.ts",
+      "grammar": "textmate/typescript/syntaxes/typescript.tmLanguage.json"
+    },
+    {
+      "name": "json",
+      "scopeName": "source.json",
+      "grammar": "textmate/json/syntaxes/json.tmLanguage.json"
+    },
+    {
+      "name": "kotlin",
+      "scopeName": "source.kotlin",
+      "grammar": "textmate/kotlin/syntaxes/kotlin.tmLanguage.json"
+    },
+    {
+      "name": "html",
+      "scopeName": "text.html.basic",
+      "grammar": "textmate/html/syntaxes/html.tmLanguage.json"
+    },
+    {
+      "name": "css",
+      "scopeName": "source.css",
+      "grammar": "textmate/css/syntaxes/css.tmLanguage.json"
+    },
+    {
+      "name": "markdown",
+      "scopeName": "text.html.markdown",
+      "grammar": "textmate/markdown/syntaxes/markdown.tmLanguage.json"
+    }
+  ]
+}

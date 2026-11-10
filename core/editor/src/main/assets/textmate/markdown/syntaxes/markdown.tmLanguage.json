@@ -1,0 +1,30 @@
+{
+  "name": "Markdown",
+  "scopeName": "text.html.markdown",
+  "patterns": [
+    {
+      "name": "markup.heading.markdown",
+      "match": "^#{1,6}\\s+.*$"
+    },
+    {
+      "name": "markup.bold.markdown",
+      "match": "\\*\\*.*?\\*\\*"
+    },
+    {
+      "name": "markup.italic.markdown",
+      "match": "(?<!\\*)\\*.*?\\*(?!\\*)"
+    },
+    {
+      "name": "markup.raw.inline.markdown",
+      "match": "`[^`]+`"
+    },
+    {
+      "name": "markup.quote.markdown",
+      "match": "^>\\s+.*$"
+    },
+    {
+      "name": "markup.list.markdown",
+      "match": "^\\s*([*+-]|\\d+\\.)\\s+.*$"
+    }
+  ]
+}

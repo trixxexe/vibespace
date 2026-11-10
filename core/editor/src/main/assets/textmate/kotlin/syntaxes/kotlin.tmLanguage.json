@@ -1,0 +1,51 @@
+{
+  "name": "Kotlin",
+  "scopeName": "source.kotlin",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.kotlin",
+      "match": "//.*$"
+    },
+    {
+      "name": "comment.block.kotlin",
+      "begin": "/\\*",
+      "end": "\\*/"
+    },
+    {
+      "name": "string.quoted.triple.kotlin",
+      "begin": "\"\"\"",
+      "end": "\"\"\""
+    },
+    {
+      "name": "string.quoted.double.kotlin",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.kotlin",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "keyword.control.kotlin",
+      "match": "\\b(if|else|when|for|while|do|return|break|continue|throw|try|catch|finally)\\b"
+    },
+    {
+      "name": "keyword.other.kotlin",
+      "match": "\\b(val|var|fun|class|interface|object|enum|data|sealed|annotation|package|import|suspend|inline|tailrec|operator|infix|override|open|abstract|private|protected|public|internal|companion|by)\\b"
+    },
+    {
+      "name": "constant.language.kotlin",
+      "match": "\\b(true|false|null|this|super)\\b"
+    },
+    {
+      "name": "support.type.primitive.kotlin",
+      "match": "\\b(Int|Long|Short|Byte|Float|Double|Boolean|Char|String|Unit|Any|Nothing)\\b"
+    },
+    {
+      "name": "constant.numeric.kotlin",
+      "match": "\\b[0-9]+(\\.[0-9]+)?[fFL]?\\b"
+    }
+  ]
+}
