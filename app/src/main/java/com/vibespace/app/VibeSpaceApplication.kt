@@ -87,8 +87,19 @@ class VibeSpaceApplication : Application() {
             try {
                 val crashFile = java.io.File(filesDir, "crash_log.txt")
                 crashFile.writeText("CRASH: ${throwable::class.java.name}: ${throwable.message}\n${throwable.stackTraceToString()}")
-            } catch (_: Exception) {}
-            defaultHandler?.uncaughtException(thread, throwable)
+
+                val intent = android.content.Intent(this, CrashActivity::class.java).apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    putExtra("error_type", throwable::class.java.simpleName)
+                    putExtra("error_message", throwable.message ?: "Unknown error")
+                    putExtra("stack_trace", throwable.stackTraceToString())
+                }
+                startActivity(intent)
+                android.os.Process.killProcess(android.os.Process.myPid())
+                System.exit(10)
+            } catch (_: Throwable) {
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
         }
         logger.i(TAG, "VibeSpace Application Initialized v0.1.0")
     }

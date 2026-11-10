@@ -2,6 +2,7 @@ package com.vibespace.core.workspace.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -13,14 +14,17 @@ import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.workspace.model.Project
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 
-val Context.recentProjectsDataStore: DataStore<Preferences> by preferencesDataStore(name = "vibespace_recent_projects")
+val Context.recentProjectsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "vibespace_recent_projects",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+)
 
 /**
  * Production persistent recent projects repository backed by AndroidX DataStore Preferences.
@@ -38,16 +42,20 @@ class DataStoreRecentProjectsRepository(
     override fun getRecentProjects(): Flow<List<Project>> {
         return try {
             context.recentProjectsDataStore.data
-                .catch { exception ->
-                    emit(emptyPreferences())
-                }
                 .map { preferences ->
-                    val jsonStr = preferences[PreferencesKeys.RECENT_PROJECTS_JSON] ?: "[]"
-                    parseProjectsJson(jsonStr)
+                    try {
+                        val jsonStr = preferences[PreferencesKeys.RECENT_PROJECTS_JSON] ?: "[]"
+                        parseProjectsJson(jsonStr)
+                    } catch (_: Throwable) {
+                        emptyList()
+                    }
+                }
+                .catch {
+                    emit(emptyList())
                 }
                 .flowOn(dispatchers.io)
-        } catch (t: Throwable) {
-            kotlinx.coroutines.flow.flowOf(emptyList())
+        } catch (_: Throwable) {
+            flowOf(emptyList())
         }
     }
 
@@ -59,7 +67,7 @@ class DataStoreRecentProjectsRepository(
                 preferences[PreferencesKeys.RECENT_PROJECTS_JSON] = serializeProjects(updated.take(15))
             }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to add recent project: ${e.message}", e)
         }
     }
@@ -72,7 +80,7 @@ class DataStoreRecentProjectsRepository(
                 preferences[PreferencesKeys.RECENT_PROJECTS_JSON] = serializeProjects(updated)
             }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to remove recent project: ${e.message}", e)
         }
     }
@@ -83,7 +91,7 @@ class DataStoreRecentProjectsRepository(
                 preferences[PreferencesKeys.RECENT_PROJECTS_JSON] = "[]"
             }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to clear recent projects: ${e.message}", e)
         }
     }

@@ -50,14 +50,18 @@ class HomeViewModel(
             )
             workspaceManager.openProject(project)
             recentProjectsRepository?.addRecentProject(project)
-            onProjectReady(project)
+            kotlinx.coroutines.withContext(dispatchers.main) {
+                onProjectReady(project)
+            }
         }
     }
 
     fun openProject(project: Project, onProjectReady: (Project) -> Unit) {
         viewModelScope.launch(dispatchers.io) {
             workspaceManager.openProject(project)
-            onProjectReady(project)
+            kotlinx.coroutines.withContext(dispatchers.main) {
+                onProjectReady(project)
+            }
         }
     }
 }

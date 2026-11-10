@@ -295,21 +295,22 @@ class StdioLanguageServerClient(
 
         val diagnosticsList = mutableListOf<Diagnostic>()
 
-        // Find each diagnostic block
-        val diagnosticRegex = Regex("""\{[^{}]*"message"\s*:\s*"([^"]+)"[^{}]*\}""")
-        for (diagMatch in diagnosticRegex.findAll(rawJson)) {
-            val block = diagMatch.value
-            val message = Regex(""""message"\s*:\s*"([^"]+)"""").find(block)?.groupValues?.get(1) ?: "Diagnostic"
-            val severityInt = Regex(""""severity"\s*:\s*(\d+)""").find(block)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val messageMatches = Regex(""""message"\s*:\s*"([^"]+)"""").findAll(rawJson).toList()
+        val severityMatches = Regex(""""severity"\s*:\s*(\d+)""").findAll(rawJson).toList()
+        val lineMatches = Regex(""""line"\s*:\s*(\d+)""").findAll(rawJson).toList()
+        val charMatches = Regex(""""character"\s*:\s*(\d+)""").findAll(rawJson).toList()
+
+        for (i in messageMatches.indices) {
+            val message = messageMatches[i].groupValues[1]
+            val severityInt = severityMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 1
             val severity = when (severityInt) {
                 1 -> DiagnosticSeverity.ERROR
                 2 -> DiagnosticSeverity.WARNING
                 3 -> DiagnosticSeverity.INFORMATION
                 else -> DiagnosticSeverity.HINT
             }
-
-            val line = Regex(""""line"\s*:\s*(\d+)""").find(block)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-            val col = Regex(""""character"\s*:\s*(\d+)""").find(block)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val line = lineMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            val col = charMatches.getOrNull(i)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
             diagnosticsList.add(
                 Diagnostic(

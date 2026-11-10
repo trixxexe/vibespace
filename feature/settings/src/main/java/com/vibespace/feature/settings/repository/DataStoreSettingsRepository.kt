@@ -2,6 +2,7 @@ package com.vibespace.feature.settings.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -15,12 +16,15 @@ import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.result.VibeResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
-val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "vibespace_settings")
+val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "vibespace_settings",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+)
 
 /**
  * Production persistent settings repository backed by AndroidX DataStore Preferences.
@@ -48,34 +52,38 @@ class DataStoreSettingsRepository(
     override fun observeSettings(): Flow<UserSettings> {
         return try {
             context.settingsDataStore.data
-                .catch { exception ->
-                    emit(emptyPreferences())
-                }
                 .map { preferences ->
-                    val themeModeStr = preferences[PreferencesKeys.THEME_MODE] ?: ThemeMode.DARK.name
-                    val themeMode = try {
-                        ThemeMode.valueOf(themeModeStr)
-                    } catch (e: Exception) {
-                        ThemeMode.DARK
-                    }
+                    try {
+                        val themeModeStr = preferences[PreferencesKeys.THEME_MODE] ?: ThemeMode.DARK.name
+                        val themeMode = try {
+                            ThemeMode.valueOf(themeModeStr)
+                        } catch (_: Exception) {
+                            ThemeMode.DARK
+                        }
 
-                    UserSettings(
-                        themeMode = themeMode,
-                        editorThemeId = preferences[PreferencesKeys.EDITOR_THEME_ID] ?: "vibe_dark",
-                        editorFontSizeSp = preferences[PreferencesKeys.EDITOR_FONT_SIZE] ?: 13f,
-                        tabSizeSpaces = preferences[PreferencesKeys.TAB_SIZE] ?: 4,
-                        showLineNumbers = preferences[PreferencesKeys.SHOW_LINE_NUMBERS] ?: true,
-                        wordWrap = preferences[PreferencesKeys.WORD_WRAP] ?: false,
-                        autoSave = preferences[PreferencesKeys.AUTO_SAVE] ?: true,
-                        aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini",
-                        aiApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: "",
-                        aiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.0-flash",
-                        aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: ""
-                    )
+                        UserSettings(
+                            themeMode = themeMode,
+                            editorThemeId = preferences[PreferencesKeys.EDITOR_THEME_ID] ?: "vibe_dark",
+                            editorFontSizeSp = preferences[PreferencesKeys.EDITOR_FONT_SIZE] ?: 13f,
+                            tabSizeSpaces = preferences[PreferencesKeys.TAB_SIZE] ?: 4,
+                            showLineNumbers = preferences[PreferencesKeys.SHOW_LINE_NUMBERS] ?: true,
+                            wordWrap = preferences[PreferencesKeys.WORD_WRAP] ?: false,
+                            autoSave = preferences[PreferencesKeys.AUTO_SAVE] ?: true,
+                            aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini",
+                            aiApiKey = preferences[PreferencesKeys.AI_API_KEY] ?: "",
+                            aiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.0-flash",
+                            aiCustomEndpoint = preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] ?: ""
+                        )
+                    } catch (_: Throwable) {
+                        UserSettings()
+                    }
+                }
+                .catch {
+                    emit(UserSettings())
                 }
                 .flowOn(dispatchers.io)
-        } catch (t: Throwable) {
-            kotlinx.coroutines.flow.flowOf(UserSettings())
+        } catch (_: Throwable) {
+            flowOf(UserSettings())
         }
     }
 
@@ -95,7 +103,7 @@ class DataStoreSettingsRepository(
                 preferences[PreferencesKeys.AI_CUSTOM_ENDPOINT] = settings.aiCustomEndpoint
             }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to update settings: ${e.message}", e)
         }
     }
@@ -104,7 +112,7 @@ class DataStoreSettingsRepository(
         try {
             context.settingsDataStore.edit { it[PreferencesKeys.THEME_MODE] = mode.name }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to update theme mode: ${e.message}", e)
         }
     }
@@ -113,7 +121,7 @@ class DataStoreSettingsRepository(
         try {
             context.settingsDataStore.edit { it[PreferencesKeys.EDITOR_THEME_ID] = themeId }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to update editor theme: ${e.message}", e)
         }
     }
@@ -122,7 +130,7 @@ class DataStoreSettingsRepository(
         try {
             context.settingsDataStore.edit { it[PreferencesKeys.EDITOR_FONT_SIZE] = fontSizeSp.coerceIn(10f, 24f) }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to update font size: ${e.message}", e)
         }
     }
@@ -131,7 +139,7 @@ class DataStoreSettingsRepository(
         try {
             context.settingsDataStore.edit { it[PreferencesKeys.TAB_SIZE] = spaces.coerceIn(2, 8) }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to update tab size: ${e.message}", e)
         }
     }
@@ -150,7 +158,7 @@ class DataStoreSettingsRepository(
                 it[PreferencesKeys.AI_CUSTOM_ENDPOINT] = customEndpoint.trim()
             }
             VibeResult.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             VibeResult.Error("Failed to update AI configuration: ${e.message}", e)
         }
     }
