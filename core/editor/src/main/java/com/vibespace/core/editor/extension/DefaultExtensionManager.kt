@@ -233,7 +233,7 @@ class DefaultExtensionManager(
                 }
                 VibeResult.Success(extension)
             }
-            is VibeResult.Error -> VibeResult.Error(parseResult.message, parseResult.cause)
+            is VibeResult.Error -> VibeResult.Error(parseResult.message, parseResult.throwable)
             else -> VibeResult.Error("Unknown VSIX parsing failure.")
         }
     }

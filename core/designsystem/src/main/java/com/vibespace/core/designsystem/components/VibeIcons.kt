@@ -2,6 +2,7 @@ package com.vibespace.core.designsystem.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
@@ -50,8 +52,6 @@ object VibeIcons {
     val ArrowDown: ImageVector = Icons.Default.KeyboardArrowDown
     val ArrowRight: ImageVector = Icons.Default.KeyboardArrowRight
     val Send: ImageVector = Icons.Default.Send
-    val SourceControl: ImageVector = Icons.Default.CallSplit
+    val SourceControl: ImageVector = Icons.AutoMirrored.Filled.CallSplit
     val Extension: ImageVector = Icons.Default.Extension
-    val Check: ImageVector = Icons.Default.Check
-    val Diff: ImageVector = Icons.Default.Difference
 }
