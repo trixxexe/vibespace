@@ -174,6 +174,7 @@ class DefaultGitManager(
     }
 
     override suspend fun stageAll(): VibeResult<Unit> = withContext(dispatchers.io) {
+        refreshStatus()
         val unstaged = _status.value.unstagedFiles
         for (f in unstaged) {
             stagedPaths.add(f.path)

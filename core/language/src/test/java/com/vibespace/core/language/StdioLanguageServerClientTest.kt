@@ -92,6 +92,7 @@ class StdioLanguageServerClientTest {
         assertEquals(DiagnosticSeverity.ERROR, diagnostics[0].severity)
         assertEquals(10, diagnostics[0].range.start.line)
         assertEquals(4, diagnostics[0].range.start.column)
+        client.stop()
     }
 
     @Test
@@ -99,7 +100,7 @@ class StdioLanguageServerClientTest {
         val transport = InMemoryLspTransport()
         val client = StdioLanguageServerClient("python", transport, dispatchers)
 
-        launch {
+        val job = launch {
             val req = transport.clientToServer.receive()
             assertTrue(req.contains("textDocument/hover"))
             transport.emitFromServer("""{"jsonrpc":"2.0","id":1,"result":{"contents":"def print(*values: object) -> None"}}""")
@@ -110,6 +111,8 @@ class StdioLanguageServerClientTest {
         val info = hover.getOrNull()
         assertNotNull(info)
         assertEquals("def print(*values: object) -> None", info?.contents)
+        client.stop()
+        job.cancel()
     }
 
     @Test
@@ -117,7 +120,7 @@ class StdioLanguageServerClientTest {
         val transport = InMemoryLspTransport()
         val client = StdioLanguageServerClient("python", transport, dispatchers)
 
-        launch {
+        val job = launch {
             val req = transport.clientToServer.receive()
             assertTrue(req.contains("textDocument/completion"))
             transport.emitFromServer("""{"jsonrpc":"2.0","id":1,"result":[{"label":"append"},{"label":"extend"}]}""")
@@ -129,5 +132,7 @@ class StdioLanguageServerClientTest {
         assertEquals(2, items.size)
         assertEquals("append", items[0].label)
         assertEquals("extend", items[1].label)
+        client.stop()
+        job.cancel()
     }
 }

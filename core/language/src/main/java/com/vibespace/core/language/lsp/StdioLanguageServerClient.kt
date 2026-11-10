@@ -90,14 +90,15 @@ class StdioLanguageServerClient(
     }
 
     override suspend fun stop(): VibeResult<Unit> = withContext(dispatchers.default) {
-        if (!_isRunning) return@withContext VibeResult.Success(Unit)
         try {
-            sendRequest("shutdown", "{}")
-            sendNotification("exit", "{}")
+            if (_isRunning) {
+                sendRequest("shutdown", "{}")
+                sendNotification("exit", "{}")
+            }
         } catch (_: Exception) {}
         _isRunning = false
-        transport.close()
         listenJob?.cancel()
+        transport.close()
         pendingRequests.values.forEach { it.cancel() }
         pendingRequests.clear()
         VibeResult.Success(Unit)

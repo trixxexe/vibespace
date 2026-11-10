@@ -7,6 +7,7 @@ import com.vibespace.core.workspace.model.Project
 import com.vibespace.feature.explorer.git.GitViewModel
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test

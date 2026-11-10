@@ -218,14 +218,9 @@ class DefaultExtensionManager(
         onProgress: (Float) -> Unit
     ): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
-            onProgress(0.2f)
-            kotlinx.coroutines.delay(60L)
-            onProgress(0.55f)
-            kotlinx.coroutines.delay(80L)
-            onProgress(0.9f)
-            kotlinx.coroutines.delay(40L)
+            onProgress(0.25f)
+            onProgress(0.75f)
             onProgress(1.0f)
-
             installExtension(extension)
         } catch (e: Exception) {
             VibeResult.Error("Failed to download extension: ${e.message}", e)
