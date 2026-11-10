@@ -1,5 +1,6 @@
 package com.vibespace.feature.terminal
 
+import com.vibespace.core.runner.alpine.AlpineInstallationState
 import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.terminal.model.TerminalSession
 
@@ -20,5 +21,6 @@ data class TerminalUiState(
     val isPanelExpanded: Boolean = true,
     val activeRunnerMode: RunnerMode = RunnerMode.EMBEDDED,
     val availableRunnerModes: List<RunnerMode> = RunnerMode.entries,
-    val isAlpineInstalled: Boolean = false
+    val isAlpineInstalled: Boolean = false,
+    val alpineInstallationState: AlpineInstallationState = AlpineInstallationState.NotInstalled
 )

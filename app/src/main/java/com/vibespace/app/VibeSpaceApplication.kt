@@ -16,9 +16,9 @@ import com.vibespace.core.terminal.service.DefaultTerminalService
 import com.vibespace.core.terminal.service.TerminalService
 import com.vibespace.core.workspace.manager.DefaultWorkspaceManager
 import com.vibespace.core.workspace.manager.WorkspaceManager
-import com.vibespace.core.workspace.repository.InMemoryRecentProjectsRepository
+import com.vibespace.core.workspace.repository.DataStoreRecentProjectsRepository
 import com.vibespace.core.workspace.repository.RecentProjectsRepository
-import com.vibespace.feature.settings.repository.InMemorySettingsRepository
+import com.vibespace.feature.settings.repository.DataStoreSettingsRepository
 import com.vibespace.feature.settings.repository.SettingsRepository
 
 /**
@@ -30,8 +30,12 @@ class VibeSpaceApplication : Application() {
     val dispatchers: DispatcherProvider by lazy { DefaultDispatcherProvider() }
     val logger: VibeLogger by lazy { AndroidVibeLogger() }
 
-    val recentProjectsRepository: RecentProjectsRepository by lazy { InMemoryRecentProjectsRepository() }
-    val settingsRepository: SettingsRepository by lazy { InMemorySettingsRepository() }
+    val recentProjectsRepository: RecentProjectsRepository by lazy {
+        DataStoreRecentProjectsRepository(this, dispatchers)
+    }
+    val settingsRepository: SettingsRepository by lazy {
+        DataStoreSettingsRepository(this, dispatchers)
+    }
 
     val workspaceManager: WorkspaceManager by lazy {
         DefaultWorkspaceManager(
@@ -47,9 +51,12 @@ class VibeSpaceApplication : Application() {
     }
 
     val runnerManager: RunnerManager by lazy {
+        val alpineDir = java.io.File(filesDir, "alpine")
+        val alpineRunner = com.vibespace.core.runner.alpine.AlpineLinuxRunner(rootDirectory = alpineDir)
         DefaultRunnerManager(
             workspaceManager = workspaceManager,
-            dispatchers = dispatchers
+            dispatchers = dispatchers,
+            alpineRunner = alpineRunner
         )
     }
 

@@ -55,4 +55,18 @@ class DefaultWorkspaceManagerTest {
         val readAfter = workspaceManager.readFile("$root/app.py")
         assertEquals("print('updated')", readAfter.getOrNull())
     }
+
+    @Test
+    fun getAllProjectFiles_recursively_returns_nested_files() = runTest {
+        val root = "vibe://projects/proj-nested"
+        val project = Project(id = "proj-nested", name = "NestedTest", rootUri = root)
+        workspaceManager.openProject(project)
+
+        val allFiles = workspaceManager.getAllProjectFiles(root).getOrNull()
+        assertNotNull(allFiles)
+        // Should contain root files and also src/Main.kt which is nested inside src
+        assertTrue(allFiles!!.any { it.name == "Main.kt" })
+        assertTrue(allFiles.any { it.name == "main.py" })
+        assertTrue(allFiles.any { it.name == "index.js" })
+    }
 }

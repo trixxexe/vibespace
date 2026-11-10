@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.result.VibeResult
+import com.vibespace.core.runner.alpine.AlpineInstallationState
 import com.vibespace.core.runner.alpine.AlpineLinuxRunner
 import com.vibespace.core.runner.manager.RunnerManager
 import com.vibespace.core.runner.model.RunnerMode
@@ -28,7 +29,23 @@ class TerminalViewModel(
     init {
         observeSessions()
         observeRunnerManager()
+        observeAlpineState()
         ensureInitialSession()
+    }
+
+    private fun observeAlpineState() {
+        val manager = runnerManager ?: return
+        val alpineRunner = manager.getRunnerForMode(RunnerMode.ALPINE) as? AlpineLinuxRunner ?: return
+        viewModelScope.launch(dispatchers.default) {
+            alpineRunner.installationState.collect { state ->
+                _uiState.update {
+                    it.copy(
+                        isAlpineInstalled = state is AlpineInstallationState.Installed,
+                        alpineInstallationState = state
+                    )
+                }
+            }
+        }
     }
 
     private fun observeSessions() {

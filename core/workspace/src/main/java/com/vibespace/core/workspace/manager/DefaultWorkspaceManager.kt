@@ -122,6 +122,89 @@ class DefaultWorkspaceManager(
             VibeResult.Success(children.sortedWith(compareBy({ it.isFile }, { it.name })))
         }
 
+    private val ignoredDirectories = setOf(
+        ".git", ".gradle", "node_modules", "build", ".idea", "__pycache__", ".venv", "venv", ".next", "dist", ".target"
+    )
+
+    override suspend fun getAllProjectFiles(rootUri: String?): VibeResult<List<VirtualFile>> =
+        withContext(dispatchers.io) {
+            val targetRoot = rootUri ?: _currentProject.value?.rootUri
+            if (targetRoot == null) {
+                return@withContext VibeResult.Success(emptyList())
+            }
+
+            val resultList = mutableListOf<VirtualFile>()
+            val queue = ArrayDeque<String>()
+            queue.add(targetRoot)
+
+            while (queue.isNotEmpty()) {
+                val currentDir = queue.removeFirst()
+                val children = directoryChildren[currentDir] ?: emptyList()
+                for (child in children) {
+                    if (child.isDirectory) {
+                        if (!ignoredDirectories.contains(child.name)) {
+                            resultList.add(child)
+                            queue.add(child.uri)
+                        }
+                    } else {
+                        resultList.add(child)
+                    }
+                }
+            }
+
+            // Also check if target is a physical directory on disk
+            val physicalPath = if (targetRoot.startsWith("file://")) {
+                targetRoot.removePrefix("file://")
+            } else if (targetRoot.startsWith("/")) {
+                targetRoot
+            } else {
+                null
+            }
+
+            if (physicalPath != null) {
+                val rootDir = java.io.File(physicalPath)
+                if (rootDir.exists() && rootDir.isDirectory) {
+                    val fileQueue = ArrayDeque<java.io.File>()
+                    fileQueue.add(rootDir)
+                    while (fileQueue.isNotEmpty()) {
+                        val current = fileQueue.removeFirst()
+                        val list = current.listFiles() ?: emptyArray()
+                        for (f in list) {
+                            if (f.isDirectory) {
+                                if (!ignoredDirectories.contains(f.name)) {
+                                    val vf = VirtualFile(
+                                        uri = f.toURI().toString(),
+                                        name = f.name,
+                                        nodeType = FileNodeType.DIRECTORY,
+                                        parentUri = current.toURI().toString(),
+                                        path = f.absolutePath
+                                    )
+                                    if (resultList.none { it.uri == vf.uri }) {
+                                        resultList.add(vf)
+                                    }
+                                    fileQueue.add(f)
+                                }
+                            } else {
+                                val vf = VirtualFile(
+                                    uri = f.toURI().toString(),
+                                    name = f.name,
+                                    nodeType = FileNodeType.FILE,
+                                    parentUri = current.toURI().toString(),
+                                    sizeBytes = f.length(),
+                                    path = f.absolutePath
+                                )
+                                if (resultList.none { it.uri == vf.uri }) {
+                                    resultList.add(vf)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            VibeResult.Success(resultList.sortedWith(compareBy({ it.isFile }, { it.name })))
+        }
+
     override suspend fun readFile(fileUri: String): VibeResult<String> = withContext(dispatchers.io) {
         val content = fileContents[fileUri]
         if (content != null) {

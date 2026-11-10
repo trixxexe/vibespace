@@ -32,9 +32,11 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.vibespace.core.runner.alpine.AlpineInstallationState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -306,25 +308,94 @@ fun TerminalPanel(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
-                                .clickable { viewModel.installAlpineSubsystem() }
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("🐧", fontSize = 14.sp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Set Up Alpine Linux Subsystem",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = VibeTheme.colors.accentPrimary
-                                    )
-                                    Text(
-                                        text = "Tap to initialize in-app PRoot container for pip, npm, and apk (~60MB)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = VibeTheme.colors.textMuted
-                                    )
+                            when (val state = uiState.alpineInstallationState) {
+                                is AlpineInstallationState.Downloading -> {
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("🐧", fontSize = 14.sp)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Downloading Alpine Linux aarch64 (${(state.progress * 100).toInt()}%)...",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = VibeTheme.colors.accentPrimary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        LinearProgressIndicator(
+                                            progress = { state.progress },
+                                            modifier = Modifier.fillMaxWidth().height(4.dp),
+                                            color = VibeTheme.colors.accentPrimary,
+                                            trackColor = VibeTheme.colors.borderSubtle
+                                        )
+                                    }
+                                }
+                                is AlpineInstallationState.Extracting -> {
+                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("📦", fontSize = 14.sp)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Unpacking rootfs into app storage...",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = VibeTheme.colors.accentPrimary
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        LinearProgressIndicator(
+                                            modifier = Modifier.fillMaxWidth().height(4.dp),
+                                            color = VibeTheme.colors.accentPrimary,
+                                            trackColor = VibeTheme.colors.borderSubtle
+                                        )
+                                    }
+                                }
+                                is AlpineInstallationState.Error -> {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.installAlpineSubsystem() }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("⚠️", fontSize = 14.sp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Setup Failed: ${state.message}",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                            Text(
+                                                text = "Tap to retry setup",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = VibeTheme.colors.textMuted
+                                            )
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.installAlpineSubsystem() }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("🐧", fontSize = 14.sp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Set Up Alpine Linux Subsystem",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = VibeTheme.colors.accentPrimary
+                                            )
+                                            Text(
+                                                text = "Tap to initialize in-app PRoot container for pip, npm, and apk (~60MB)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = VibeTheme.colors.textMuted
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

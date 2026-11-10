@@ -33,7 +33,7 @@ class ExplorerViewModel(
                 if (project != null) {
                     refreshFiles()
                 } else {
-                    _uiState.update { it.copy(rootNodes = emptyList()) }
+                    _uiState.update { it.copy(rootNodes = emptyList(), allProjectFiles = emptyList()) }
                 }
             }
         }
@@ -44,7 +44,9 @@ class ExplorerViewModel(
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val nodes = loadDirectoryNodes(project.rootUri, 0)
-            _uiState.update { it.copy(isLoading = false, rootNodes = nodes) }
+            val allFilesResult = workspaceManager.getAllProjectFiles(project.rootUri)
+            val allFiles = allFilesResult.getOrNull() ?: emptyList()
+            _uiState.update { it.copy(isLoading = false, rootNodes = nodes, allProjectFiles = allFiles) }
         }
     }
 

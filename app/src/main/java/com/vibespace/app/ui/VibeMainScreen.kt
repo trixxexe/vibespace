@@ -427,7 +427,7 @@ fun VibeMainScreen(
 
     if (isCommandPaletteVisible) {
         val explorerUiState by explorerViewModel.uiState.collectAsState()
-        val allFiles = explorerUiState.rootNodes.map { it.file }
+        val allFiles = explorerUiState.allProjectFiles.ifEmpty { explorerUiState.rootNodes.map { it.file } }
         CommandPaletteDialog(
             files = allFiles,
             onOpenFile = { file ->

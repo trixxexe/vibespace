@@ -15,6 +15,14 @@ interface WorkspaceManager {
     suspend fun closeProject(): VibeResult<Unit>
 
     suspend fun listFiles(parentDirectoryUri: String): VibeResult<List<VirtualFile>>
+
+    /**
+     * Recursively traverses all files and directories in the workspace (or a sub-path)
+     * skipping ignored directories like .git, node_modules, build, etc.
+     * Ideal for global search, indexing, and Quick Open command palettes.
+     */
+    suspend fun getAllProjectFiles(rootUri: String? = null): VibeResult<List<VirtualFile>>
+
     suspend fun readFile(fileUri: String): VibeResult<String>
     suspend fun writeFile(fileUri: String, content: String): VibeResult<Unit>
     suspend fun createFile(parentDirectoryUri: String, fileName: String, initialContent: String = ""): VibeResult<VirtualFile>

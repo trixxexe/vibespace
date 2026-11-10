@@ -25,10 +25,11 @@ import kotlinx.coroutines.withContext
 
 class DefaultRunnerManager(
     private val workspaceManager: WorkspaceManager? = null,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    alpineRunner: AlpineLinuxRunner? = null
 ) : RunnerManager {
 
-    constructor(dispatchers: DispatcherProvider) : this(null, dispatchers)
+    constructor(dispatchers: DispatcherProvider) : this(null, dispatchers, null)
 
     private val runners = mutableMapOf<String, ExternalRunner>()
     private val _activeExecutions = MutableStateFlow<List<ProcessExecution>>(emptyList())
@@ -44,7 +45,7 @@ class DefaultRunnerManager(
     init {
         // Register out-of-the-box Tri-Mode Runners
         registerRunner(EmbeddedInstantRunner(workspaceManager = workspaceManager))
-        registerRunner(AlpineLinuxRunner())
+        registerRunner(alpineRunner ?: AlpineLinuxRunner())
         registerRunner(TermuxBridgeRunner())
     }
 

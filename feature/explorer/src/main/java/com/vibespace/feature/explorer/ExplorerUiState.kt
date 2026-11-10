@@ -13,6 +13,7 @@ data class ExplorerNode(
 data class ExplorerUiState(
     val currentProject: Project? = null,
     val rootNodes: List<ExplorerNode> = emptyList(),
+    val allProjectFiles: List<VirtualFile> = emptyList(),
     val selectedFileUri: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
