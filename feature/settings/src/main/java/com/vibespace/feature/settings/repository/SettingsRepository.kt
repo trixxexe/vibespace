@@ -18,7 +18,11 @@ data class UserSettings(
     val tabSizeSpaces: Int = 4,
     val showLineNumbers: Boolean = true,
     val wordWrap: Boolean = false,
-    val autoSave: Boolean = true
+    val autoSave: Boolean = true,
+    val aiProviderId: String = "gemini",
+    val aiApiKey: String = "",
+    val aiModel: String = "gemini-2.0-flash",
+    val aiCustomEndpoint: String = ""
 )
 
 interface SettingsRepository {
@@ -28,6 +32,7 @@ interface SettingsRepository {
     suspend fun setEditorTheme(themeId: String): VibeResult<Unit>
     suspend fun setEditorFontSize(fontSizeSp: Float): VibeResult<Unit>
     suspend fun setTabSize(spaces: Int): VibeResult<Unit>
+    suspend fun setAiConfig(providerId: String, apiKey: String, model: String, customEndpoint: String = ""): VibeResult<Unit>
 }
 
 class InMemorySettingsRepository(
@@ -60,6 +65,21 @@ class InMemorySettingsRepository(
 
     override suspend fun setTabSize(spaces: Int): VibeResult<Unit> {
         _settings.value = _settings.value.copy(tabSizeSpaces = spaces.coerceIn(2, 8))
+        return VibeResult.Success(Unit)
+    }
+
+    override suspend fun setAiConfig(
+        providerId: String,
+        apiKey: String,
+        model: String,
+        customEndpoint: String
+    ): VibeResult<Unit> {
+        _settings.value = _settings.value.copy(
+            aiProviderId = providerId,
+            aiApiKey = apiKey.trim(),
+            aiModel = model.trim(),
+            aiCustomEndpoint = customEndpoint.trim()
+        )
         return VibeResult.Success(Unit)
     }
 }

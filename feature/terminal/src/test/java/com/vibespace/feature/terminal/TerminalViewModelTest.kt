@@ -76,4 +76,41 @@ class TerminalViewModelTest {
         assertNotNull(active)
         assertTrue(active!!.lines.any { it.text.contains("$ python script.py") })
     }
+
+    @Test
+    fun multiple_sessions_can_be_created_switched_and_closed() = runTest {
+        val viewModel = TerminalViewModel(
+            terminalService = terminalService,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        val initialCount = viewModel.uiState.value.sessions.size
+        viewModel.createNewSession("Terminal 2")
+        assertEquals(initialCount + 1, viewModel.uiState.value.sessions.size)
+
+        val secondSession = viewModel.uiState.value.sessions.last()
+        assertEquals("Terminal 2", secondSession.title)
+        assertEquals(secondSession.sessionId, viewModel.uiState.value.activeSession?.sessionId)
+
+        val firstSession = viewModel.uiState.value.sessions.first()
+        viewModel.switchSession(firstSession.sessionId)
+        assertEquals(firstSession.sessionId, viewModel.uiState.value.activeSession?.sessionId)
+
+        viewModel.closeSession(secondSession.sessionId)
+        assertEquals(initialCount, viewModel.uiState.value.sessions.size)
+    }
+
+    @Test
+    fun launchTerminalAgent_creates_dedicated_agent_session() = runTest {
+        val viewModel = TerminalViewModel(
+            terminalService = terminalService,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        viewModel.launchTerminalAgent("Code Agent")
+        val active = viewModel.uiState.value.activeSession
+        assertNotNull(active)
+        assertTrue(active!!.title.contains("Code Agent"))
+        assertTrue(active.lines.any { it.text.contains("VibeSpace AI Terminal Agent") })
+    }
 }

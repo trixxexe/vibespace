@@ -73,6 +73,22 @@ fun VibeNavigation(
         editorViewModel.setEditorTheme(settingsState.settings.editorThemeId)
     }
 
+    LaunchedEffect(
+        settingsState.settings.aiProviderId,
+        settingsState.settings.aiApiKey,
+        settingsState.settings.aiModel,
+        settingsState.settings.aiCustomEndpoint
+    ) {
+        app.aiService.updateConfiguration(
+            com.vibespace.core.ai.model.AIConfiguration(
+                providerId = settingsState.settings.aiProviderId,
+                apiKey = settingsState.settings.aiApiKey,
+                model = settingsState.settings.aiModel,
+                customEndpoint = settingsState.settings.aiCustomEndpoint
+            )
+        )
+    }
+
     NavHost(
         navController = navController,
         startDestination = VibeDestination.Home.route,

@@ -39,4 +39,17 @@ class AIChatViewModelTest {
         viewModel.clearHistory()
         assertTrue(viewModel.uiState.value.messages.isEmpty())
     }
+
+    @Test
+    fun configureApiKey_updates_configuration_state() = runTest {
+        val viewModel = AIChatViewModel(
+            aiService = aiService,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertFalse(viewModel.uiState.value.isConfigured)
+        viewModel.configureApiKey("AIzaSyTest123")
+        assertTrue(viewModel.uiState.value.isConfigured)
+        assertEquals("gemini", viewModel.uiState.value.activeProvider)
+    }
 }

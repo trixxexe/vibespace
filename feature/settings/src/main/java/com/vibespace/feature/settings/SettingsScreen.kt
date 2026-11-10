@@ -20,9 +20,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -31,9 +38,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vibespace.core.designsystem.components.VibeCard
@@ -261,6 +273,183 @@ fun SettingsScreen(
                             title = "Termux Bridge",
                             subtitle = "Direct bridge to Termux app for hardware-accelerated binaries."
                         )
+                    }
+                }
+            }
+
+            // AI Assistant Configuration (BYOK - Bring Your Own Key)
+            item {
+                SectionHeader("AI ASSISTANT (BYOK - BRING YOUR OWN KEY)")
+                VibeCard {
+                    var inputKey by remember(settings.aiApiKey) { mutableStateOf(settings.aiApiKey) }
+                    var selectedProvider by remember(settings.aiProviderId) { mutableStateOf(settings.aiProviderId) }
+                    var selectedModel by remember(settings.aiModel) { mutableStateOf(settings.aiModel) }
+                    var isKeyVisible by remember { mutableStateOf(false) }
+
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Bring Your Own Key (BYOK)",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = VibeTheme.colors.textPrimary
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.accentSuccess.copy(alpha = 0.15f) else VibeTheme.colors.accentWarning.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = if (settings.aiApiKey.isNotBlank()) "✓ Active" else "⚠ Key Needed",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (settings.aiApiKey.isNotBlank()) VibeTheme.colors.accentSuccess else VibeTheme.colors.accentWarning,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "Connect Google Gemini or OpenAI to activate intelligent coding, code explanation, and bug fixing.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VibeTheme.colors.textSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Provider Selection
+                        Text(
+                            text = "AI PROVIDER",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = VibeTheme.colors.textMuted
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedProvider == "gemini") VibeTheme.colors.accentPrimary.copy(alpha = 0.15f) else VibeTheme.colors.gutterBackground,
+                                border = BorderStroke(1.dp, if (selectedProvider == "gemini") VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedProvider = "gemini"
+                                        selectedModel = "gemini-2.0-flash"
+                                        viewModel.setAiConfig(selectedProvider, inputKey, selectedModel)
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text("Google Gemini", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("Free via AI Studio", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedProvider == "openai") VibeTheme.colors.accentPrimary.copy(alpha = 0.15f) else VibeTheme.colors.gutterBackground,
+                                border = BorderStroke(1.dp, if (selectedProvider == "openai") VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedProvider = "openai"
+                                        selectedModel = "gpt-4o-mini"
+                                        viewModel.setAiConfig(selectedProvider, inputKey, selectedModel)
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text("OpenAI / Custom", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("GPT-4o, Claude, etc.", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // API Key Input
+                        Text(
+                            text = "API KEY",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = VibeTheme.colors.textMuted
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        OutlinedTextField(
+                            value = inputKey,
+                            onValueChange = {
+                                inputKey = it
+                                viewModel.setAiConfig(selectedProvider, it, selectedModel)
+                            },
+                            placeholder = { Text("Paste your API key here (e.g. AIzaSy...)") },
+                            visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
+                                    Icon(
+                                        imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "Toggle visibility",
+                                        tint = VibeTheme.colors.textSecondary
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = if (selectedProvider == "gemini") "Get your free Gemini API key at aistudio.google.com" else "Enter your standard OpenAI or compatible endpoint API key",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VibeTheme.colors.accentPrimary
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Model Selection
+                        Text(
+                            text = "MODEL",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = VibeTheme.colors.textMuted
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        val models = if (selectedProvider == "gemini") {
+                            listOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro")
+                        } else {
+                            listOf("gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet")
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            models.forEach { modelName ->
+                                val isSelected = selectedModel == modelName
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isSelected) VibeTheme.colors.accentPrimary else VibeTheme.colors.gutterBackground,
+                                    modifier = Modifier.clickable {
+                                        selectedModel = modelName
+                                        viewModel.setAiConfig(selectedProvider, inputKey, modelName)
+                                    }
+                                ) {
+                                    Text(
+                                        text = modelName,
+                                        style = VibeCodeTypography.copy(
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) VibeTheme.colors.background else VibeTheme.colors.textPrimary
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

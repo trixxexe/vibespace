@@ -271,7 +271,12 @@ fun VibeMainScreen(
                 ) {
                     AIChatScreen(
                         viewModel = aiChatViewModel,
-                        onClose = { isAiChatVisible = false }
+                        onClose = { isAiChatVisible = false },
+                        onRunInTerminal = { command ->
+                            terminalViewModel.executeCommand(command)
+                            isTerminalVisible = true
+                        },
+                        onOpenSettings = onNavigateToSettings
                     )
                 }
             }
@@ -407,7 +412,12 @@ fun VibeMainScreen(
                     Box(modifier = Modifier.height(500.dp)) {
                         AIChatScreen(
                             viewModel = aiChatViewModel,
-                            onClose = { isAiChatVisible = false }
+                            onClose = { isAiChatVisible = false },
+                            onRunInTerminal = { command ->
+                                terminalViewModel.executeCommand(command)
+                                isTerminalVisible = true
+                            },
+                            onOpenSettings = onNavigateToSettings
                         )
                     }
                 }

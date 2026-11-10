@@ -1,5 +1,6 @@
 package com.vibespace.feature.terminal
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -198,6 +201,92 @@ fun TerminalPanel(
         when (uiState.activeTab) {
             BottomPanelTab.TERMINAL -> {
                 Column(modifier = Modifier.fillMaxSize()) {
+                    // Multiple Terminal Sessions Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(34.dp)
+                            .background(VibeTheme.colors.gutterBackground)
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LazyRow(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            items(uiState.sessions, key = { it.sessionId }) { session ->
+                                val isSelected = session.sessionId == uiState.activeSession?.sessionId
+                                Surface(
+                                    onClick = { viewModel.switchSession(session.sessionId) },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isSelected) VibeTheme.colors.panelBackground else Color.Transparent,
+                                    border = BorderStroke(1.dp, if (isSelected) VibeTheme.colors.borderSubtle else Color.Transparent),
+                                    modifier = Modifier.height(26.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = session.title,
+                                            style = VibeCodeTypography.copy(
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) VibeTheme.colors.accentPrimary else VibeTheme.colors.textSecondary
+                                            )
+                                        )
+                                        if (uiState.sessions.size > 1 && isSelected) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Close session",
+                                                tint = VibeTheme.colors.textMuted,
+                                                modifier = Modifier
+                                                    .size(14.dp)
+                                                    .clickable { viewModel.closeSession(session.sessionId) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Add Session Button
+                        IconButton(
+                            onClick = { viewModel.createNewSession() },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "New Terminal",
+                                tint = VibeTheme.colors.textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        // Pair Agent Button
+                        Surface(
+                            onClick = { viewModel.launchTerminalAgent() },
+                            shape = RoundedCornerShape(4.dp),
+                            color = VibeTheme.colors.accentPrimary.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .height(24.dp)
+                                .padding(start = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🤖 Pair Agent",
+                                    style = VibeCodeTypography.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                    color = VibeTheme.colors.accentPrimary
+                                )
+                            }
+                        }
+                    }
+
                     // Lines list
                     LazyColumn(
                         state = listState,

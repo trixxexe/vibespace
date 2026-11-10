@@ -8,5 +8,8 @@ data class AIChatUiState(
     val isGenerating: Boolean = false,
     val attachedCodeContext: CodeContext? = null,
     val inputPrompt: String = "",
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isConfigured: Boolean = false,
+    val activeProvider: String = "gemini",
+    val activeModel: String = "gemini-2.0-flash"
 )

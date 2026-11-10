@@ -75,4 +75,10 @@ class SettingsViewModel(
             repository.updateSettings(_uiState.value.settings.copy(wordWrap = enabled))
         }
     }
+
+    fun setAiConfig(providerId: String, apiKey: String, model: String, customEndpoint: String = "") {
+        viewModelScope.launch(dispatchers.default) {
+            repository.setAiConfig(providerId, apiKey, model, customEndpoint)
+        }
+    }
 }

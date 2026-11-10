@@ -130,4 +130,40 @@ class TerminalViewModel(
             terminalService.clearSession(session.sessionId)
         }
     }
+
+    fun createNewSession(title: String? = null, workingDirectory: String = "~") {
+        viewModelScope.launch(dispatchers.default) {
+            val count = _uiState.value.sessions.size + 1
+            val sessionTitle = title ?: "Terminal $count"
+            terminalService.createSession(sessionTitle, workingDirectory)
+        }
+    }
+
+    fun switchSession(sessionId: String) {
+        viewModelScope.launch(dispatchers.default) {
+            terminalService.setActiveSession(sessionId)
+        }
+    }
+
+    fun closeSession(sessionId: String) {
+        viewModelScope.launch(dispatchers.default) {
+            terminalService.closeSession(sessionId)
+            if (terminalService.sessions.value.isEmpty()) {
+                terminalService.createSession("Terminal 1", "~")
+            }
+        }
+    }
+
+    fun launchTerminalAgent(agentName: String = "AI Agent") {
+        viewModelScope.launch(dispatchers.default) {
+            val title = "🤖 $agentName"
+            val result = terminalService.createSession(title, "~")
+            if (result is VibeResult.Success) {
+                val sessionId = result.data.sessionId
+                terminalService.appendLine(sessionId, "=== VibeSpace AI Terminal Agent ===", StreamType.SYSTEM)
+                terminalService.appendLine(sessionId, "Paired session ready. Run CLI agents (agy, aider, codegen) or interactive tools.", StreamType.SYSTEM)
+                terminalService.appendLine(sessionId, "$ ", StreamType.SYSTEM)
+            }
+        }
+    }
 }

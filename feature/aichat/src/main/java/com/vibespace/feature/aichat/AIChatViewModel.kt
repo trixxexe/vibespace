@@ -2,6 +2,7 @@ package com.vibespace.feature.aichat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vibespace.core.ai.model.AIConfiguration
 import com.vibespace.core.ai.model.CodeContext
 import com.vibespace.core.ai.service.AIService
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
@@ -25,6 +26,7 @@ class AIChatViewModel(
     init {
         observeMessages()
         observeEditorContext()
+        observeConfiguration()
     }
 
     private fun observeMessages() {
@@ -58,6 +60,20 @@ class AIChatViewModel(
         }
     }
 
+    private fun observeConfiguration() {
+        viewModelScope.launch(dispatchers.default) {
+            aiService.configuration.collect { config ->
+                _uiState.update {
+                    it.copy(
+                        isConfigured = config.isConfigured,
+                        activeProvider = config.providerId,
+                        activeModel = config.model
+                    )
+                }
+            }
+        }
+    }
+
     fun onPromptChange(text: String) {
         _uiState.update { it.copy(inputPrompt = text) }
     }
@@ -76,6 +92,16 @@ class AIChatViewModel(
             }
             _uiState.update { it.copy(isGenerating = false) }
         }
+    }
+
+    fun configureApiKey(apiKey: String, providerId: String = "gemini", model: String = "gemini-2.0-flash") {
+        aiService.updateConfiguration(
+            AIConfiguration(
+                providerId = providerId,
+                apiKey = apiKey.trim(),
+                model = model.trim()
+            )
+        )
     }
 
     fun clearHistory() {
