@@ -30,11 +30,6 @@ sealed interface VibeResult<out T> {
         else -> null
     }
 
-    fun getOrDefault(defaultValue: @UnsafeVariance T): T = when (this) {
-        is Success -> data
-        else -> defaultValue
-    }
-
     fun <R> map(transform: (T) -> R): VibeResult<R> = when (this) {
         is Success -> Success(transform(data))
         is Error -> Error(message, throwable, code)
@@ -50,4 +45,9 @@ sealed interface VibeResult<out T> {
         if (this is Error) action(this)
         return this
     }
+}
+
+fun <T> VibeResult<T>.getOrDefault(defaultValue: T): T = when (this) {
+    is VibeResult.Success -> data
+    else -> defaultValue
 }
