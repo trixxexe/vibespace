@@ -26,13 +26,23 @@ class SoraEditorController {
     fun insertSymbol(symbol: String) {
         val editor = editorRef?.get() ?: return
         val cursor = editor.cursor
+        val text = editor.text
 
-        if (cursor.isSelected && isPairSymbol(symbol)) {
-            val selectedText = cursor.selectedText
-            val wrapped = wrapTextWithPair(symbol, selectedText)
-            cursor.onCommitText(wrapped)
+        if (cursor.isSelected) {
+            val startLine = cursor.leftLine
+            val startCol = cursor.leftColumn
+            val endLine = cursor.rightLine
+            val endCol = cursor.rightColumn
+            val selected = text.subSequence(cursor.left, cursor.right).toString()
+            text.delete(startLine, startCol, endLine, endCol)
+            val wrapped = if (isPairSymbol(symbol)) wrapTextWithPair(symbol, selected) else symbol
+            text.insert(startLine, startCol, wrapped)
+            editor.setSelection(startLine, startCol + wrapped.length)
         } else {
-            cursor.onCommitText(symbol)
+            val line = cursor.leftLine
+            val col = cursor.leftColumn
+            text.insert(line, col, symbol)
+            editor.setSelection(line, col + symbol.length)
         }
     }
 
@@ -41,12 +51,14 @@ class SoraEditorController {
      */
     fun moveCursorLeft() {
         val editor = editorRef?.get() ?: return
-        try {
-            editor.moveSelectionLeft()
-        } catch (_: Throwable) {
-            val line = editor.cursor.leftLine
-            val col = (editor.cursor.leftColumn - 1).coerceAtLeast(0)
-            editor.setSelection(line, col)
+        val cursor = editor.cursor
+        val line = cursor.leftLine
+        val col = cursor.leftColumn
+        if (col > 0) {
+            editor.setSelection(line, col - 1)
+        } else if (line > 0) {
+            val prevLineLen = editor.text.getColumnCount(line - 1)
+            editor.setSelection(line - 1, prevLineLen)
         }
     }
 
@@ -55,12 +67,14 @@ class SoraEditorController {
      */
     fun moveCursorRight() {
         val editor = editorRef?.get() ?: return
-        try {
-            editor.moveSelectionRight()
-        } catch (_: Throwable) {
-            val line = editor.cursor.leftLine
-            val col = editor.cursor.leftColumn + 1
-            editor.setSelection(line, col)
+        val cursor = editor.cursor
+        val line = cursor.leftLine
+        val col = cursor.leftColumn
+        val lineLen = editor.text.getColumnCount(line)
+        if (col < lineLen) {
+            editor.setSelection(line, col + 1)
+        } else if (line + 1 < editor.text.lineCount) {
+            editor.setSelection(line + 1, 0)
         }
     }
 

@@ -144,7 +144,7 @@ private fun SymbolButton(
             .height(38.dp)
             .widthIn(min = if (isSpecial) 48.dp else 36.dp)
             .clip(shape)
-            .background(if (isSpecial) VibeTheme.colors.surfaceElevated else VibeTheme.colors.cardBackground)
+            .background(if (isSpecial) VibeTheme.colors.activeLineBackground else VibeTheme.colors.panelBackground)
             .border(width = 0.5.dp, color = VibeTheme.colors.borderSubtle, shape = shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 6.dp),

@@ -13,8 +13,8 @@ class TextMateLanguageManagerTest {
         assertEquals("source.python", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.Python))
         assertEquals("source.js", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.JavaScript))
         assertEquals("source.kotlin", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.Kotlin))
-        assertEquals("text.html.basic", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.HTML))
-        assertEquals("source.css", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.CSS))
+        assertEquals("text.html.basic", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.Html))
+        assertEquals("source.css", TextMateLanguageManager.getScopeNameForLanguage(LanguageDefinition.Css))
     }
 
     @Test

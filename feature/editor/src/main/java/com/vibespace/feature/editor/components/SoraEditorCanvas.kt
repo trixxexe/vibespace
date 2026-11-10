@@ -50,7 +50,7 @@ fun SoraEditorCanvas(
                 colorScheme = VibeEditorColorScheme()
                 isLineNumberEnabled = true
                 isWordwrap = false
-                textSize = fontSizeSp
+                setTextSize(fontSizeSp)
 
                 // Set TextMate syntax highlighting for active language
                 val editorLang = TextMateLanguageManager.createLanguageForDefinition(language)
@@ -78,9 +78,7 @@ fun SoraEditorCanvas(
         },
         update = { editor ->
             // Update font size if changed externally
-            if (editor.textSize != fontSizeSp) {
-                editor.textSize = fontSizeSp
-            }
+            editor.setTextSize(fontSizeSp)
 
             // Sync content if updated externally
             if (editor.text.toString() != content) {
