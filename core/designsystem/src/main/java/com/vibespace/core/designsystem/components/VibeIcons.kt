@@ -117,10 +117,10 @@ object VibeIcons {
 
     val AI: ImageVector = fillIcon("AI") {
         moveTo(12f, 2f)
-        cubicTo(12f, 7.5f, 16.5f, 12f, 22f, 12f)
-        cubicTo(16.5f, 12f, 12f, 16.5f, 12f, 22f)
-        cubicTo(12f, 16.5f, 7.5f, 12f, 2f, 12f)
-        cubicTo(7.5f, 12f, 12f, 7.5f, 12f, 2f)
+        quadTo(12f, 12f, 22f, 12f)
+        quadTo(12f, 12f, 12f, 22f)
+        quadTo(12f, 12f, 2f, 12f)
+        quadTo(12f, 12f, 12f, 2f)
         close()
     }
 

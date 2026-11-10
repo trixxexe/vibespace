@@ -22,4 +22,22 @@ class DesignSystemTest {
         assertEquals(SplitOrientation.HORIZONTAL, SplitOrientation.valueOf("HORIZONTAL"))
         assertEquals(SplitOrientation.VERTICAL, SplitOrientation.valueOf("VERTICAL"))
     }
+
+    @Test
+    fun vibeIcons_family_is_instantiated_and_valid() {
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Logo)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Home)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Editor)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Explorer)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.AI)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Terminal)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Search)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Settings)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Save)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Checkmark)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Warning)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.Error)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.SourceControl)
+        org.junit.Assert.assertNotNull(com.vibespace.core.designsystem.components.VibeIcons.RunnerAlpine)
+    }
 }
