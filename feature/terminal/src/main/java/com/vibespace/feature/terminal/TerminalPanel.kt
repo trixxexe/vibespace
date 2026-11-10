@@ -1,0 +1,267 @@
+package com.vibespace.feature.terminal
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.theme.VibeCodeTypography
+import com.vibespace.core.designsystem.theme.VibeTheme
+import com.vibespace.core.terminal.model.StreamType
+import com.vibespace.core.terminal.model.TerminalLine
+
+@Composable
+fun TerminalPanel(
+    viewModel: TerminalViewModel,
+    onClosePanel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+
+    val currentLines = uiState.activeSession?.lines ?: emptyList()
+
+    LaunchedEffect(currentLines.size) {
+        if (currentLines.isNotEmpty()) {
+            listState.animateScrollToItem(currentLines.size - 1)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(260.dp)
+            .background(VibeTheme.colors.panelBackground)
+    ) {
+        // Tab Header Strip
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .background(VibeTheme.colors.gutterBackground)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PanelTabButton(
+                title = "TERMINAL",
+                isSelected = uiState.activeTab == BottomPanelTab.TERMINAL,
+                onClick = { viewModel.selectTab(BottomPanelTab.TERMINAL) }
+            )
+            PanelTabButton(
+                title = "OUTPUT",
+                isSelected = uiState.activeTab == BottomPanelTab.OUTPUT,
+                onClick = { viewModel.selectTab(BottomPanelTab.OUTPUT) }
+            )
+            PanelTabButton(
+                title = "PROBLEMS (0)",
+                isSelected = uiState.activeTab == BottomPanelTab.PROBLEMS,
+                onClick = { viewModel.selectTab(BottomPanelTab.PROBLEMS) }
+            )
+            PanelTabButton(
+                title = "CONSOLE",
+                isSelected = uiState.activeTab == BottomPanelTab.CONSOLE,
+                onClick = { viewModel.selectTab(BottomPanelTab.CONSOLE) }
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            IconButton(
+                onClick = { viewModel.clearActiveSession() },
+                modifier = Modifier.size(26.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Clear,
+                    contentDescription = "Clear terminal",
+                    tint = VibeTheme.colors.textMuted,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onClosePanel,
+                modifier = Modifier.size(26.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close panel",
+                    tint = VibeTheme.colors.textMuted,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+
+        // Panel Body
+        when (uiState.activeTab) {
+            BottomPanelTab.TERMINAL -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Lines list
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        items(currentLines, key = { it.id }) { line ->
+                            TerminalLineView(line)
+                        }
+                    }
+
+                    // Input bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .background(VibeTheme.colors.gutterBackground)
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "$",
+                            style = VibeCodeTypography,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        BasicTextField(
+                            value = uiState.commandInput,
+                            onValueChange = { viewModel.onCommandInputChange(it) },
+                            textStyle = VibeCodeTypography.copy(
+                                color = VibeTheme.colors.textPrimary,
+                                fontSize = 12.sp
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { viewModel.submitCommand() }),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        IconButton(
+                            onClick = { viewModel.submitCommand() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "Send command",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            BottomPanelTab.OUTPUT -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Build output and task executions will be streamed here.\nNo tasks currently running.",
+                        style = VibeCodeTypography,
+                        color = VibeTheme.colors.textSecondary
+                    )
+                }
+            }
+            BottomPanelTab.PROBLEMS -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "No problems detected in workspace.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = VibeTheme.colors.statusSuccess
+                    )
+                }
+            }
+            BottomPanelTab.CONSOLE -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "VibeSpace System Console ready.\nAll modules initialized successfully.",
+                        style = VibeCodeTypography,
+                        color = VibeTheme.colors.textSecondary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanelTabButton(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val textColor = if (isSelected) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted
+    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+
+    Box(
+        modifier = Modifier
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = fontWeight),
+            color = textColor
+        )
+    }
+}
+
+@Composable
+private fun TerminalLineView(line: TerminalLine) {
+    val color = when (line.streamType) {
+        StreamType.COMMAND -> VibeTheme.colors.textPrimary
+        StreamType.STDOUT -> VibeTheme.colors.textSecondary
+        StreamType.STDERR -> VibeTheme.colors.statusError
+        StreamType.SYSTEM -> VibeTheme.colors.accentSecondary
+    }
+
+    Text(
+        text = line.text,
+        style = VibeCodeTypography.copy(fontSize = 12.sp, lineHeight = 16.sp),
+        color = color,
+        modifier = Modifier.padding(vertical = 1.dp)
+    )
+}
