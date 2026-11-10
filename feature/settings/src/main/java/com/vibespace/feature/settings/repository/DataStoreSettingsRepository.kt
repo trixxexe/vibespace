@@ -73,7 +73,7 @@ class DataStoreSettingsRepository(
                         val decryptedApiKey = if (rawApiKey.isNotBlank()) {
                             when (val res = secretStorage.decrypt(rawApiKey)) {
                                 is VibeResult.Success -> res.data
-                                is VibeResult.Error -> ""
+                                else -> ""
                             }
                         } else ""
 

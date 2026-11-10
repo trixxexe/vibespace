@@ -98,6 +98,7 @@ class HomeViewModel(
                         onProjectError(res.message)
                     }
                 }
+                else -> Unit
             }
         }
     }
@@ -123,6 +124,7 @@ class HomeViewModel(
                         onProjectError?.invoke(res.message)
                     }
                 }
+                else -> Unit
             }
         }
     }

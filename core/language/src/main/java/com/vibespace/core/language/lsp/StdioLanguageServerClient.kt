@@ -162,9 +162,6 @@ class StdioLanguageServerClient(
         line: Int,
         column: Int
     ): VibeResult<HoverInfo?> = withContext(dispatchers.default) {
-        if (!_isRunning) {
-            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
-        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
@@ -187,9 +184,6 @@ class StdioLanguageServerClient(
         line: Int,
         column: Int
     ): VibeResult<List<DefinitionLocation>> = withContext(dispatchers.default) {
-        if (!_isRunning) {
-            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
-        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
@@ -212,9 +206,6 @@ class StdioLanguageServerClient(
         line: Int,
         column: Int
     ): VibeResult<List<CompletionItem>> = withContext(dispatchers.default) {
-        if (!_isRunning) {
-            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
-        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},
@@ -233,9 +224,6 @@ class StdioLanguageServerClient(
     }
 
     override suspend fun formatDocument(documentUri: String): VibeResult<String> = withContext(dispatchers.default) {
-        if (!_isRunning) {
-            return@withContext VibeResult.Error("Language server for '$languageId' is not running")
-        }
         val params = """
             {
                 "textDocument": {"uri": "$documentUri"},

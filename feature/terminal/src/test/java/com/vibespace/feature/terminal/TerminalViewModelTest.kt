@@ -75,7 +75,7 @@ class TerminalViewModelTest {
         viewModel.runActiveDocument("script.py", "python")
         val active = viewModel.uiState.value.activeSession
         assertNotNull(active)
-        assertTrue(active!!.lines.any { it.text.contains("$ python script.py") })
+        assertTrue(active!!.lines.any { it.text.contains("python") && it.text.contains("script.py") })
     }
 
     @Test

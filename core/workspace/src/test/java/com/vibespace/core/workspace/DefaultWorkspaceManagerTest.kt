@@ -136,13 +136,13 @@ class DefaultWorkspaceManagerTest {
             // Attempt to write to sibling directory which shares prefix with projectDir
             val siblingFileUri = siblingFile.toURI().toString()
             val writeResult = workspaceManager.writeFile(siblingFileUri, "attack")
-            assertTrue(writeResult.isFailure)
+            assertTrue(writeResult.isError)
             assertTrue(writeResult.toString().contains("Security error") || writeResult.toString().contains("escapes"))
             assertEquals("secret", siblingFile.readText())
 
             // Attempt to delete sibling file
             val deleteResult = workspaceManager.delete(siblingFileUri)
-            assertTrue(deleteResult.isFailure)
+            assertTrue(deleteResult.isError)
             assertTrue(siblingFile.exists())
         } finally {
             baseDir.deleteRecursively()
@@ -161,13 +161,13 @@ class DefaultWorkspaceManagerTest {
             workspaceManager.openProject(project)
 
             val resNullByte = workspaceManager.createFile(rootUri, "evil\u0000file.py")
-            assertTrue(resNullByte.isFailure)
+            assertTrue(resNullByte.isError)
 
             val resSlash = workspaceManager.createFile(rootUri, "../traversal.py")
-            assertTrue(resSlash.isFailure)
+            assertTrue(resSlash.isError)
 
             val resDotDot = workspaceManager.createFile(rootUri, "..")
-            assertTrue(resDotDot.isFailure)
+            assertTrue(resDotDot.isError)
         } finally {
             tempDir.deleteRecursively()
         }
@@ -179,7 +179,7 @@ class DefaultWorkspaceManagerTest {
         val tempFile = java.io.File.createTempFile("vibe_orphan_", ".txt")
         try {
             val res = workspaceManager.writeFile(tempFile.toURI().toString(), "data")
-            assertTrue(res.isFailure)
+            assertTrue(res.isError)
             assertTrue(res.toString().contains("active project"))
         } finally {
             tempFile.delete()

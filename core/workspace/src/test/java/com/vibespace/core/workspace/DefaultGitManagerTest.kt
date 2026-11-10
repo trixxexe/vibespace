@@ -119,11 +119,11 @@ class DefaultGitManagerTest {
         gitManager.commit("Commit ahead")
 
         val pushResult = gitManager.push()
-        assertTrue(pushResult.isFailure)
+        assertTrue(pushResult.isError)
         assertTrue(pushResult.toString().contains("unavailable") || pushResult.toString().contains("sandbox"))
 
         val pullResult = gitManager.pull()
-        assertTrue(pullResult.isFailure)
+        assertTrue(pullResult.isError)
         assertTrue(pullResult.toString().contains("unavailable") || pullResult.toString().contains("sandbox"))
     }
 
@@ -156,6 +156,6 @@ class DefaultGitManagerTest {
         workspaceManager.openProject(Project("g8", "GitErrDiff", root))
 
         val diffResult = gitManager.getFileDiff("vibe://projects/git-err-diff/does_not_exist.txt")
-        assertTrue(diffResult.isFailure)
+        assertTrue(diffResult.isError)
     }
 }
