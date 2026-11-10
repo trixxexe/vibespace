@@ -61,4 +61,5 @@ jobs:
         with:
           name: unit-test-reports
           path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
           retention-days: 7
