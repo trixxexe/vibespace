@@ -32,6 +32,5 @@ class VibeEditorColorScheme : EditorColorScheme() {
         setColor(OPERATOR, Color.parseColor("#F3F4F6"))
         setColor(IDENTIFIER_NAME, Color.parseColor("#9CDCFE"))
         setColor(FUNCTION_NAME, Color.parseColor("#D2A8FF"))
-        setColor(TYPE_NAME, Color.parseColor("#FFA657"))
     }
 }

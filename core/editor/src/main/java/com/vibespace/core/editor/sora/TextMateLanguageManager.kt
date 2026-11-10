@@ -30,8 +30,7 @@ object TextMateLanguageManager {
             )
 
             // Load master language mapping
-            val inputStream = context.applicationContext.assets.open("textmate/languages.json")
-            GrammarRegistry.getInstance().loadGrammars(inputStream)
+            GrammarRegistry.getInstance().loadGrammars("textmate/languages.json")
             isInitialized = true
         } catch (_: Throwable) {
             // Gracefully handle missing assets in test or headless environments
