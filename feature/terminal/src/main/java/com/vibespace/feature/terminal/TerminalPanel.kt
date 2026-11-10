@@ -16,21 +16,29 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -98,6 +106,68 @@ fun TerminalPanel(
             )
 
             Spacer(modifier = Modifier.weight(1f))
+
+            var isRunnerMenuExpanded by remember { mutableStateOf(false) }
+
+            Box {
+                Surface(
+                    onClick = { isRunnerMenuExpanded = true },
+                    shape = RoundedCornerShape(4.dp),
+                    color = VibeTheme.colors.activeLineBackground,
+                    modifier = Modifier.padding(end = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = uiState.activeRunnerMode.shortBadge,
+                            style = VibeCodeTypography.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = VibeTheme.colors.accentPrimary
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Switch Runner Mode",
+                            tint = VibeTheme.colors.accentPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = isRunnerMenuExpanded,
+                    onDismissRequest = { isRunnerMenuExpanded = false }
+                ) {
+                    uiState.availableRunnerModes.forEach { mode ->
+                        DropdownMenuItem(
+                            text = {
+                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                    Text(
+                                        text = mode.displayName,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = if (mode == uiState.activeRunnerMode) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (mode == uiState.activeRunnerMode) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary
+                                        )
+                                    )
+                                    Text(
+                                        text = mode.description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VibeTheme.colors.textMuted
+                                    )
+                                }
+                            },
+                            onClick = {
+                                viewModel.switchRunnerMode(mode)
+                                isRunnerMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             IconButton(
                 onClick = { viewModel.clearActiveSession() },

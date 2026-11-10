@@ -1,6 +1,8 @@
 package com.vibespace.feature.terminal
 
 import com.vibespace.core.common.dispatchers.TestDispatcherProvider
+import com.vibespace.core.runner.manager.DefaultRunnerManager
+import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.terminal.service.DefaultTerminalService
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -38,5 +40,25 @@ class TerminalViewModelTest {
 
         viewModel.selectTab(BottomPanelTab.OUTPUT)
         assertEquals(BottomPanelTab.OUTPUT, viewModel.uiState.value.activeTab)
+    }
+
+    @Test
+    fun switchRunnerMode_updates_active_mode_in_manager_and_state() = runTest {
+        val runnerManager = DefaultRunnerManager(dispatchers = TestDispatcherProvider())
+        val viewModel = TerminalViewModel(
+            terminalService = terminalService,
+            runnerManager = runnerManager,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        assertEquals(RunnerMode.EMBEDDED, viewModel.uiState.value.activeRunnerMode)
+
+        viewModel.switchRunnerMode(RunnerMode.ALPINE)
+        assertEquals(RunnerMode.ALPINE, viewModel.uiState.value.activeRunnerMode)
+        assertEquals(RunnerMode.ALPINE, runnerManager.activeRunnerMode.value)
+
+        viewModel.switchRunnerMode(RunnerMode.TERMUX)
+        assertEquals(RunnerMode.TERMUX, viewModel.uiState.value.activeRunnerMode)
+        assertEquals(RunnerMode.TERMUX, runnerManager.activeRunnerMode.value)
     }
 }

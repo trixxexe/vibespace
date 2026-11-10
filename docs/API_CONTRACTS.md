@@ -98,9 +98,12 @@ interface LanguageServerClient {
 ```kotlin
 interface RunnerManager {
     val activeExecutions: StateFlow<List<ProcessExecution>>
+    val activeRunnerMode: StateFlow<RunnerMode>
 
     fun registerRunner(runner: ExternalRunner)
     fun getAvailableRunners(): List<ExternalRunner>
+    fun setRunnerMode(mode: RunnerMode)
+    fun getRunnerForMode(mode: RunnerMode): ExternalRunner?
 
     suspend fun runCommand(
         command: String,
@@ -113,7 +116,8 @@ interface RunnerManager {
 }
 ```
 
-### Models:
+### Models & Tri-Mode Architecture:
+- `RunnerMode`: `EMBEDDED` ("⚡ Instant"), `ALPINE` ("🐧 Alpine"), `TERMUX` ("🚀 Termux")
 - `ProcessExecution(executionId, command, workingDirectoryUri, state, exitCode, startTime, endTime, outputs)`
 - `ProcessOutput(line, isError, timestamp)`
 - `ExecutionState`: `IDLE`, `STARTING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`

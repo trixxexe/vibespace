@@ -1,5 +1,6 @@
 package com.vibespace.feature.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -21,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -173,6 +176,49 @@ fun SettingsScreen(
                 }
             }
 
+            // Execution Runtimes Section
+            item {
+                SectionHeader("EXECUTION RUNTIMES (TRI-MODE)")
+                VibeCard {
+                    Column {
+                        Text(
+                            text = "Tri-Mode Runner Architecture",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = VibeTheme.colors.textPrimary
+                        )
+                        Text(
+                            text = "Choose your preferred engine to execute code on Android",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = VibeTheme.colors.textSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        RuntimeOptionRow(
+                            badge = "⚡ Instant",
+                            title = "Instant Embedded",
+                            subtitle = "Zero download. Pre-bundled JS, Python, HTML & Shell."
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        RuntimeOptionRow(
+                            badge = "🐧 In-App",
+                            title = "Alpine Linux Subsystem",
+                            subtitle = "PRoot container inside app. Real apk, pip install, and npm install."
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        RuntimeOptionRow(
+                            badge = "🚀 Bridge",
+                            title = "Termux Bridge",
+                            subtitle = "Direct bridge to Termux app for hardware-accelerated binaries."
+                        )
+                    }
+                }
+            }
+
             // About VibeSpace
             item {
                 SectionHeader("ABOUT VIBESPACE")
@@ -239,6 +285,33 @@ private fun ThemeOptionRow(
         Spacer(modifier = Modifier.width(8.dp))
         Column {
             Text(title, style = MaterialTheme.typography.bodyMedium, color = VibeTheme.colors.textPrimary)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
+        }
+    }
+}
+
+@Composable
+private fun RuntimeOptionRow(
+    badge: String,
+    title: String,
+    subtitle: String
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = VibeTheme.colors.panelBackground,
+        border = BorderStroke(0.5.dp, VibeTheme.colors.borderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                Text(badge, style = VibeCodeTypography.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold), color = VibeTheme.colors.accentPrimary)
+            }
+            Spacer(modifier = Modifier.height(2.dp))
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
         }
     }
