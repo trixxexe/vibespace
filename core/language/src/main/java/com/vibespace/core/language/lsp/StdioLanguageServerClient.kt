@@ -16,6 +16,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -101,6 +102,7 @@ class StdioLanguageServerClient(
         transport.close()
         pendingRequests.values.forEach { it.cancel() }
         pendingRequests.clear()
+        scope.cancel()
         VibeResult.Success(Unit)
     }
 

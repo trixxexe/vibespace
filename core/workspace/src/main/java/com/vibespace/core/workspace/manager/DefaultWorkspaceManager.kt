@@ -217,6 +217,22 @@ class DefaultWorkspaceManager(
     override suspend fun writeFile(fileUri: String, content: String): VibeResult<Unit> =
         withContext(dispatchers.io) {
             fileContents[fileUri] = content
+            val parentUri = fileUri.substringBeforeLast('/', "")
+            if (parentUri.isNotEmpty()) {
+                val fileName = fileUri.substringAfterLast('/')
+                val children = directoryChildren.getOrPut(parentUri) { mutableListOf() }
+                if (children.none { it.name == fileName }) {
+                    children.add(
+                        VirtualFile(
+                            uri = fileUri,
+                            name = fileName,
+                            nodeType = FileNodeType.FILE,
+                            parentUri = parentUri,
+                            sizeBytes = content.toByteArray().size.toLong()
+                        )
+                    )
+                }
+            }
             VibeResult.Success(Unit)
         }
 
