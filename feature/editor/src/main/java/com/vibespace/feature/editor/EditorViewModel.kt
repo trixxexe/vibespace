@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
+import com.vibespace.core.common.result.getOrDefault
 import com.vibespace.core.editor.engine.EditorEngine
 import com.vibespace.core.editor.model.CursorPosition
 import com.vibespace.core.editor.model.EditorDocument
