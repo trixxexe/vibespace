@@ -25,7 +25,7 @@ android {
 
 dependencies {
     implementation(project(":core:common"))
-    implementation(project(":core:workspace"))
+    api(project(":core:workspace"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)

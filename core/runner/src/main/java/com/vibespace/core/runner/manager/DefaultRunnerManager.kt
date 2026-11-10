@@ -25,6 +25,8 @@ class DefaultRunnerManager(
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : RunnerManager {
 
+    constructor(dispatchers: DispatcherProvider) : this(null, dispatchers)
+
     private val runners = mutableMapOf<String, ExternalRunner>()
     private val _activeExecutions = MutableStateFlow<List<ProcessExecution>>(emptyList())
     override val activeExecutions: StateFlow<List<ProcessExecution>> = _activeExecutions.asStateFlow()

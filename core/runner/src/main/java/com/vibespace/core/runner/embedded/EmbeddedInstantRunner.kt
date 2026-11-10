@@ -356,10 +356,8 @@ class EmbeddedInstantRunner(
     private fun evaluateExpression(expr: String, scope: Map<String, Any>): String {
         val trimmed = expr.trim()
 
-        // String literals
-        if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
-            (trimmed.startsWith("'") && trimmed.endsWith("'"))
-        ) {
+        // String literals (must be a single self-contained literal)
+        if (isStringLiteral(trimmed)) {
             return trimmed.substring(1, trimmed.length - 1)
         }
 
@@ -368,9 +366,10 @@ class EmbeddedInstantRunner(
             return scope[trimmed].toString()
         }
 
-        // Simple addition: a + b
-        if (trimmed.contains("+")) {
-            val parts = trimmed.split("+").map { evaluateExpression(it.trim(), scope) }
+        // Addition: a + b (split outside quotes)
+        val plusParts = splitByOperator(trimmed, '+')
+        if (plusParts.size > 1) {
+            val parts = plusParts.map { evaluateExpression(it.trim(), scope) }
             val numericValues = parts.mapNotNull { it.toDoubleOrNull() }
             if (numericValues.size == parts.size) {
                 val sum = numericValues.sum()
@@ -379,9 +378,10 @@ class EmbeddedInstantRunner(
             return parts.joinToString("")
         }
 
-        // Simple multiplication: a * b
-        if (trimmed.contains("*")) {
-            val parts = trimmed.split("*").map { evaluateExpression(it.trim(), scope) }
+        // Multiplication: a * b
+        val multParts = splitByOperator(trimmed, '*')
+        if (multParts.size > 1) {
+            val parts = multParts.map { evaluateExpression(it.trim(), scope) }
             val nums = parts.mapNotNull { it.toDoubleOrNull() }
             if (nums.size == 2) {
                 val prod = nums[0] * nums[1]
@@ -389,19 +389,23 @@ class EmbeddedInstantRunner(
             }
         }
 
-        // Simple subtraction: a - b
+        // Subtraction: a - b
         if (trimmed.contains("-") && !trimmed.startsWith("-")) {
-            val parts = trimmed.split("-").map { evaluateExpression(it.trim(), scope) }
-            val nums = parts.mapNotNull { it.toDoubleOrNull() }
-            if (nums.size == 2) {
-                val diff = nums[0] - nums[1]
-                return if (diff % 1.0 == 0.0) diff.toLong().toString() else diff.toString()
+            val subParts = splitByOperator(trimmed, '-')
+            if (subParts.size == 2) {
+                val parts = subParts.map { evaluateExpression(it.trim(), scope) }
+                val nums = parts.mapNotNull { it.toDoubleOrNull() }
+                if (nums.size == 2) {
+                    val diff = nums[0] - nums[1]
+                    return if (diff % 1.0 == 0.0) diff.toLong().toString() else diff.toString()
+                }
             }
         }
 
-        // Simple division: a / b
-        if (trimmed.contains("/")) {
-            val parts = trimmed.split("/").map { evaluateExpression(it.trim(), scope) }
+        // Division: a / b
+        val divParts = splitByOperator(trimmed, '/')
+        if (divParts.size == 2) {
+            val parts = divParts.map { evaluateExpression(it.trim(), scope) }
             val nums = parts.mapNotNull { it.toDoubleOrNull() }
             if (nums.size == 2 && nums[1] != 0.0) {
                 val quotient = nums[0] / nums[1]
@@ -410,5 +414,61 @@ class EmbeddedInstantRunner(
         }
 
         return trimmed
+    }
+
+    private fun isStringLiteral(s: String): Boolean {
+        if (s.length < 2) return false
+        val quote = s[0]
+        if (quote != '"' && quote != '\'') return false
+        if (s.last() != quote) return false
+
+        var escaped = false
+        for (i in 1 until s.length - 1) {
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (s[i] == '\\') {
+                escaped = true
+                continue
+            }
+            if (s[i] == quote) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun splitByOperator(expr: String, op: Char): List<String> {
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        var inSingleQuote = false
+        var inDoubleQuote = false
+
+        for (char in expr) {
+            when (char) {
+                '\'' -> {
+                    if (!inDoubleQuote) inSingleQuote = !inSingleQuote
+                    current.append(char)
+                }
+                '"' -> {
+                    if (!inSingleQuote) inDoubleQuote = !inDoubleQuote
+                    current.append(char)
+                }
+                op -> {
+                    if (!inSingleQuote && !inDoubleQuote) {
+                        parts.add(current.toString())
+                        current.clear()
+                    } else {
+                        current.append(char)
+                    }
+                }
+                else -> current.append(char)
+            }
+        }
+        if (current.isNotEmpty()) {
+            parts.add(current.toString())
+        }
+        return parts
     }
 }
