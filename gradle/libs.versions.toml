@@ -16,6 +16,7 @@ soraEditor = "0.23.6"
 documentfile = "1.0.1"
 json = "20240303"
 re2j = "1.8"
+jgit = "7.8.1.202611041320-r"
 
 [libraries]
 # AndroidX Core
@@ -50,6 +51,7 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 org-json = { group = "org.json", name = "json", version.ref = "json" }
 re2j = { group = "com.google.re2j", name = "re2j", version.ref = "re2j" }
+jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
 
 # Sora Code Editor
 sora-editor-core = { group = "io.github.Rosemoe.sora-editor", name = "editor", version.ref = "soraEditor" }

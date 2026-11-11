@@ -494,6 +494,30 @@ class DefaultWorkspaceManager(
         VibeResult.Error("File not found: $fileUri")
     }
 
+    override suspend fun readBytes(fileUri: String): VibeResult<ByteArray> = withContext(dispatchers.io) {
+        if (fileUri.startsWith("content://") && context != null) {
+            if (!isWithinActiveSafTree(fileUri)) return@withContext VibeResult.Error("Security error: File is outside the active SAF project.")
+            try {
+                context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { VibeResult.Success(it.readBytes()) }
+                    ?: VibeResult.Error("Unable to open SAF content stream for $fileUri")
+            } catch (e: Throwable) {
+                VibeResult.Error("Failed to read SAF bytes: ${e.message}", e)
+            }
+        } else {
+            val diskFile = toPhysicalFile(fileUri)
+            if (diskFile != null) {
+                val rootCheck = validatePhysicalWorkspacePath(diskFile)
+                if (rootCheck is VibeResult.Error) return@withContext rootCheck
+                if (!diskFile.exists() || !diskFile.isFile) return@withContext VibeResult.Error("File not found: $fileUri")
+                try { VibeResult.Success(diskFile.readBytes()) }
+                catch (e: Exception) { VibeResult.Error("Failed to read file bytes: ${e.message}", e) }
+            } else {
+                fileContents[fileUri]?.let { VibeResult.Success(it.toByteArray(StandardCharsets.UTF_8)) }
+                    ?: VibeResult.Error("File not found: $fileUri")
+            }
+        }
+    }
+
     private fun childUri(parentUri: String, name: String): String =
         if (parentUri.startsWith("vibe://")) "$parentUri/${URLEncoder.encode(name, "UTF-8").replace("+", "%20")}"
         else File(toPhysicalFile(parentUri) ?: File(parentUri), name).toURI().toString().trimEnd('/')
@@ -560,6 +584,37 @@ class DefaultWorkspaceManager(
             }
             VibeResult.Success(Unit)
         }
+
+    override suspend fun writeBytes(fileUri: String, content: ByteArray): VibeResult<Unit> = withContext(dispatchers.io) {
+        if (fileUri.startsWith("content://") && context != null) {
+            if (!isWithinActiveSafTree(fileUri)) return@withContext VibeResult.Error("Security error: File is outside the active SAF project.")
+            try {
+                context.contentResolver.openOutputStream(Uri.parse(fileUri), "wt")?.use { it.write(content) }
+                    ?: return@withContext VibeResult.Error("Unable to open SAF write stream for $fileUri")
+                fileContents.remove(fileUri)
+                VibeResult.Success(Unit)
+            } catch (e: Throwable) {
+                VibeResult.Error("Failed to write SAF bytes: ${e.message}", e)
+            }
+        } else {
+            val diskFile = toPhysicalFile(fileUri)
+            if (diskFile != null) {
+                val project = _currentProject.value ?: return@withContext VibeResult.Error("Security error: No active project root to validate file containment.")
+                val root = toPhysicalFile(normalizeUri(project.rootUri)) ?: return@withContext VibeResult.Error("Security error: Project root cannot be resolved.")
+                val check = validateWithinProjectRoot(diskFile, root)
+                if (check is VibeResult.Error) return@withContext check
+                try {
+                    diskFile.parentFile?.let { if (!it.exists() && !it.mkdirs()) return@withContext VibeResult.Error("Could not create parent directory.") }
+                    diskFile.writeBytes(content)
+                } catch (e: Exception) {
+                    return@withContext VibeResult.Error("Failed to write file bytes: ${e.message}", e)
+                }
+            }
+            val text = content.toString(StandardCharsets.UTF_8)
+            fileContents[fileUri] = text
+            VibeResult.Success(Unit)
+        }
+    }
 
     override suspend fun createFile(
         parentDirectoryUri: String,

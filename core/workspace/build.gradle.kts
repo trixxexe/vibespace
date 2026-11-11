@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.jgit)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

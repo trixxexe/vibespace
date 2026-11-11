@@ -25,6 +25,14 @@ interface WorkspaceManager {
 
     suspend fun readFile(fileUri: String): VibeResult<String>
     suspend fun writeFile(fileUri: String, content: String): VibeResult<Unit>
+    /** Binary-safe access used by version control and file transfer. */
+    suspend fun readBytes(fileUri: String): VibeResult<ByteArray> = when (val result = readFile(fileUri)) {
+        is VibeResult.Success -> VibeResult.Success(result.data.toByteArray(Charsets.UTF_8))
+        is VibeResult.Error -> result
+        else -> VibeResult.Error("File contents are unavailable.")
+    }
+    suspend fun writeBytes(fileUri: String, content: ByteArray): VibeResult<Unit> =
+        writeFile(fileUri, content.toString(Charsets.UTF_8))
     suspend fun createFile(parentDirectoryUri: String, fileName: String, initialContent: String = ""): VibeResult<VirtualFile>
     suspend fun createDirectory(parentDirectoryUri: String, directoryName: String): VibeResult<VirtualFile>
     suspend fun delete(targetUri: String): VibeResult<Unit>

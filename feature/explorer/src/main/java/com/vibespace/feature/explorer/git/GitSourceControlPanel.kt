@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +29,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.vibespace.core.designsystem.components.VibeDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vibespace.core.designsystem.components.VibeIcons
@@ -78,7 +81,7 @@ fun GitSourceControlPanel(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Local Changes",
+                text = "Source Control",
                 style = MaterialTheme.typography.titleSmall,
                 color = VibeTheme.colors.textPrimary,
                 modifier = Modifier.weight(1f)
@@ -114,11 +117,34 @@ fun GitSourceControlPanel(
         // Commit Box Section
         Column(modifier = Modifier.padding(10.dp)) {
             Text(
-                text = "Local snapshots only. This workspace is not a Git repository and cannot sync with a remote.",
+                text = uiState.status.remoteUrl?.let { "Git repository · $it" } ?: "Local Git repository · remote not configured",
                 style = MaterialTheme.typography.labelSmall,
                 color = VibeTheme.colors.textMuted,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { viewModel.toggleRemoteDialog(true) }, modifier = Modifier.weight(1f)) {
+                    Text(if (uiState.status.remoteUrl == null) "Add remote" else "Remote settings")
+                }
+                OutlinedButton(
+                    onClick = { viewModel.pull() },
+                    enabled = !uiState.isSyncing && uiState.status.remoteUrl != null,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Pull") }
+                Button(
+                    onClick = { viewModel.push() },
+                    enabled = !uiState.isSyncing && uiState.status.remoteUrl != null,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Push") }
+            }
+            if (uiState.isSyncing) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Syncing Git…", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                }
+            }
             OutlinedTextField(
                 value = uiState.commitMessage,
                 onValueChange = { viewModel.onCommitMessageChange(it) },
@@ -181,7 +207,7 @@ fun GitSourceControlPanel(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Save snapshot (${uiState.status.stagedFiles.size} staged)")
+                    Text("Commit ${uiState.status.stagedFiles.size} staged file${if (uiState.status.stagedFiles.size == 1) "" else "s"}")
                 }
             }
         }
@@ -273,6 +299,45 @@ fun GitSourceControlPanel(
                 }
             }
         }
+    }
+
+    if (uiState.showRemoteDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleRemoteDialog(false) },
+            title = { Text("Git remote") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Connect an HTTP(S) Git remote. Credentials are kept in memory and must be entered again after restarting the app.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = uiState.remoteUrlInput,
+                        onValueChange = viewModel::updateRemoteUrl,
+                        label = { Text("Remote URL") },
+                        placeholder = { Text("https://github.com/user/repository.git") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = uiState.remoteUsernameInput,
+                        onValueChange = viewModel::updateRemoteUsername,
+                        label = { Text("Username (optional for public remotes)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = uiState.remoteTokenInput,
+                        onValueChange = viewModel::updateRemoteToken,
+                        label = { Text("Password or access token") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.configureRemote() }, enabled = !uiState.isSyncing) { Text("Save remote") }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.toggleRemoteDialog(false) }) { Text("Cancel") } }
+        )
     }
 
     // Diff Viewer Dialog if active

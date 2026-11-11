@@ -46,8 +46,9 @@ class VibeSpaceApplication : Application() {
     }
 
     val gitManager: com.vibespace.core.workspace.git.GitManager by lazy {
-        com.vibespace.core.workspace.git.DefaultGitManager(
+        com.vibespace.core.workspace.git.JGitWorkspaceManager(
             workspaceManager = workspaceManager,
+            storageDirectory = java.io.File(filesDir, "git-repositories"),
             dispatchers = dispatchers
         )
     }

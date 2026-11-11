@@ -16,6 +16,8 @@ interface GitManager {
     suspend fun checkoutBranch(branchName: String): VibeResult<Unit>
     suspend fun createBranch(branchName: String): VibeResult<Unit>
     suspend fun getFileDiff(path: String): VibeResult<FileDiff>
+    suspend fun configureRemote(url: String, username: String? = null, passwordOrToken: String? = null): VibeResult<Unit> =
+        VibeResult.Error("Remote configuration is not supported by this Git manager.")
     suspend fun push(): VibeResult<String>
     suspend fun pull(): VibeResult<String>
 }

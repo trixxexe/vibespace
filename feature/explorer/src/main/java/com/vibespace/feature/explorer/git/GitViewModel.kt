@@ -24,6 +24,10 @@ data class GitUiState(
     val syncMessage: String? = null,
     val showBranchDialog: Boolean = false,
     val showCommitDialog: Boolean = false,
+    val showRemoteDialog: Boolean = false,
+    val remoteUrlInput: String = "",
+    val remoteUsernameInput: String = "",
+    val remoteTokenInput: String = "",
     val pendingDiscardPath: String? = null,
     val errorMessage: String? = null
 )
@@ -153,6 +157,38 @@ class GitViewModel(
 
     fun toggleCommitDialog(show: Boolean) {
         _uiState.update { it.copy(showCommitDialog = show) }
+    }
+
+    fun toggleRemoteDialog(show: Boolean) {
+        _uiState.update {
+            it.copy(
+                showRemoteDialog = show,
+                remoteUrlInput = if (show) it.status.remoteUrl.orEmpty() else it.remoteUrlInput,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun updateRemoteUrl(value: String) { _uiState.update { it.copy(remoteUrlInput = value) } }
+    fun updateRemoteUsername(value: String) { _uiState.update { it.copy(remoteUsernameInput = value) } }
+    fun updateRemoteToken(value: String) { _uiState.update { it.copy(remoteTokenInput = value) } }
+
+    fun configureRemote() {
+        val state = _uiState.value
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isSyncing = true, errorMessage = null, syncMessage = null) }
+            when (val result = gitManager.configureRemote(
+                state.remoteUrlInput,
+                state.remoteUsernameInput.ifBlank { null },
+                state.remoteTokenInput.ifBlank { null }
+            )) {
+                is VibeResult.Success -> _uiState.update {
+                    it.copy(isSyncing = false, showRemoteDialog = false, remoteTokenInput = "", syncMessage = "Git remote configured.")
+                }
+                is VibeResult.Error -> _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }
+                else -> _uiState.update { it.copy(isSyncing = false) }
+            }
+        }
     }
 
     fun push() {

@@ -56,6 +56,7 @@ data class GitWorkspaceStatus(
     val aheadCount: Int = 0,
     val behindCount: Int = 0,
     val remoteBranch: String? = null,
+    val remoteUrl: String? = null,
     val isClean: Boolean = stagedFiles.isEmpty() && unstagedFiles.isEmpty(),
     val errorMessage: String? = null
 )
