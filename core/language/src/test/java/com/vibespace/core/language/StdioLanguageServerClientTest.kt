@@ -75,7 +75,8 @@ class StdioLanguageServerClientTest {
         )
         val responder = launch {
             val initialize = transport.clientToServer.receive()
-            assertTrue(initialize.contains("\"rootUri\":\"file:///workspace\""))
+            val rootUri = org.json.JSONObject(initialize).getJSONObject("params").getString("rootUri")
+            assertEquals("file:///workspace", rootUri)
             transport.emitFromServer("""{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}""")
             transport.clientToServer.receive() // initialized notification
         }
@@ -83,7 +84,9 @@ class StdioLanguageServerClientTest {
         assertTrue(client.start("vibe://project").isSuccess)
         client.didOpen("vibe://project/main.py", "print('hello')")
         val open = transport.clientToServer.receive()
-        assertTrue(open.contains("\"uri\":\"file:///workspace/main.py\""))
+        val documentUri = org.json.JSONObject(open).getJSONObject("params")
+            .getJSONObject("textDocument").getString("uri")
+        assertEquals("file:///workspace/main.py", documentUri)
 
         client.stop()
         responder.cancel()
