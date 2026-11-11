@@ -1,11 +1,16 @@
 package com.vibespace.feature.editor.components
 
 import android.graphics.Typeface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vibespace.core.designsystem.theme.VibeTheme
@@ -14,11 +19,19 @@ import com.vibespace.core.editor.sora.TextMateLanguageManager
 import com.vibespace.core.editor.sora.VibeEditorColorScheme
 import com.vibespace.core.editor.theme.EditorThemeDefinition
 import com.vibespace.core.language.model.LanguageDefinition
+import io.github.rosemoe.sora.lang.EmptyLanguage
+import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.widget.CodeEditor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-private class EditorBinding(val documentId: String, val languageId: String) {
+private class EditorBinding(
+    val documentId: String,
+    val languageId: String,
+    val editorLanguage: Language
+) {
     var isUpdatingProgrammatically: Boolean = false
 }
 
@@ -43,6 +56,28 @@ fun SoraEditorCanvas(
     controller: SoraEditorController = remember { SoraEditorController() },
     modifier: Modifier = Modifier
 ) {
+    val appContext = LocalContext.current.applicationContext
+    var grammarReady by remember { mutableStateOf(TextMateLanguageManager.isReady()) }
+    LaunchedEffect(appContext) {
+        grammarReady = withContext(Dispatchers.IO) {
+            TextMateLanguageManager.initialize(appContext)
+            TextMateLanguageManager.isReady()
+        }
+    }
+
+    var editorLanguage by remember(language.id, grammarReady) {
+        mutableStateOf<Language>(EmptyLanguage())
+    }
+    LaunchedEffect(language.id, grammarReady) {
+        editorLanguage = if (grammarReady) {
+            withContext(Dispatchers.Default) {
+                TextMateLanguageManager.createLanguageForDefinition(language)
+            }
+        } else {
+            EmptyLanguage()
+        }
+    }
+
     DisposableEffect(controller) {
         onDispose {
             controller.unbind()
@@ -54,8 +89,6 @@ fun SoraEditorCanvas(
             .fillMaxSize()
             .background(VibeTheme.colors.editorBackground),
         factory = { context ->
-            TextMateLanguageManager.initialize(context)
-
             CodeEditor(context).apply {
                 typefaceText = Typeface.MONOSPACE
                 colorScheme = VibeEditorColorScheme(theme)
@@ -65,13 +98,12 @@ fun SoraEditorCanvas(
                 setTextSize(fontSizeSp)
 
                 // Set TextMate syntax highlighting for active language
-                val editorLang = TextMateLanguageManager.createLanguageForDefinition(language)
-                setEditorLanguage(editorLang)
+                setEditorLanguage(editorLanguage)
 
                 // Initialize document content
                 setText(content)
                 restoreCursor(this, content, cursorPosition)
-                tag = EditorBinding(documentId, language.id)
+                tag = EditorBinding(documentId, language.id, editorLanguage)
 
                 // Listen for content changes
                 subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
@@ -126,11 +158,10 @@ fun SoraEditorCanvas(
             }
 
             // Update language syntax if language changed
-            if (binding?.languageId != language.id) {
-                val editorLang = TextMateLanguageManager.createLanguageForDefinition(language)
-                editor.setEditorLanguage(editorLang)
+            if (binding?.languageId != language.id || binding.editorLanguage !== editorLanguage) {
+                editor.setEditorLanguage(editorLanguage)
             }
-            editor.tag = EditorBinding(documentId, language.id)
+            editor.tag = EditorBinding(documentId, language.id, editorLanguage)
         },
         onRelease = { editor ->
             controller.unbind()

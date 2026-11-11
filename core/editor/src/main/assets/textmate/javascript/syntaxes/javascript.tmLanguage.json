@@ -43,8 +43,22 @@
       "match": "\\b(if|else|switch|case|default|for|while|do|break|continue|return|throw|try|catch|finally|yield|await)\\b"
     },
     {
+      "match": "\\b(function)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)",
+      "captures": {
+        "1": { "name": "keyword.other.js" },
+        "2": { "name": "entity.name.function.js" }
+      }
+    },
+    {
+      "match": "\\b(class)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)",
+      "captures": {
+        "1": { "name": "keyword.other.js" },
+        "2": { "name": "entity.name.type.class.js" }
+      }
+    },
+    {
       "name": "keyword.other.js",
-      "match": "\\b(const|let|var|function|class|extends|new|this|super|import|export|from|as|default|static|async)\\b"
+      "match": "\\b(const|let|var|extends|new|this|super|import|export|from|as|default|static|async)\\b"
     },
     {
       "name": "constant.language.js",
@@ -57,14 +71,6 @@
     {
       "name": "constant.numeric.js",
       "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
-    },
-    {
-      "name": "entity.name.function.js",
-      "match": "(?<=function\\s+)[a-zA-Z_$][a-zA-Z0-9_$]*"
-    },
-    {
-      "name": "entity.name.type.class.js",
-      "match": "(?<=class\\s+)[a-zA-Z_$][a-zA-Z0-9_$]*"
     }
   ]
 }

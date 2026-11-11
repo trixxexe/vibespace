@@ -14,7 +14,10 @@ import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolve
  */
 object TextMateLanguageManager {
 
+    @Volatile
     private var isInitialized = false
+
+    fun isReady(): Boolean = isInitialized
 
     /**
      * Initializes the asset file resolver and loads grammar registry from assets/textmate/languages.json.
@@ -43,6 +46,7 @@ object TextMateLanguageManager {
      * Falls back to EmptyLanguage if TextMate grammar is unavailable.
      */
     fun createLanguageForDefinition(definition: LanguageDefinition): Language {
+        if (!isInitialized) return EmptyLanguage()
         val scopeName = getScopeNameForLanguage(definition) ?: return EmptyLanguage()
 
         return try {
