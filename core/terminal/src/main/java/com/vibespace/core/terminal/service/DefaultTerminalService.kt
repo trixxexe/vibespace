@@ -174,9 +174,9 @@ class DefaultTerminalService(
                 emitLine(sessionId, TerminalLine(IdGenerator.shortId(), session.workingDirectory, StreamType.STDOUT))
             }
             "ls" -> {
-                val targetDir = if (args.isNotEmpty()) File(args[0]) else File(session.workingDirectory)
+                val targetDir = if (args.isNotEmpty()) resolveFile(session.workingDirectory, args[0]) else File(session.workingDirectory)
                 if (targetDir.exists() && targetDir.isDirectory) {
-                    val files = targetDir.listFiles()?.sortedBy { it.name } ?: emptyArray()
+                    val files: List<File> = targetDir.listFiles()?.sortedBy { it.name } ?: emptyList()
                     val output = if (files.isEmpty()) "(empty directory)" else files.joinToString("  ") {
                         if (it.isDirectory) "${it.name}/" else it.name
                     }

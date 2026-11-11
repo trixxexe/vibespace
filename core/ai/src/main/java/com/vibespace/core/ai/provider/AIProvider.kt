@@ -31,6 +31,27 @@ class AIProviderRegistry(
         if (registerDefaults) {
             register(GeminiAIProvider())
             register(OpenAIAIProvider())
+            register(OpenAIAIProvider(
+                providerId = "anthropic",
+                displayName = "Anthropic (Claude)",
+                activeModel = "claude-3-7-sonnet",
+                customEndpoint = "https://api.anthropic.com/v1/messages",
+                supportedModels = listOf("claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku")
+            ))
+            register(OpenAIAIProvider(
+                providerId = "deepseek",
+                displayName = "DeepSeek",
+                activeModel = "deepseek-chat",
+                customEndpoint = "https://api.deepseek.com/chat/completions",
+                supportedModels = listOf("deepseek-chat", "deepseek-reasoner")
+            ))
+            register(OpenAIAIProvider(
+                providerId = "groq",
+                displayName = "Groq",
+                activeModel = "llama-3.3-70b-versatile",
+                customEndpoint = "https://api.groq.com/openai/v1/chat/completions",
+                supportedModels = listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768")
+            ))
             activeProviderId = "gemini"
         }
     }

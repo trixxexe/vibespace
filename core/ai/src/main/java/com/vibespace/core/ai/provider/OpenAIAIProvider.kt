@@ -35,14 +35,14 @@ class OpenAIAIProvider(
     var apiKey: String = "",
     var activeModel: String = "gpt-4o-mini",
     var customEndpoint: String = "",
+    override val providerId: String = "openai",
+    override val displayName: String = "OpenAI / Compatible",
+    override val supportedModels: List<String> = listOf("gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-coder", "custom"),
     private val httpTransport: ((url: String, method: String, headers: Map<String, String>, body: String) -> Pair<Int, String>)? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
     private val streamTransport: ((url: String, headers: Map<String, String>, body: String) -> Pair<Int, Flow<String>>)? = null
 ) : AIProvider {
 
-    override val providerId: String = "openai"
-    override val displayName: String = "OpenAI / Compatible"
-    override val supportedModels: List<String> = listOf("gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-coder", "custom")
     override val isConfigured: Boolean get() = apiKey.isNotBlank()
 
     override suspend fun generateResponse(request: AIRequest): VibeResult<AIResponse> {

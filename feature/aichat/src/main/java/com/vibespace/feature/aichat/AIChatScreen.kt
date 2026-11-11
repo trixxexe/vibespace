@@ -198,6 +198,14 @@ fun AIChatScreen(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 var keyInput by remember { mutableStateOf("") }
+                var selectedProvider by remember { mutableStateOf("gemini") }
+                val defaultModels = mapOf(
+                    "gemini" to "gemini-3.8-flash",
+                    "openai" to "gpt-4o-mini",
+                    "anthropic" to "claude-3-7-sonnet",
+                    "deepseek" to "deepseek-chat",
+                    "groq" to "llama-3.3-70b-versatile"
+                )
                 Column(modifier = Modifier.padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(VibeIcons.Key, contentDescription = null, tint = VibeTheme.colors.accentPrimary, modifier = Modifier.size(16.dp))
@@ -211,13 +219,34 @@ fun AIChatScreen(
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
                     Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf("gemini" to "Gemini", "openai" to "OpenAI", "anthropic" to "Claude", "deepseek" to "DeepSeek", "groq" to "Groq").forEach { (id, label) ->
+                            val isSelected = selectedProvider == id
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isSelected) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.panelBackground,
+                                border = BorderStroke(1.dp, if (isSelected) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                modifier = Modifier.clickable { selectedProvider = id }
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal),
+                                    color = if (isSelected) VibeTheme.colors.accentPrimary else VibeTheme.colors.textSecondary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedTextField(
                             value = keyInput,
                             onValueChange = { keyInput = it },
-                            placeholder = { Text("Paste API Key (AIzaSy...)", style = MaterialTheme.typography.bodySmall) },
+                            placeholder = { Text("Paste $selectedProvider API Key...", style = MaterialTheme.typography.bodySmall) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -227,7 +256,8 @@ fun AIChatScreen(
                         Button(
                             onClick = {
                                 if (keyInput.isNotBlank()) {
-                                    viewModel.configureApiKey(keyInput)
+                                    val model = defaultModels[selectedProvider] ?: "gemini-3.8-flash"
+                                    viewModel.configureApiKey(keyInput, selectedProvider, model)
                                 }
                             },
                             enabled = keyInput.isNotBlank(),
