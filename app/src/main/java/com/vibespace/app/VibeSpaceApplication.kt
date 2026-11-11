@@ -10,6 +10,7 @@ import com.vibespace.core.editor.engine.DefaultEditorEngine
 import com.vibespace.core.editor.engine.EditorEngine
 import com.vibespace.core.language.detector.DefaultLanguageDetector
 import com.vibespace.core.language.detector.LanguageDetector
+import com.vibespace.core.language.lsp.WorkspaceLspUriMapper
 import com.vibespace.core.runner.manager.DefaultRunnerManager
 import com.vibespace.core.runner.manager.RunnerManager
 import com.vibespace.core.terminal.service.DefaultTerminalService
@@ -114,6 +115,7 @@ class VibeSpaceApplication : Application() {
     private val lspCleanupScope by lazy { CoroutineScope(SupervisorJob() + dispatchers.io) }
     private val lspClientMutex = Mutex()
     private val lspWorkspaceUriMaps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, String>>()
+    private val lspWorkspaceUriReverseMaps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, String>>()
 
     fun registerLspClient(languageId: String, client: com.vibespace.core.language.lsp.LanguageServerClient) {
         val normalized = languageId.trim().lowercase()
@@ -143,6 +145,9 @@ class VibeSpaceApplication : Application() {
         val workspaceRoot = project.rootPath?.let(::File)?.takeIf { it.isDirectory } ?: stagedWorkspace?.first
             ?: return@withLock null
         val uriMap = stagedWorkspace?.second ?: java.util.concurrent.ConcurrentHashMap()
+        val reverseUriMap = if (stagedWorkspace != null) {
+            lspWorkspaceUriReverseMaps.computeIfAbsent(project.id) { java.util.concurrent.ConcurrentHashMap() }
+        } else java.util.concurrent.ConcurrentHashMap()
         existingClient?.let { return@withLock it }
         // A language server is rooted in one workspace. Stop old workspace processes rather than
         // accidentally reusing their index after the active project changes.
@@ -156,37 +161,18 @@ class VibeSpaceApplication : Application() {
             }
         try {
             val process = alpine.startLanguageServer(normalized, workspaceRoot)
-            fun toServerUri(uri: String): String {
-                val relativePath = runCatching {
-                    val parsed = java.net.URI(uri)
-                    if (parsed.scheme.equals("file", ignoreCase = true)) {
-                        val path = java.io.File(parsed).canonicalFile.toPath()
-                        val root = workspaceRoot.canonicalFile.toPath()
-                        if (path.startsWith(root)) root.relativize(path).toString().replace('\\', '/') else null
-                    } else {
-                        val rootUri = project.rootUri.trimEnd('/')
-                        if (uri == rootUri) "" else uri.takeIf { it.startsWith("$rootUri/") }
-                            ?.removePrefix("$rootUri/")
-                    }
-                }.getOrNull() ?: return uri
-                if (relativePath.split('/').any { it == ".." || it == "." }) return uri
-                val containerPath = if (relativePath.isEmpty()) "/workspace" else "/workspace/$relativePath"
-                return java.net.URI("file", "", containerPath, null).toASCIIString()
-            }
-            fun toClientUri(uri: String): String {
-                val path = runCatching { java.net.URI(uri).path }.getOrNull() ?: return uri
-                if (path != "/workspace" && !path.startsWith("/workspace/")) return uri
-                val relative = path.removePrefix("/workspace").trimStart('/')
-                uriMap[relative]?.let { return it }
-                val target = File(workspaceRoot, relative).canonicalFile
-                return if (target.toPath().startsWith(workspaceRoot.canonicalFile.toPath())) target.toURI().toString() else uri
-            }
+            val uriMapper = WorkspaceLspUriMapper(
+                workspaceRootUri = project.rootUri,
+                workspaceDirectory = workspaceRoot,
+                documentUriToRelativePath = reverseUriMap::get,
+                relativePathToDocumentUri = uriMap::get
+            )
             val client = com.vibespace.core.language.lsp.StdioLanguageServerClient(
                 languageId = normalized,
                 transport = com.vibespace.core.language.lsp.ProcessLspTransport(process, dispatchers),
                 dispatchers = dispatchers,
-                uriToServer = ::toServerUri,
-                uriToClient = ::toClientUri
+                uriToServer = uriMapper::toServerUri,
+                uriToClient = uriMapper::toClientUri
             )
             lspClients[clientKey] = client
             client
@@ -227,8 +213,11 @@ class VibeSpaceApplication : Application() {
         }
         root.walkTopDown().filter { it.isFile && it.relativeTo(root).invariantSeparatorsPath !in entries }.forEach { it.delete() }
         val sharedMap = lspWorkspaceUriMaps.computeIfAbsent(project.id) { java.util.concurrent.ConcurrentHashMap() }
+        val sharedReverseMap = lspWorkspaceUriReverseMaps.computeIfAbsent(project.id) { java.util.concurrent.ConcurrentHashMap() }
         sharedMap.clear()
         sharedMap.putAll(entries)
+        sharedReverseMap.clear()
+        entries.forEach { (relative, uri) -> sharedReverseMap[uri] = relative }
         return root to sharedMap
     }
 
