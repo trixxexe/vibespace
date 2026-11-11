@@ -235,7 +235,7 @@ class TerminalViewModel(
                 "date", "version", "whoami", "sh", "bash"
             )
 
-            val useInternalShell = (_uiState.value.activeRunnerMode == RunnerMode.INSTANT || runnerManager == null) &&
+            val useInternalShell = (_uiState.value.activeRunnerMode == RunnerMode.EMBEDDED || runnerManager == null) &&
                     cmdBinary in safeBuiltins &&
                     !cleanCommand.startsWith("python", ignoreCase = true) &&
                     !cleanCommand.startsWith("node", ignoreCase = true)
