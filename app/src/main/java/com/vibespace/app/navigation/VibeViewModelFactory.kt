@@ -60,7 +60,15 @@ class VibeViewModelFactory(
                 AIChatViewModel(
                     aiService = app.aiService,
                     editorEngine = app.editorEngine,
-                    dispatchers = app.dispatchers
+                    dispatchers = app.dispatchers,
+                    persistConfiguration = { config ->
+                        app.settingsRepository.setAiConfig(
+                            providerId = config.providerId,
+                            apiKey = config.apiKey,
+                            model = config.model,
+                            customEndpoint = config.customEndpoint
+                        )
+                    }
                 ) as T
             }
             modelClass.isAssignableFrom(SearchViewModel::class.java) -> {

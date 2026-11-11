@@ -35,17 +35,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.designsystem.components.VibeCard
 import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /**
  * Visual theme mode selection options for onboarding.
@@ -73,7 +80,7 @@ fun OnboardingScreen(
     onTrySampleProject: () -> Unit,
     onSelectTheme: (OnboardingThemeMode) -> Unit,
     currentTheme: OnboardingThemeMode,
-    onConfigureAi: ((provider: String, key: String, model: String) -> Unit)? = null,
+    onConfigureAi: (suspend (provider: String, key: String, model: String) -> VibeResult<Unit>)? = null,
     errorMessage: String? = null,
     onDismissError: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -451,11 +458,13 @@ private fun StepIdeTour(
 private fun StepPreferencesAndFinish(
     currentTheme: OnboardingThemeMode,
     onSelectTheme: (OnboardingThemeMode) -> Unit,
-    onConfigureAi: ((provider: String, key: String, model: String) -> Unit)?,
+    onConfigureAi: (suspend (provider: String, key: String, model: String) -> VibeResult<Unit>)?,
     onFinish: () -> Unit
 ) {
     var apiKeyInput by remember { mutableStateOf("") }
-    var selectedAiProvider by remember { mutableStateOf("gemini") }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -539,7 +548,7 @@ private fun StepPreferencesAndFinish(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "VibeSpace has no subscription fees. You supply your own API key (Google Gemini or OpenAI). Keys are encrypted with Android Keystore AES-256-GCM authenticated encryption.",
+                        text = "AI is optional. Connect a Gemini key now, or choose another provider later in Settings. Provider limits and charges may apply.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeTheme.colors.textSecondary
                     )
@@ -550,8 +559,18 @@ private fun StepPreferencesAndFinish(
                         onValueChange = { apiKeyInput = it },
                         placeholder = { Text("Enter API Key (or leave blank to skip)") },
                         singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (saveError != null) {
+                        Text(
+                            text = saveError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
             }
         }
@@ -559,22 +578,41 @@ private fun StepPreferencesAndFinish(
         Column(modifier = Modifier.padding(top = 24.dp)) {
             Button(
                 onClick = {
-                    if (apiKeyInput.isNotBlank()) {
-                        onConfigureAi?.invoke(
-                            selectedAiProvider,
-                            apiKeyInput.trim(),
-                            if (selectedAiProvider == "gemini") "gemini-2.0-flash" else "gpt-4o"
-                        )
+                    coroutineScope.launch {
+                        if (apiKeyInput.isBlank()) {
+                            onFinish()
+                            return@launch
+                        }
+                        isSaving = true
+                        saveError = null
+                        try {
+                            val saveResult = onConfigureAi?.invoke(
+                                "gemini",
+                                apiKeyInput.trim(),
+                                "gemini-3.8-flash"
+                            ) ?: VibeResult.Error("AI settings are unavailable. Clear the key to continue without AI.")
+                            when (saveResult) {
+                                is VibeResult.Success -> onFinish()
+                                is VibeResult.Error -> saveError = "Could not save the API key: ${saveResult.message}"
+                                else -> saveError = "Could not save the API key."
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
+                            saveError = "Could not save the API key: ${failure.message ?: "unexpected error"}"
+                        } finally {
+                            isSaving = false
+                        }
                     }
-                    onFinish()
                 },
+                enabled = !isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text(
-                    text = "Finish Setup & Start Coding",
+                    text = if (isSaving) "Saving secure settings…" else "Finish Setup & Start Coding",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
             }

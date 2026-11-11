@@ -69,7 +69,7 @@ class TermuxBridgeRunner(
         if (termuxContext == null || !isAvailable()) {
             emitLine("[Termux Bridge] Termux app not detected on this device.", true)
             emitLine("To use Termux execution, install Termux from F-Droid (https://f-droid.org/packages/com.termux/).", false)
-            emitLine("Tip: Switch to 'Instant Embedded' or 'Alpine Linux' mode to run code directly inside VibeSpace.", false)
+            emitLine("The embedded mode only evaluates basic Python and JavaScript snippets. Alpine is unavailable in this build.", false)
 
             val failed = execution.copy(
                 state = ExecutionState.FAILED,
@@ -132,12 +132,12 @@ class TermuxBridgeRunner(
             emitLine("Check the RUN_COMMAND permission and Termux's allow-external-apps setting.", false)
         }
 
-        val resultState = if (dispatchSucceeded) ExecutionState.RUNNING else ExecutionState.FAILED
+        val resultState = if (dispatchSucceeded) ExecutionState.DISPATCHED else ExecutionState.FAILED
         val exitCode = if (dispatchSucceeded) null else 1
         val finalExecution = execution.copy(
             state = resultState,
             exitCode = exitCode,
-            endTime = if (dispatchSucceeded) null else System.currentTimeMillis(),
+            endTime = System.currentTimeMillis(),
             outputs = outputs
         )
         activeRuns[executionId] = finalExecution

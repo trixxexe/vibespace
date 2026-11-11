@@ -18,7 +18,9 @@ data class SettingsUiState(
     val isInitialized: Boolean = false,
     val appVersion: String = "0.1.0-alpha",
     val buildNumber: String = "1",
-    val kotlinVersion: String = "2.0.21"
+    val kotlinVersion: String = "2.0.21",
+    val isSavingAiConfig: Boolean = false,
+    val aiConfigError: String? = null
 )
 
 class SettingsViewModel(
@@ -78,8 +80,15 @@ class SettingsViewModel(
     }
 
     fun setAiConfig(providerId: String, apiKey: String, model: String, customEndpoint: String = "") {
-        viewModelScope.launch(dispatchers.default) {
-            repository.setAiConfig(providerId, apiKey, model, customEndpoint)
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isSavingAiConfig = true, aiConfigError = null) }
+            when (val result = repository.setAiConfig(providerId, apiKey, model, customEndpoint)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> _uiState.update { it.copy(isSavingAiConfig = false) }
+                is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update {
+                    it.copy(isSavingAiConfig = false, aiConfigError = result.message)
+                }
+                else -> _uiState.update { it.copy(isSavingAiConfig = false, aiConfigError = "AI settings could not be saved.") }
+            }
         }
     }
 

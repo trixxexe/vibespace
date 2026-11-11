@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,7 +29,7 @@ class DefaultTerminalService(
     private val _activeSession = MutableStateFlow<TerminalSession?>(null)
     override val activeSession: StateFlow<TerminalSession?> = _activeSession.asStateFlow()
 
-    private val lineFlows = mutableMapOf<String, MutableSharedFlow<TerminalLine>>()
+    private val lineFlows = java.util.concurrent.ConcurrentHashMap<String, MutableSharedFlow<TerminalLine>>()
 
     override suspend fun createSession(
         title: String,
@@ -51,7 +52,7 @@ class DefaultTerminalService(
         val flow = MutableSharedFlow<TerminalLine>(replay = 50)
         lineFlows[sessionId] = flow
 
-        _sessions.value = _sessions.value + session
+        _sessions.update { it + session }
         _activeSession.value = session
         VibeResult.Success(session)
     }
@@ -64,8 +65,8 @@ class DefaultTerminalService(
         }
 
         lineFlows.remove(sessionId)
-        val updated = list.filterNot { it.sessionId == sessionId }
-        _sessions.value = updated
+        _sessions.update { it.filterNot { session -> session.sessionId == sessionId } }
+        val updated = _sessions.value
 
         if (_activeSession.value?.sessionId == sessionId) {
             _activeSession.value = updated.lastOrNull()
@@ -85,7 +86,8 @@ class DefaultTerminalService(
         val session = _sessions.value.firstOrNull { it.sessionId == sessionId }
             ?: return@withContext VibeResult.Error("Session not found: $sessionId")
 
-        val cleanInput = input.trim().removePrefix("$").trim()
+        val enteredInput = input.trim()
+        val cleanInput = if (enteredInput.startsWith("$ ")) enteredInput.removePrefix("$ ").trim() else enteredInput
         val commandLine = TerminalLine(
             id = IdGenerator.shortId(),
             text = "$ $cleanInput",
@@ -181,19 +183,31 @@ class DefaultTerminalService(
 
     private suspend fun emitLine(sessionId: String, line: TerminalLine) {
         val flow = lineFlows.getOrPut(sessionId) { MutableSharedFlow(replay = 50) }
-        flow.emit(line)
+        flow.tryEmit(line)
 
-        val currentSession = _sessions.value.firstOrNull { it.sessionId == sessionId } ?: return
-        val updatedSession = currentSession.copy(lines = currentSession.lines + line)
-        updateSession(updatedSession)
+        var updatedSession: TerminalSession? = null
+        _sessions.update { currentSessions ->
+            currentSessions.map { session ->
+                if (session.sessionId == sessionId) {
+                    session.copy(lines = (session.lines + line).takeLast(MAX_LINES_PER_SESSION)).also {
+                        if (_activeSession.value?.sessionId == sessionId) updatedSession = it
+                    }
+                } else session
+            }
+        }
+        updatedSession?.let { _activeSession.value = it }
     }
 
     private fun updateSession(updated: TerminalSession) {
-        _sessions.value = _sessions.value.map {
+        _sessions.update { sessions -> sessions.map {
             if (it.sessionId == updated.sessionId) updated else it
-        }
+        } }
         if (_activeSession.value?.sessionId == updated.sessionId) {
             _activeSession.value = updated
         }
+    }
+
+    private companion object {
+        const val MAX_LINES_PER_SESSION = 2000
     }
 }

@@ -13,22 +13,18 @@ import com.vibespace.core.ai.service.AIService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AIServiceTest {
 
     @Test
-    fun unconfiguredProvider_returns_helpful_configuration_prompt() = runTest {
+    fun unconfiguredProvider_returns_error_without_fabricating_assistant_reply() = runTest {
         val service = AIService(dispatchers = TestDispatcherProvider())
         val result = service.sendUserPrompt("Explain this code")
 
-        assertTrue(result.isSuccess)
-        val messages = service.messages.value
-        assertEquals(2, messages.size)
-        assertEquals("Explain this code", messages[0].content)
-        assertTrue(messages[1].content.contains("No AI provider configured"))
+        assertTrue(result is VibeResult.Error)
+        assertTrue(service.messages.value.isEmpty())
     }
 
     @Test

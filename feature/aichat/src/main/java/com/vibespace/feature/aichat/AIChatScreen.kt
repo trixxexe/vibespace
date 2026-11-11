@@ -42,6 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vibespace.core.ai.model.AIMessage
@@ -200,7 +203,7 @@ fun AIChatScreen(
                         Text("Connect Your API Key (BYOK)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
                     }
                     Text(
-                        text = "Enter your Google Gemini API key to activate intelligent code analysis, debugging, and terminal pairing.",
+                        text = "Connect a provider to send prompts with optional active-file context. Your key is stored encrypted on this device.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeTheme.colors.textSecondary,
                         modifier = Modifier.padding(vertical = 4.dp)
@@ -214,6 +217,8 @@ fun AIChatScreen(
                             onValueChange = { keyInput = it },
                             placeholder = { Text("Paste API Key (AIzaSy...)", style = MaterialTheme.typography.bodySmall) },
                             singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -232,6 +237,23 @@ fun AIChatScreen(
                         }
                     }
                 }
+            }
+        }
+
+        uiState.errorMessage?.let { error ->
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                )
             }
         }
 

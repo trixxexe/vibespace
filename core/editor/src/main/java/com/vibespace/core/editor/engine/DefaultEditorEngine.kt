@@ -130,8 +130,11 @@ class DefaultEditorEngine(
         VibeResult.Success(Unit)
     }
 
-    override suspend fun markSaved(documentId: String): VibeResult<Unit> = withContext(dispatchers.default) {
+    override suspend fun markSaved(documentId: String, contentAtSave: String?): VibeResult<Unit> = withContext(dispatchers.default) {
         val current = getDocument(documentId) ?: return@withContext VibeResult.Error("Document not found: $documentId")
+        if (contentAtSave != null && current.content != contentAtSave) {
+            return@withContext VibeResult.Success(Unit)
+        }
         val updated = current.copy(isDirty = false)
         updateDocumentInList(updated)
         VibeResult.Success(Unit)

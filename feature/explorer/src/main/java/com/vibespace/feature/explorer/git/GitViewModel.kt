@@ -24,6 +24,7 @@ data class GitUiState(
     val syncMessage: String? = null,
     val showBranchDialog: Boolean = false,
     val showCommitDialog: Boolean = false,
+    val pendingDiscardPath: String? = null,
     val errorMessage: String? = null
 )
 
@@ -42,14 +43,17 @@ class GitViewModel(
     private fun observeGitStatus() {
         viewModelScope.launch(dispatchers.default) {
             gitManager.status.collect { status ->
-                _uiState.update { it.copy(status = status) }
+                _uiState.update { it.copy(status = status, errorMessage = status.errorMessage) }
             }
         }
     }
 
     fun refreshStatus() {
         viewModelScope.launch(dispatchers.io) {
-            gitManager.refreshStatus()
+            when (val result = gitManager.refreshStatus()) {
+                is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> _uiState.update { it.copy(errorMessage = null) }
+            }
         }
     }
 
@@ -58,32 +62,37 @@ class GitViewModel(
     }
 
     fun stageFile(path: String) {
-        viewModelScope.launch(dispatchers.io) {
-            gitManager.stageFile(path)
-        }
+        runAction { gitManager.stageFile(path) }
     }
 
     fun unstageFile(path: String) {
-        viewModelScope.launch(dispatchers.io) {
-            gitManager.unstageFile(path)
-        }
+        runAction { gitManager.unstageFile(path) }
     }
 
     fun stageAll() {
-        viewModelScope.launch(dispatchers.io) {
-            gitManager.stageAll()
-        }
+        runAction { gitManager.stageAll() }
     }
 
     fun unstageAll() {
-        viewModelScope.launch(dispatchers.io) {
-            gitManager.unstageAll()
-        }
+        runAction { gitManager.unstageAll() }
     }
 
     fun discardChanges(path: String) {
+        _uiState.update { it.copy(pendingDiscardPath = path, errorMessage = null) }
+    }
+
+    fun cancelDiscardChanges() {
+        _uiState.update { it.copy(pendingDiscardPath = null) }
+    }
+
+    fun confirmDiscardChanges() {
+        val path = _uiState.value.pendingDiscardPath ?: return
         viewModelScope.launch(dispatchers.io) {
-            gitManager.discardChanges(path)
+            _uiState.update { it.copy(pendingDiscardPath = null, errorMessage = null) }
+            when (val result = gitManager.discardChanges(path)) {
+                is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> Unit
+            }
         }
     }
 
@@ -112,14 +121,16 @@ class GitViewModel(
 
     fun openDiff(path: String) {
         viewModelScope.launch(dispatchers.io) {
-            val result = gitManager.getFileDiff(path)
-            if (result is VibeResult.Success) {
-                _uiState.update {
+            when (val result = gitManager.getFileDiff(path)) {
+                is VibeResult.Success -> _uiState.update {
                     it.copy(
                         activeDiffFile = path,
-                        activeDiff = result.data
+                        activeDiff = result.data,
+                        errorMessage = null
                     )
                 }
+                is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> _uiState.update { it.copy(errorMessage = "Could not load the selected diff.") }
             }
         }
     }
@@ -129,17 +140,11 @@ class GitViewModel(
     }
 
     fun createBranch(name: String) {
-        viewModelScope.launch(dispatchers.io) {
-            gitManager.createBranch(name)
-            _uiState.update { it.copy(showBranchDialog = false) }
-        }
+        runAction(closeBranchDialog = true) { gitManager.createBranch(name) }
     }
 
     fun checkoutBranch(name: String) {
-        viewModelScope.launch(dispatchers.io) {
-            gitManager.checkoutBranch(name)
-            _uiState.update { it.copy(showBranchDialog = false) }
-        }
+        runAction(closeBranchDialog = true) { gitManager.checkoutBranch(name) }
     }
 
     fun toggleBranchDialog(show: Boolean) {
@@ -176,6 +181,21 @@ class GitViewModel(
                     _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }
                 }
                 else -> _uiState.update { it.copy(isSyncing = false) }
+            }
+        }
+    }
+
+    private fun runAction(
+        closeBranchDialog: Boolean = false,
+        action: suspend () -> VibeResult<Unit>
+    ) {
+        viewModelScope.launch(dispatchers.io) {
+            when (val result = action()) {
+                is VibeResult.Success -> _uiState.update {
+                    it.copy(errorMessage = null, showBranchDialog = if (closeBranchDialog) false else it.showBranchDialog)
+                }
+                is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> _uiState.update { it.copy(errorMessage = "The source control action did not complete.") }
             }
         }
     }

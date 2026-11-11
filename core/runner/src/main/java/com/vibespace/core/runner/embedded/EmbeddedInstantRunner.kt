@@ -105,7 +105,7 @@ class EmbeddedInstantRunner(
 
     private suspend fun runPython(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
         emit("VibeSpace Instant Evaluator (Basic Print & Arithmetic)", false)
-        emit("(Notice: Lightweight expression evaluator. Switch runner to 'Alpine Linux' or 'Termux' for full python/pip runtime)", false)
+        emit("Lightweight evaluator only; loops, imports, and packages are not supported.", false)
 
         val codeOrFile = extractCodeFromCommand(command, "python3", "python")
         if (codeOrFile.isBlank()) {
@@ -140,7 +140,7 @@ class EmbeddedInstantRunner(
 
     private suspend fun runJavaScript(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
         emit("VibeSpace Instant Evaluator (Basic Print & Arithmetic)", false)
-        emit("(Notice: Lightweight expression evaluator. Switch runner to 'Alpine Linux' or 'Termux' for full Node.js/npm runtime)", false)
+        emit("Lightweight evaluator only; modules, classes, and packages are not supported.", false)
 
         val codeOrFile = extractCodeFromCommand(command, "node", "js")
         if (codeOrFile.isBlank()) {
@@ -220,7 +220,7 @@ class EmbeddedInstantRunner(
                 emit("  node <code>   - Run JavaScript / TypeScript snippet or script", false)
                 emit("  clear         - Clear terminal screen", false)
                 emit("", false)
-                emit("Active Mode: Instant Embedded. To use pip or npm, switch to 'Alpine Linux' mode.", false)
+                emit("Active Mode: Instant Embedded. This evaluator does not install packages or run external tools.", false)
                 0
             }
             "clear" -> {

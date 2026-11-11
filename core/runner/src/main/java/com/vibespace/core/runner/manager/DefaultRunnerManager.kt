@@ -88,6 +88,10 @@ class DefaultRunnerManager(
             _activeExecutions.value = _activeExecutions.value + execution
             executionRunners[execution.executionId] = runner
 
+            if (execution.state != ExecutionState.RUNNING) {
+                return@withContext result
+            }
+
             // Pipe output from runner to output flow
             val combinedFlow = outputFlows.getOrPut(execution.executionId) { MutableSharedFlow(replay = 50) }
             val runnerOutputFlow = runner.observeOutput(execution.executionId)
@@ -104,10 +108,6 @@ class DefaultRunnerManager(
             collectionJobs[execution.executionId]?.cancel()
             collectionJobs[execution.executionId] = job
 
-            if (execution.state != ExecutionState.RUNNING) {
-                job.cancel()
-                collectionJobs.remove(execution.executionId)
-            }
         }
 
         result

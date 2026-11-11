@@ -78,60 +78,11 @@ fun GitSourceControlPanel(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Source Control",
+                text = "Local Changes",
                 style = MaterialTheme.typography.titleSmall,
                 color = VibeTheme.colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
-
-            // Interactive Branch Pill
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = VibeTheme.colors.activeLineBackground,
-                border = androidx.compose.foundation.BorderStroke(1.dp, VibeTheme.colors.borderSubtle),
-                modifier = Modifier
-                    .padding(end = 4.dp)
-                    .clickable { viewModel.toggleBranchDialog(true) }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = " ${uiState.status.currentBranch}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Icon(
-                        imageVector = VibeIcons.ArrowDown,
-                        contentDescription = "Switch Branch",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-            }
-
-            // Sync Button (Ahead/Behind counts)
-            IconButton(
-                onClick = { viewModel.push() },
-                enabled = !uiState.isSyncing,
-                modifier = Modifier.size(36.dp)
-            ) {
-                if (uiState.isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Text(
-                        text = "↑${uiState.status.aheadCount}↓${uiState.status.behindCount}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (uiState.status.aheadCount > 0 || uiState.status.behindCount > 0) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted
-                    )
-                }
-            }
 
             IconButton(
                 onClick = { viewModel.refreshStatus() },
@@ -162,12 +113,18 @@ fun GitSourceControlPanel(
 
         // Commit Box Section
         Column(modifier = Modifier.padding(10.dp)) {
+            Text(
+                text = "Local snapshots only. This workspace is not a Git repository and cannot sync with a remote.",
+                style = MaterialTheme.typography.labelSmall,
+                color = VibeTheme.colors.textMuted,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
             OutlinedTextField(
                 value = uiState.commitMessage,
                 onValueChange = { viewModel.onCommitMessageChange(it) },
                 placeholder = {
                     Text(
-                        text = "Commit message...",
+                        text = "Snapshot message...",
                         style = MaterialTheme.typography.bodySmall
                     )
                 },
@@ -206,7 +163,7 @@ fun GitSourceControlPanel(
 
             Button(
                 onClick = { viewModel.commit() },
-                enabled = !uiState.isCommitting && (uiState.status.stagedFiles.isNotEmpty() || uiState.status.unstagedFiles.isNotEmpty()),
+                enabled = !uiState.isCommitting && uiState.status.stagedFiles.isNotEmpty(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp)
@@ -224,34 +181,7 @@ fun GitSourceControlPanel(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Commit (${uiState.status.stagedFiles.size} staged)")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Pull / Push Actions Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { viewModel.pull() },
-                    enabled = !uiState.isSyncing,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                ) {
-                    Text("Pull (${uiState.status.behindCount})", fontSize = 12.sp)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.push() },
-                    enabled = !uiState.isSyncing,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                ) {
-                    Text("Push (${uiState.status.aheadCount})", fontSize = 12.sp)
+                    Text("Save snapshot (${uiState.status.stagedFiles.size} staged)")
                 }
             }
         }
@@ -356,128 +286,20 @@ fun GitSourceControlPanel(
         )
     }
 
-    // Branch Switcher Dialog
-    if (uiState.showBranchDialog) {
-        var newBranchName by remember { mutableStateOf("") }
+    uiState.pendingDiscardPath?.let {
         VibeDialog(
-            title = "Git Branches",
-            onDismissRequest = { viewModel.toggleBranchDialog(false) },
-            confirmButtonText = "Done",
-            onConfirm = { viewModel.toggleBranchDialog(false) },
-            dismissButtonText = null,
-            onDismiss = null
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Branches in workspace",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = VibeTheme.colors.textSecondary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                LazyColumn(modifier = Modifier.heightIn(max = 160.dp)) {
-                    items(uiState.status.branches) { branch ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(38.dp)
-                                .clickable { viewModel.checkoutBranch(branch.name) }
-                                .padding(horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (branch.isCurrent) "●" else "○",
-                                color = if (branch.isCurrent) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted,
-                                fontSize = 12.sp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = branch.name,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = if (branch.isCurrent) FontWeight.Bold else FontWeight.Normal
-                                ),
-                                color = if (branch.isCurrent) MaterialTheme.colorScheme.primary else VibeTheme.colors.textPrimary,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (branch.isCurrent) {
-                                Text(
-                                    text = "Current",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = VibeTheme.colors.textMuted
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-                Text(
-                    text = "Create New Branch",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = VibeTheme.colors.textSecondary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = newBranchName,
-                        onValueChange = { newBranchName = it },
-                        placeholder = { Text("feature/my-branch", style = MaterialTheme.typography.bodySmall) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            if (newBranchName.isNotBlank()) {
-                                viewModel.createBranch(newBranchName.trim())
-                                newBranchName = ""
-                            }
-                        },
-                        enabled = newBranchName.isNotBlank(),
-                        modifier = Modifier.height(44.dp)
-                    ) {
-                        Text("Create")
-                    }
-                }
-            }
-        }
-    }
-
-    // Git Commit Dialog
-    if (uiState.showCommitDialog) {
-        var dialogCommitMsg by remember { mutableStateOf(uiState.commitMessage) }
-        VibeDialog(
-            title = "Commit to ${uiState.status.currentBranch}",
-            onDismissRequest = { viewModel.toggleCommitDialog(false) },
-            confirmButtonText = "Commit",
-            isConfirmEnabled = dialogCommitMsg.isNotBlank() && (uiState.status.stagedFiles.isNotEmpty() || uiState.status.unstagedFiles.isNotEmpty()),
-            onConfirm = {
-                viewModel.onCommitMessageChange(dialogCommitMsg)
-                viewModel.commit()
-                viewModel.toggleCommitDialog(false)
-            },
+            title = "Discard local changes?",
+            onDismissRequest = { viewModel.cancelDiscardChanges() },
+            confirmButtonText = "Discard",
+            onConfirm = { viewModel.confirmDiscardChanges() },
             dismissButtonText = "Cancel",
-            onDismiss = { viewModel.toggleCommitDialog(false) }
+            onDismiss = { viewModel.cancelDiscardChanges() }
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "${uiState.status.stagedFiles.size} staged, ${uiState.status.unstagedFiles.size} unstaged",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = VibeTheme.colors.textMuted
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = dialogCommitMsg,
-                    onValueChange = { dialogCommitMsg = it },
-                    placeholder = { Text("Commit message...") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                )
-            }
+            Text(
+                text = "This removes an untracked file or restores a tracked file to its staged or saved content. This cannot be undone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = VibeTheme.colors.textPrimary
+            )
         }
     }
 }

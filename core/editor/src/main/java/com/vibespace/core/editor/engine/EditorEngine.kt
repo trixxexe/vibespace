@@ -26,7 +26,7 @@ interface EditorEngine {
 
     suspend fun updateDocument(documentId: String, newContent: String): VibeResult<EditorDocument>
     suspend fun updateCursorPosition(documentId: String, cursorPosition: CursorPosition): VibeResult<Unit>
-    suspend fun markSaved(documentId: String): VibeResult<Unit>
+    suspend fun markSaved(documentId: String, contentAtSave: String? = null): VibeResult<Unit>
 
     fun getDocument(documentId: String): EditorDocument?
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.vibespace.core.ai.model.AIConfiguration
 import com.vibespace.core.ai.model.CodeContext
 import com.vibespace.core.ai.service.AIService
+import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.editor.engine.EditorEngine
@@ -13,11 +14,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 class AIChatViewModel(
     private val aiService: AIService,
     private val editorEngine: EditorEngine? = null,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    private val persistConfiguration: suspend (AIConfiguration) -> VibeResult<Unit> = { VibeResult.Success(Unit) }
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AIChatUiState())
@@ -84,24 +87,37 @@ class AIChatViewModel(
 
         _uiState.update { it.copy(inputPrompt = "", isGenerating = true, errorMessage = null) }
         viewModelScope.launch(dispatchers.default) {
-            when (val result = aiService.sendUserPrompt(prompt)) {
-                is com.vibespace.core.common.result.VibeResult.Error -> {
-                    _uiState.update { it.copy(errorMessage = result.message) }
+            try {
+                when (val result = aiService.sendUserPrompt(prompt)) {
+                    is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                    else -> Unit
                 }
-                else -> Unit
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                _uiState.update { it.copy(errorMessage = failure.message ?: "AI request failed.") }
+            } finally {
+                _uiState.update { it.copy(isGenerating = false) }
             }
-            _uiState.update { it.copy(isGenerating = false) }
         }
     }
 
-    fun configureApiKey(apiKey: String, providerId: String = "gemini", model: String = "gemini-2.0-flash") {
-        aiService.updateConfiguration(
-            AIConfiguration(
+    fun configureApiKey(apiKey: String, providerId: String = "gemini", model: String = "gemini-3.8-flash") {
+        val config = AIConfiguration(
                 providerId = providerId,
                 apiKey = apiKey.trim(),
                 model = model.trim()
-            )
         )
+        viewModelScope.launch(dispatchers.io) {
+            when (val result = persistConfiguration(config)) {
+                is VibeResult.Success -> {
+                    aiService.updateConfiguration(config)
+                    _uiState.update { it.copy(errorMessage = null) }
+                }
+                is VibeResult.Error -> _uiState.update { it.copy(errorMessage = "Could not save API key: ${result.message}") }
+                else -> _uiState.update { it.copy(errorMessage = "Could not save API key: no result returned") }
+            }
+        }
     }
 
     fun clearHistory() {

@@ -13,6 +13,8 @@ import com.vibespace.core.common.result.VibeResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -32,6 +34,7 @@ class AIService(
 
     private val _activeContext = MutableStateFlow<CodeContext?>(null)
     val activeContext: StateFlow<CodeContext?> = _activeContext.asStateFlow()
+    private val sendMutex = Mutex()
 
     fun updateConfiguration(config: AIConfiguration) {
         _configuration.value = config
@@ -47,45 +50,29 @@ class AIService(
             return@withContext VibeResult.Error("Prompt cannot be empty.")
         }
 
-        val userMsg = AIMessage(
-            id = IdGenerator.shortId("msg"),
-            role = AIRole.USER,
-            content = prompt,
-            attachedCodeContext = _activeContext.value
-        )
-        _messages.value = _messages.value + userMsg
+        sendMutex.withLock {
+            val provider = registry.getActiveProvider()
+            if (provider == null || !provider.isConfigured) {
+                return@withLock VibeResult.Error("No AI provider configured. Add an API key in Settings or the AI Assistant panel.")
+            }
 
-        val provider = registry.getActiveProvider()
-        if (provider == null || !provider.isConfigured) {
-            val unconfiguredMsg = AIMessage(
+            val userMsg = AIMessage(
                 id = IdGenerator.shortId("msg"),
-                role = AIRole.ASSISTANT,
-                content = "No AI provider configured. Please configure your API key (Google Gemini or OpenAI) in Settings or in the AI Chat panel to activate intelligent coding assistance."
+                role = AIRole.USER,
+                content = prompt.trim(),
+                attachedCodeContext = _activeContext.value
             )
-            _messages.value = _messages.value + unconfiguredMsg
-            return@withContext VibeResult.Success(unconfiguredMsg)
-        }
+            val requestMessages = _messages.value + userMsg
+            val request = AIRequest(messages = requestMessages, codeContext = _activeContext.value)
 
-        val request = AIRequest(
-            messages = _messages.value,
-            codeContext = _activeContext.value
-        )
-
-        when (val responseResult = provider.generateResponse(request)) {
-            is VibeResult.Success -> {
-                _messages.value = _messages.value + responseResult.data.message
-                VibeResult.Success(responseResult.data.message)
+            when (val responseResult = provider.generateResponse(request)) {
+                is VibeResult.Success -> {
+                    _messages.value = requestMessages + responseResult.data.message
+                    VibeResult.Success(responseResult.data.message)
+                }
+                is VibeResult.Error -> VibeResult.Error(responseResult.message, responseResult.throwable)
+                is VibeResult.Loading -> VibeResult.Loading
             }
-            is VibeResult.Error -> {
-                val errorMsg = AIMessage(
-                    id = IdGenerator.shortId("msg"),
-                    role = AIRole.ASSISTANT,
-                    content = "[Error] ${responseResult.message}"
-                )
-                _messages.value = _messages.value + errorMsg
-                VibeResult.Error(responseResult.message, responseResult.throwable)
-            }
-            is VibeResult.Loading -> VibeResult.Loading
         }
     }
 

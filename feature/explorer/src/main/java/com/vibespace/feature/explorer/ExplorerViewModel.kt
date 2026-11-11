@@ -59,16 +59,34 @@ class ExplorerViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val nodes = loadDirectoryNodes(project.rootUri, 0)
             val allFilesResult = workspaceManager.getAllProjectFiles(project.rootUri)
-            val allFiles = allFilesResult.getOrNull() ?: emptyList()
-            _uiState.update { it.copy(isLoading = false, rootNodes = nodes, allProjectFiles = allFiles) }
+            when (allFilesResult) {
+                is com.vibespace.core.common.result.VibeResult.Success -> _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        rootNodes = nodes,
+                        allProjectFiles = allFilesResult.data.filterNot { file -> file.name == ".vibespace" || file.name == "git_state.json" }
+                    )
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update {
+                    it.copy(isLoading = false, errorMessage = allFilesResult.message)
+                }
+                else -> _uiState.update { it.copy(isLoading = false, errorMessage = "Could not load project files.") }
+            }
         }
     }
 
     private suspend fun loadDirectoryNodes(directoryUri: String, level: Int): List<ExplorerNode> {
         val result = workspaceManager.listFiles(directoryUri)
-        val files = result.getOrNull() ?: return emptyList()
+        val files = when (result) {
+            is com.vibespace.core.common.result.VibeResult.Success -> result.data
+            is com.vibespace.core.common.result.VibeResult.Error -> {
+                _uiState.update { it.copy(errorMessage = result.message) }
+                return emptyList()
+            }
+            else -> return emptyList()
+        }
 
-        return files.map { file ->
+        return files.filterNot { it.name == ".vibespace" || it.name == "git_state.json" }.map { file ->
             val isExpanded = expandedDirs.contains(file.uri)
             val children = if (file.isDirectory && isExpanded) {
                 loadDirectoryNodes(file.uri, level + 1)
@@ -132,9 +150,16 @@ class ExplorerViewModel(
 
     fun deleteFile(fileUri: String) {
         viewModelScope.launch(dispatchers.io) {
-            workspaceManager.delete(fileUri)
-            refreshFiles()
-            gitManager?.refreshStatus()
+            when (val result = workspaceManager.delete(fileUri)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    refreshFiles()
+                    gitManager?.refreshStatus()
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                }
+                else -> _uiState.update { it.copy(errorMessage = "Could not delete the selected item.") }
+            }
         }
     }
 }

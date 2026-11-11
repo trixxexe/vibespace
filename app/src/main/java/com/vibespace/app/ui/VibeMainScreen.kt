@@ -139,12 +139,13 @@ fun VibeMainScreen(
                         Key.Enter -> {
                             val active = editorViewModel.uiState.value.activeDocument
                             if (active != null) {
-                                if (active.isDirty) {
-                                    editorViewModel.saveActiveDocument()
-                                    gitViewModel?.refreshStatus()
-                                }
-                                terminalViewModel.runActiveDocument(active.fileName, active.language.id)
                                 isTerminalVisible = true
+                                editorViewModel.saveActiveDocument { saved ->
+                                    if (saved) {
+                                        gitViewModel?.refreshStatus()
+                                        terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                                    }
+                                }
                             }
                             true
                         }
@@ -326,14 +327,15 @@ fun VibeMainScreen(
                                     isTerminalVisible = true
                                     val active = editorViewModel.uiState.value.activeDocument
                                     if (active != null) {
-                                        if (active.isDirty) {
-                                            editorViewModel.saveActiveDocument()
-                                            gitViewModel?.refreshStatus()
+                                        editorViewModel.saveActiveDocument { saved ->
+                                            if (saved) {
+                                                gitViewModel?.refreshStatus()
+                                                terminalViewModel.runActiveDocument(
+                                                    fileName = active.fileName,
+                                                    languageId = active.language.id
+                                                )
+                                            }
                                         }
-                                        terminalViewModel.runActiveDocument(
-                                            fileName = active.fileName,
-                                            languageId = active.language.id
-                                        )
                                     }
                                 },
                                 onAiAssistantClick = { isAiChatVisible = !isAiChatVisible },
@@ -358,14 +360,15 @@ fun VibeMainScreen(
                                 isTerminalVisible = true
                                 val active = editorViewModel.uiState.value.activeDocument
                                 if (active != null) {
-                                    if (active.isDirty) {
-                                        editorViewModel.saveActiveDocument()
-                                        gitViewModel?.refreshStatus()
+                                    editorViewModel.saveActiveDocument { saved ->
+                                        if (saved) {
+                                            gitViewModel?.refreshStatus()
+                                            terminalViewModel.runActiveDocument(
+                                                fileName = active.fileName,
+                                                languageId = active.language.id
+                                            )
+                                        }
                                     }
-                                    terminalViewModel.runActiveDocument(
-                                        fileName = active.fileName,
-                                        languageId = active.language.id
-                                    )
                                 }
                             },
                             onAiAssistantClick = { isAiChatVisible = !isAiChatVisible },
@@ -550,14 +553,15 @@ fun VibeMainScreen(
                             isTerminalVisible = true
                             val active = editorViewModel.uiState.value.activeDocument
                             if (active != null) {
-                                if (active.isDirty) {
-                                    editorViewModel.saveActiveDocument()
-                                    gitViewModel?.refreshStatus()
+                                editorViewModel.saveActiveDocument { saved ->
+                                    if (saved) {
+                                        gitViewModel?.refreshStatus()
+                                        terminalViewModel.runActiveDocument(
+                                            fileName = active.fileName,
+                                            languageId = active.language.id
+                                        )
+                                    }
                                 }
-                                terminalViewModel.runActiveDocument(
-                                    fileName = active.fileName,
-                                    languageId = active.language.id
-                                )
                             }
                         },
                         onAiAssistantClick = { isAiChatVisible = true },
@@ -615,12 +619,13 @@ fun VibeMainScreen(
             onRunScript = {
                 val active = editorViewModel.uiState.value.activeDocument
                 if (active != null) {
-                    if (active.isDirty) {
-                        editorViewModel.saveActiveDocument()
-                        gitViewModel?.refreshStatus()
+                    editorViewModel.saveActiveDocument { saved ->
+                        if (saved) {
+                            gitViewModel?.refreshStatus()
+                            terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                            isTerminalVisible = true
+                        }
                     }
-                    terminalViewModel.runActiveDocument(active.fileName, active.language.id)
-                    isTerminalVisible = true
                 }
                 isCommandPaletteVisible = false
             },

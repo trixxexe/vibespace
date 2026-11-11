@@ -55,6 +55,7 @@ data class GitWorkspaceStatus(
     val commits: List<GitCommit> = emptyList(),
     val aheadCount: Int = 0,
     val behindCount: Int = 0,
-    val remoteBranch: String? = "origin/main",
-    val isClean: Boolean = stagedFiles.isEmpty() && unstagedFiles.isEmpty()
+    val remoteBranch: String? = null,
+    val isClean: Boolean = stagedFiles.isEmpty() && unstagedFiles.isEmpty(),
+    val errorMessage: String? = null
 )

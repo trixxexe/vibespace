@@ -5,6 +5,8 @@ import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.id.IdGenerator
 import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.workspace.manager.WorkspaceManager
+import com.vibespace.core.workspace.model.FileNodeType
+import com.vibespace.core.workspace.model.VirtualFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,7 @@ class DefaultGitManager(
     // Baseline snapshots of files at last commit (path -> content)
     private val baselineFiles = mutableMapOf<String, String>()
     private val stagedPaths = mutableSetOf<String>()
+    private val stagedSnapshots = mutableMapOf<String, String?>()
     private val branches = mutableListOf(GitBranch("main", isCurrent = true))
     private val commits = mutableListOf<GitCommit>()
     private var aheadCount = 0
@@ -50,6 +53,7 @@ class DefaultGitManager(
                 } else {
                     baselineFiles.clear()
                     stagedPaths.clear()
+                    stagedSnapshots.clear()
                     commits.clear()
                     _status.value = GitWorkspaceStatus()
                 }
@@ -58,8 +62,10 @@ class DefaultGitManager(
     }
 
     private suspend fun initRepositoryForProject(rootUri: String) = withContext(dispatchers.io) {
+        _status.value = GitWorkspaceStatus(errorMessage = "Loading local snapshots…")
         baselineFiles.clear()
         stagedPaths.clear()
+        stagedSnapshots.clear()
         aheadCount = 0
         behindCount = 0
         branches.clear()
@@ -67,12 +73,31 @@ class DefaultGitManager(
         commits.clear()
 
         // Attempt to load persisted git state
-        val stateUri = "$rootUri/.vibespace/git_state.json"
-        val stateRead = workspaceManager.readFile(stateUri)
+        val stateFile = when (val result = locateGitStateFile(rootUri, create = false)) {
+            is VibeResult.Success -> result.data
+            is VibeResult.Error -> {
+                _status.value = GitWorkspaceStatus(errorMessage = "Cannot inspect local snapshot history: ${result.message}")
+                return@withContext
+            }
+            else -> null
+        }
+        val stateRead = stateFile?.let { workspaceManager.readFile(it.uri) }
         var restoredFromState = false
+        if (stateRead is VibeResult.Error) {
+            _status.value = GitWorkspaceStatus(errorMessage = "Cannot read local snapshot history: ${stateRead.message}")
+            return@withContext
+        }
+        if (stateFile != null && stateRead !is VibeResult.Success) {
+            _status.value = GitWorkspaceStatus(errorMessage = "Local snapshot history could not be read; existing data was left untouched.")
+            return@withContext
+        }
         if (stateRead is VibeResult.Success) {
             try {
                 val json = JSONObject(stateRead.data)
+                if (!json.has("baseline") || !json.has("commits")) {
+                    _status.value = GitWorkspaceStatus(errorMessage = "Local snapshot history is incomplete and was left untouched.")
+                    return@withContext
+                }
                 aheadCount = json.optInt("aheadCount", 0)
                 behindCount = json.optInt("behindCount", 0)
 
@@ -94,6 +119,15 @@ class DefaultGitManager(
                 if (stagedArray != null) {
                     for (i in 0 until stagedArray.length()) {
                         stagedPaths.add(stagedArray.getString(i))
+                    }
+                }
+
+                val indexObj = json.optJSONObject("index")
+                if (indexObj != null) {
+                    val keys = indexObj.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        stagedSnapshots[key] = if (indexObj.isNull(key)) null else indexObj.getString(key)
                     }
                 }
 
@@ -122,35 +156,39 @@ class DefaultGitManager(
                     }
                 }
                 restoredFromState = true
-            } catch (_: Throwable) {}
-        }
-
-        // Detect real .git repository HEAD if present
-        val gitHeadRead = workspaceManager.readFile("$rootUri/.git/HEAD")
-        if (gitHeadRead is VibeResult.Success) {
-            val headText = gitHeadRead.data.trim()
-            if (headText.startsWith("ref: refs/heads/")) {
-                val branchFromHead = headText.removePrefix("ref: refs/heads/").trim()
-                if (branchFromHead.isNotEmpty()) {
-                    for (i in branches.indices) {
-                        branches[i] = branches[i].copy(isCurrent = false)
-                    }
-                    val existingIdx = branches.indexOfFirst { it.name == branchFromHead }
-                    if (existingIdx != -1) {
-                        branches[existingIdx] = branches[existingIdx].copy(isCurrent = true)
-                    } else {
-                        branches.add(GitBranch(name = branchFromHead, isCurrent = true))
-                    }
-                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _status.value = GitWorkspaceStatus(errorMessage = "Local snapshot history is invalid and was left untouched: ${failure.message}")
+                return@withContext
             }
         }
 
         if (!restoredFromState) {
-            val allFiles = workspaceManager.getAllProjectFiles(rootUri).getOrNull() ?: emptyList()
+            val allFiles = when (val result = workspaceManager.getAllProjectFiles(rootUri)) {
+                is VibeResult.Success -> result.data
+                is VibeResult.Error -> {
+                    _status.value = _status.value.copy(errorMessage = "Cannot initialize local history: ${result.message}")
+                    return@withContext
+                }
+                else -> {
+                    _status.value = _status.value.copy(errorMessage = "Cannot initialize local history: workspace files are unavailable.")
+                    return@withContext
+                }
+            }
             for (f in allFiles) {
-                if (!f.isDirectory && !f.uri.contains(".vibespace/")) {
-                    val content = workspaceManager.readFile(f.uri).getOrNull() ?: ""
-                    baselineFiles[f.uri] = content
+                if (!f.isDirectory && f.name != "git_state.json") {
+                    when (val read = workspaceManager.readFile(f.uri)) {
+                        is VibeResult.Success -> baselineFiles[f.uri] = read.data
+                        is VibeResult.Error -> {
+                            _status.value = _status.value.copy(errorMessage = "Cannot initialize local history for ${f.name}: ${read.message}")
+                            return@withContext
+                        }
+                        else -> {
+                            _status.value = _status.value.copy(errorMessage = "Cannot initialize local history for ${f.name}.")
+                            return@withContext
+                        }
+                    }
                 }
             }
 
@@ -169,7 +207,38 @@ class DefaultGitManager(
         refreshStatusInternal(rootUri)
     }
 
-    private suspend fun saveGitState(rootUri: String) = withContext(dispatchers.io) {
+    private suspend fun locateGitStateFile(rootUri: String, create: Boolean): VibeResult<VirtualFile?> {
+        val rootContents = when (val result = workspaceManager.listFiles(rootUri)) {
+            is VibeResult.Success -> result.data
+            is VibeResult.Error -> return result
+            else -> return VibeResult.Error("Could not inspect the workspace for local snapshot metadata.")
+        }
+        var metadataDirectory = rootContents.firstOrNull { it.name == ".vibespace" && it.nodeType == FileNodeType.DIRECTORY }
+        if (metadataDirectory == null && create) {
+            metadataDirectory = when (val result = workspaceManager.createDirectory(rootUri, ".vibespace")) {
+                is VibeResult.Success -> result.data
+                is VibeResult.Error -> return VibeResult.Error("Could not create local snapshot storage: ${result.message}", result.throwable)
+                else -> return VibeResult.Error("Could not create local snapshot storage.")
+            }
+        }
+        if (metadataDirectory == null) return VibeResult.Success(null)
+
+        val stateFiles = when (val result = workspaceManager.listFiles(metadataDirectory.uri)) {
+            is VibeResult.Success -> result.data
+            is VibeResult.Error -> return VibeResult.Error("Could not inspect local snapshot storage: ${result.message}", result.throwable)
+            else -> return VibeResult.Error("Could not inspect local snapshot storage.")
+        }
+        val stateFile = stateFiles.firstOrNull { it.name == "git_state.json" && !it.isDirectory }
+        if (stateFile != null || !create) return VibeResult.Success(stateFile)
+
+        return when (val result = workspaceManager.createFile(metadataDirectory.uri, "git_state.json", "{}")) {
+            is VibeResult.Success -> VibeResult.Success(result.data)
+            is VibeResult.Error -> VibeResult.Error("Could not create local snapshot state: ${result.message}", result.throwable)
+            else -> VibeResult.Error("Could not create local snapshot state.")
+        }
+    }
+
+    private suspend fun saveGitState(rootUri: String): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
             val json = JSONObject()
             json.put("aheadCount", aheadCount)
@@ -189,6 +258,14 @@ class DefaultGitManager(
                 stagedArray.put(s)
             }
             json.put("staged", stagedArray)
+
+            val indexObj = JSONObject()
+            for (path in stagedPaths) {
+                if (stagedSnapshots.containsKey(path)) {
+                    indexObj.put(path, stagedSnapshots[path] ?: JSONObject.NULL)
+                }
+            }
+            json.put("index", indexObj)
 
             val commitsArray = JSONArray()
             for (c in commits) {
@@ -210,72 +287,93 @@ class DefaultGitManager(
             }
             json.put("baseline", baselineObj)
 
-            workspaceManager.writeFile("$rootUri/.vibespace/git_state.json", json.toString())
-        } catch (_: Throwable) {}
+            val stateFile = when (val result = locateGitStateFile(rootUri, create = true)) {
+                is VibeResult.Success -> result.data ?: return@withContext VibeResult.Error("Could not create local snapshot state file.")
+                is VibeResult.Error -> return@withContext result
+                else -> return@withContext VibeResult.Error("Could not create local snapshot state file.")
+            }
+            workspaceManager.writeFile(stateFile.uri, json.toString())
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            VibeResult.Error("Failed to save local snapshot state: ${e.message}", e)
+        }
     }
 
     override suspend fun refreshStatus(): VibeResult<GitWorkspaceStatus> = withContext(dispatchers.io) {
         val project = workspaceManager.currentProject.value
             ?: return@withContext VibeResult.Success(_status.value)
         val updated = refreshStatusInternal(project.rootUri)
-        VibeResult.Success(updated)
+        if (updated.errorMessage != null) VibeResult.Error(updated.errorMessage) else VibeResult.Success(updated)
     }
 
     private suspend fun refreshStatusInternal(rootUri: String): GitWorkspaceStatus {
-        val currentFiles = workspaceManager.getAllProjectFiles(rootUri).getOrNull() ?: emptyList()
+        val currentFiles = when (val result = workspaceManager.getAllProjectFiles(rootUri)) {
+            is VibeResult.Success -> result.data
+            is VibeResult.Error -> {
+                val errorStatus = _status.value.copy(errorMessage = "Could not refresh local changes: ${result.message}")
+                _status.value = errorStatus
+                return errorStatus
+            }
+            else -> {
+                val errorStatus = _status.value.copy(errorMessage = "Could not refresh local changes: workspace files are unavailable.")
+                _status.value = errorStatus
+                return errorStatus
+            }
+        }
         val currentFilesMap = mutableMapOf<String, String>()
         for (f in currentFiles) {
-            if (!f.isDirectory && !f.uri.contains(".vibespace/")) {
-                val content = workspaceManager.readFile(f.uri).getOrNull() ?: ""
-                currentFilesMap[f.uri] = content
+            if (!f.isDirectory && f.name != "git_state.json") {
+                when (val read = workspaceManager.readFile(f.uri)) {
+                    is VibeResult.Success -> currentFilesMap[f.uri] = read.data
+                    is VibeResult.Error -> {
+                        val errorStatus = _status.value.copy(errorMessage = "Could not read ${f.name} while refreshing local changes: ${read.message}")
+                        _status.value = errorStatus
+                        return errorStatus
+                    }
+                    else -> {
+                        val errorStatus = _status.value.copy(errorMessage = "Could not read ${f.name} while refreshing local changes.")
+                        _status.value = errorStatus
+                        return errorStatus
+                    }
+                }
             }
         }
 
-        val allDetected = mutableListOf<GitFileStatus>()
-
-        // Check for modified and untracked files
-        for ((uri, content) in currentFilesMap) {
-            val fileName = uri.substringAfterLast('/')
-            val baseline = baselineFiles[uri]
-            if (baseline == null) {
-                val isStaged = stagedPaths.contains(uri)
-                allDetected.add(
-                    GitFileStatus(
-                        path = uri,
-                        fileName = fileName,
-                        statusType = if (isStaged) GitStatusType.ADDED else GitStatusType.UNTRACKED,
-                        isStaged = isStaged
-                    )
-                )
-            } else if (baseline != content) {
-                allDetected.add(
-                    GitFileStatus(
-                        path = uri,
-                        fileName = fileName,
-                        statusType = GitStatusType.MODIFIED,
-                        isStaged = stagedPaths.contains(uri)
-                    )
-                )
-            }
+        val allPaths = (currentFilesMap.keys + baselineFiles.keys + stagedPaths).toSet()
+        val staged = stagedPaths.mapNotNull { path ->
+            val indexContent = if (stagedSnapshots.containsKey(path)) stagedSnapshots[path] else currentFilesMap[path]
+            val baselineContent = baselineFiles[path]
+            if (indexContent == baselineContent) return@mapNotNull null
+            GitFileStatus(
+                path = path,
+                fileName = path.substringAfterLast('/'),
+                statusType = when {
+                    indexContent == null -> GitStatusType.DELETED
+                    baselineContent == null -> GitStatusType.ADDED
+                    else -> GitStatusType.MODIFIED
+                },
+                isStaged = true
+            )
         }
-
-        // Check for deleted files
-        for ((uri, _) in baselineFiles) {
-            if (!uri.contains(".vibespace/") && !currentFilesMap.containsKey(uri)) {
-                val fileName = uri.substringAfterLast('/')
-                allDetected.add(
-                    GitFileStatus(
-                        path = uri,
-                        fileName = fileName,
-                        statusType = GitStatusType.DELETED,
-                        isStaged = stagedPaths.contains(uri)
-                    )
-                )
+        val unstaged = allPaths.mapNotNull { path ->
+            val expectedContent = if (stagedPaths.contains(path)) {
+                if (stagedSnapshots.containsKey(path)) stagedSnapshots[path] else currentFilesMap[path]
+            } else {
+                baselineFiles[path]
             }
+            val currentContent = currentFilesMap[path]
+            if (currentContent == expectedContent) return@mapNotNull null
+            GitFileStatus(
+                path = path,
+                fileName = path.substringAfterLast('/'),
+                statusType = when {
+                    currentContent == null -> GitStatusType.DELETED
+                    expectedContent == null -> GitStatusType.UNTRACKED
+                    else -> GitStatusType.MODIFIED
+                }
+            )
         }
-
-        val staged = allDetected.filter { it.isStaged }
-        val unstaged = allDetected.filter { !it.isStaged }
         val currentBranch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
 
         val newStatus = GitWorkspaceStatus(
@@ -284,56 +382,132 @@ class DefaultGitManager(
             stagedFiles = staged,
             unstagedFiles = unstaged,
             commits = commits.toList(),
-            aheadCount = aheadCount,
-            behindCount = behindCount,
-            remoteBranch = "origin/$currentBranch",
-            isClean = staged.isEmpty() && unstaged.isEmpty()
+            aheadCount = 0,
+            behindCount = 0,
+            remoteBranch = null,
+            isClean = staged.isEmpty() && unstaged.isEmpty(),
+            errorMessage = null
         )
         _status.value = newStatus
         return newStatus
     }
 
     override suspend fun stageFile(path: String): VibeResult<Unit> = withContext(dispatchers.io) {
+        val before = refreshStatus()
+        if (before is VibeResult.Error) return@withContext before
+        val status = _status.value.stagedFiles.firstOrNull { it.path == path }
+            ?: _status.value.unstagedFiles.firstOrNull { it.path == path }
+            ?: return@withContext VibeResult.Error("No changed workspace file found at '$path'.")
+        val snapshot = when (val result = workspaceManager.readFile(path)) {
+            is VibeResult.Success -> result.data
+            is VibeResult.Error -> if (status.statusType == GitStatusType.DELETED) null else {
+                return@withContext VibeResult.Error("Could not stage '$path': ${result.message}", result.throwable)
+            }
+            else -> return@withContext VibeResult.Error("Could not stage '$path': file contents are unavailable.")
+        }
+        val oldSnapshot = stagedSnapshots[path]
+        val hadSnapshot = stagedSnapshots.containsKey(path)
         stagedPaths.add(path)
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+        stagedSnapshots[path] = snapshot
+        val saveResult = workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+            ?: VibeResult.Error("No active workspace is available.")
+        if (saveResult is VibeResult.Error) {
+            stagedPaths.remove(path)
+            if (hadSnapshot) stagedSnapshots[path] = oldSnapshot else stagedSnapshots.remove(path)
+            return@withContext saveResult
+        }
         refreshStatus()
         VibeResult.Success(Unit)
     }
 
     override suspend fun unstageFile(path: String): VibeResult<Unit> = withContext(dispatchers.io) {
+        if (!stagedPaths.contains(path)) return@withContext VibeResult.Error("'$path' is not staged.")
+        val hadSnapshot = stagedSnapshots.containsKey(path)
+        val oldSnapshot = stagedSnapshots.remove(path)
         stagedPaths.remove(path)
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+        val saveResult = workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+            ?: VibeResult.Error("No active workspace is available.")
+        if (saveResult is VibeResult.Error) {
+            stagedPaths.add(path)
+            if (hadSnapshot) stagedSnapshots[path] = oldSnapshot
+            return@withContext saveResult
+        }
         refreshStatus()
         VibeResult.Success(Unit)
     }
 
     override suspend fun stageAll(): VibeResult<Unit> = withContext(dispatchers.io) {
-        refreshStatus()
-        val unstaged = _status.value.unstagedFiles
-        for (f in unstaged) {
-            stagedPaths.add(f.path)
+        when (val refresh = refreshStatus()) {
+            is VibeResult.Error -> return@withContext refresh
+            else -> Unit
         }
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+        val candidatePaths = (_status.value.stagedFiles + _status.value.unstagedFiles).map { it.path }.toSet()
+        val previousPaths = stagedPaths.toSet()
+        val previousSnapshots = stagedSnapshots.toMap()
+        for (path in candidatePaths) {
+            val result = workspaceManager.readFile(path)
+            stagedSnapshots[path] = when (result) {
+                is VibeResult.Success -> result.data
+                is VibeResult.Error -> if (_status.value.unstagedFiles.any { it.path == path && it.statusType == GitStatusType.DELETED }) null else {
+                    stagedPaths.clear(); stagedPaths.addAll(previousPaths)
+                    stagedSnapshots.clear(); stagedSnapshots.putAll(previousSnapshots)
+                    return@withContext VibeResult.Error("Could not stage '$path': ${result.message}", result.throwable)
+                }
+                else -> {
+                    stagedPaths.clear(); stagedPaths.addAll(previousPaths)
+                    stagedSnapshots.clear(); stagedSnapshots.putAll(previousSnapshots)
+                    return@withContext VibeResult.Error("Could not stage '$path': file contents are unavailable.")
+                }
+            }
+            stagedPaths.add(path)
+        }
+        val saveResult = workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+            ?: VibeResult.Error("No active workspace is available.")
+        if (saveResult is VibeResult.Error) {
+            stagedPaths.clear(); stagedPaths.addAll(previousPaths)
+            stagedSnapshots.clear(); stagedSnapshots.putAll(previousSnapshots)
+            return@withContext saveResult
+        }
         refreshStatus()
         VibeResult.Success(Unit)
     }
 
     override suspend fun unstageAll(): VibeResult<Unit> = withContext(dispatchers.io) {
+        val previousPaths = stagedPaths.toSet()
+        val previousSnapshots = stagedSnapshots.toMap()
         stagedPaths.clear()
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+        stagedSnapshots.clear()
+        val saveResult = workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+            ?: VibeResult.Error("No active workspace is available.")
+        if (saveResult is VibeResult.Error) {
+            stagedPaths.addAll(previousPaths)
+            stagedSnapshots.putAll(previousSnapshots)
+            return@withContext saveResult
+        }
         refreshStatus()
         VibeResult.Success(Unit)
     }
 
     override suspend fun discardChanges(path: String): VibeResult<Unit> = withContext(dispatchers.io) {
-        val baseline = baselineFiles[path]
-        if (baseline != null) {
-            workspaceManager.writeFile(path, baseline)
+        val refresh = refreshStatus()
+        if (refresh is VibeResult.Error) return@withContext refresh
+        if (_status.value.stagedFiles.none { it.path == path } && _status.value.unstagedFiles.none { it.path == path }) {
+            return@withContext VibeResult.Error("No local changes found for '$path'.")
+        }
+        val restoreContent = when {
+            stagedSnapshots.containsKey(path) -> stagedSnapshots[path]
+            else -> baselineFiles[path]
+        }
+        val restoreResult = if (restoreContent != null) {
+            workspaceManager.writeFile(path, restoreContent)
         } else {
             workspaceManager.delete(path)
         }
-        stagedPaths.remove(path)
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+        if (restoreResult is VibeResult.Error) return@withContext restoreResult
+        if (!stagedSnapshots.containsKey(path)) stagedPaths.remove(path)
+        val saveResult = workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
+            ?: VibeResult.Error("No active workspace is available.")
+        if (saveResult is VibeResult.Error) return@withContext saveResult
         refreshStatus()
         VibeResult.Success(Unit)
     }
@@ -344,21 +518,39 @@ class DefaultGitManager(
             return@withContext VibeResult.Error("Commit message cannot be empty")
         }
 
+        when (val refresh = refreshStatus()) {
+            is VibeResult.Error -> return@withContext refresh
+            else -> Unit
+        }
         val staged = _status.value.stagedFiles
         if (staged.isEmpty()) {
             return@withContext VibeResult.Error("No changes staged to commit")
         }
 
-        // Apply staged changes to baseline
+        val previousBaseline = baselineFiles.toMap()
+        val previousPaths = stagedPaths.toSet()
+        val previousSnapshots = stagedSnapshots.toMap()
+        val previousCommits = commits.toList()
+
+        // Apply the captured staged snapshot, not any later edits in the working file.
         for (item in staged) {
-            if (item.statusType == GitStatusType.DELETED) {
+            val snapshot = if (stagedSnapshots.containsKey(item.path)) stagedSnapshots[item.path] else {
+                when (val read = workspaceManager.readFile(item.path)) {
+                    is VibeResult.Success -> read.data
+                    is VibeResult.Error -> if (item.statusType == GitStatusType.DELETED) null else {
+                        return@withContext VibeResult.Error("Could not save snapshot for '${item.fileName}': ${read.message}", read.throwable)
+                    }
+                    else -> return@withContext VibeResult.Error("Could not save snapshot for '${item.fileName}'.")
+                }
+            }
+            if (snapshot == null) {
                 baselineFiles.remove(item.path)
             } else {
-                val currentContent = workspaceManager.readFile(item.path).getOrNull() ?: ""
-                baselineFiles[item.path] = currentContent
+                baselineFiles[item.path] = snapshot
             }
         }
         stagedPaths.clear()
+        stagedSnapshots.clear()
 
         val commitId = IdGenerator.shortId("commit")
         val shortId = commitId.take(7)
@@ -370,11 +562,23 @@ class DefaultGitManager(
             timestamp = System.currentTimeMillis()
         )
         commits.add(0, newCommit)
-        aheadCount++
-
         val project = workspaceManager.currentProject.value
-        if (project != null) {
-            saveGitState(project.rootUri)
+        if (project == null) {
+            baselineFiles.clear(); baselineFiles.putAll(previousBaseline)
+            stagedPaths.addAll(previousPaths)
+            stagedSnapshots.putAll(previousSnapshots)
+            commits.clear(); commits.addAll(previousCommits)
+            return@withContext VibeResult.Error("No active workspace is available.")
+        }
+        when (val saveResult = saveGitState(project.rootUri)) {
+            is VibeResult.Error -> {
+                baselineFiles.clear(); baselineFiles.putAll(previousBaseline)
+                stagedPaths.addAll(previousPaths)
+                stagedSnapshots.putAll(previousSnapshots)
+                commits.clear(); commits.addAll(previousCommits)
+                return@withContext saveResult
+            }
+            else -> Unit
         }
 
         refreshStatus()
@@ -382,33 +586,11 @@ class DefaultGitManager(
     }
 
     override suspend fun checkoutBranch(branchName: String): VibeResult<Unit> = withContext(dispatchers.io) {
-        val index = branches.indexOfFirst { it.name == branchName }
-        if (index == -1) {
-            return@withContext VibeResult.Error("Branch '$branchName' not found")
-        }
-        for (i in branches.indices) {
-            branches[i] = branches[i].copy(isCurrent = branches[i].name == branchName)
-        }
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
-        refreshStatus()
-        VibeResult.Success(Unit)
+        VibeResult.Error("Branch checkout is unavailable because local snapshots are not a Git repository.")
     }
 
     override suspend fun createBranch(branchName: String): VibeResult<Unit> = withContext(dispatchers.io) {
-        val cleanName = branchName.trim()
-        if (cleanName.isEmpty()) {
-            return@withContext VibeResult.Error("Branch name cannot be empty")
-        }
-        if (branches.any { it.name == cleanName }) {
-            return@withContext VibeResult.Error("Branch '$cleanName' already exists")
-        }
-        for (i in branches.indices) {
-            branches[i] = branches[i].copy(isCurrent = false)
-        }
-        branches.add(GitBranch(name = cleanName, isCurrent = true))
-        workspaceManager.currentProject.value?.let { saveGitState(it.rootUri) }
-        refreshStatus()
-        VibeResult.Success(Unit)
+        VibeResult.Error("Branch creation is unavailable because local snapshots are not a Git repository.")
     }
 
     override suspend fun getFileDiff(path: String): VibeResult<FileDiff> = withContext(dispatchers.io) {
@@ -437,13 +619,11 @@ class DefaultGitManager(
     }
 
     override suspend fun push(): VibeResult<String> = withContext(dispatchers.io) {
-        val branch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
-        VibeResult.Error("Remote Git push to origin/$branch is unavailable. Mobile sandbox lacks configured SSH/HTTPS remote transport; use Alpine PRoot or Termux runner with git push.")
+        VibeResult.Error("Remote push is unavailable because VibeSpace local snapshots are not a Git repository.")
     }
 
     override suspend fun pull(): VibeResult<String> = withContext(dispatchers.io) {
-        val branch = branches.firstOrNull { it.isCurrent }?.name ?: "main"
-        VibeResult.Error("Remote Git pull from origin/$branch is unavailable. Mobile sandbox lacks configured SSH/HTTPS remote transport; use Alpine PRoot or Termux runner with git pull.")
+        VibeResult.Error("Remote pull is unavailable because VibeSpace local snapshots are not a Git repository.")
     }
 
     private fun computeDiffLines(oldLines: List<String>, newLines: List<String>): List<DiffLine> {

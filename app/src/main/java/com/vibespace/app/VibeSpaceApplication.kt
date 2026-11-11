@@ -98,12 +98,9 @@ class VibeSpaceApplication : Application() {
     fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? {
         val normalized = languageId.trim().lowercase()
         if (normalized.isEmpty()) return null
-        return lspClients.getOrPut(normalized) {
-            val transport = com.vibespace.core.language.lsp.InMemoryLspTransport()
-            val responder = com.vibespace.core.language.lsp.LocalLspServerResponder(normalized, transport, dispatchers)
-            responder.start()
-            com.vibespace.core.language.lsp.StdioLanguageServerClient(normalized, transport, dispatchers)
-        }
+        // A test-only in-memory responder must never be presented as a production language server.
+        // A real server client can be registered by a build that packages and manages that runtime.
+        return lspClients[normalized]
     }
 
     override fun onCreate() {

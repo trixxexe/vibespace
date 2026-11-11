@@ -94,16 +94,15 @@ class DefaultGitManagerTest {
     }
 
     @Test
-    fun branch_creation_and_checkout_updates_active_branch() = runTest {
+    fun branch_operations_are_not_claimed_by_local_snapshot_history() = runTest {
         val root = "vibe://projects/git-branch"
         workspaceManager.openProject(Project("g5", "GitBranch", root))
 
         val createResult = gitManager.createBranch("feature/dark-mode")
-        assertTrue(createResult.isSuccess)
-        assertEquals("feature/dark-mode", gitManager.status.value.currentBranch)
+        assertTrue(createResult.isError)
 
         val checkoutResult = gitManager.checkoutBranch("main")
-        assertTrue(checkoutResult.isSuccess)
+        assertTrue(checkoutResult.isError)
         assertEquals("main", gitManager.status.value.currentBranch)
     }
 
@@ -160,13 +159,13 @@ class DefaultGitManagerTest {
     }
 
     @Test
-    fun local_git_history_branches_and_staging_persist_across_project_reloads() = runTest {
+    fun local_snapshot_history_and_staging_persist_across_project_reloads() = runTest {
         val root = "vibe://projects/git-persist"
         val project = Project("g9", "GitPersist", root)
         workspaceManager.openProject(project)
 
         workspaceManager.writeFile("$root/code.py", "print(1)")
-        gitManager.createBranch("feature-persist")
+        assertTrue(gitManager.createBranch("feature-persist").isError)
         gitManager.stageAll()
         val commitRes = gitManager.commit("Commit to persist")
         assertTrue(commitRes.isSuccess)
@@ -179,9 +178,25 @@ class DefaultGitManagerTest {
         workspaceManager.openProject(project)
 
         val restoredStatus = newGitManager.status.value
-        assertEquals("feature-persist", restoredStatus.currentBranch)
-        assertTrue(restoredStatus.branches.any { it.name == "feature-persist" && it.isCurrent })
+        assertEquals("main", restoredStatus.currentBranch)
         assertTrue(restoredStatus.commits.any { it.message == "Commit to persist" })
         assertTrue(restoredStatus.stagedFiles.any { it.path == "$root/next.py" })
+    }
+
+    @Test
+    fun commit_uses_staged_content_even_if_working_file_changes_later() = runTest {
+        val root = "vibe://projects/git-index"
+        workspaceManager.openProject(Project("g10", "GitIndex", root))
+        val fileUri = "$root/app.py"
+        workspaceManager.writeFile(fileUri, "print('staged')")
+        gitManager.refreshStatus()
+        assertTrue(gitManager.stageAll().isSuccess)
+
+        workspaceManager.writeFile(fileUri, "print('newer working copy')")
+        assertTrue(gitManager.commit("Save staged version").isSuccess)
+
+        val status = gitManager.refreshStatus().getOrNull()
+        assertEquals(1, status?.unstagedFiles?.size)
+        assertEquals(GitStatusType.MODIFIED, status?.unstagedFiles?.single()?.statusType)
     }
 }

@@ -56,10 +56,10 @@ class SettingsViewModelTest {
         )
 
         assertEquals("", viewModel.uiState.value.settings.aiApiKey)
-        viewModel.setAiConfig("gemini", "AIzaSyTest123", "gemini-2.0-flash")
+        viewModel.setAiConfig("gemini", "AIzaSyTest123", "gemini-3.8-flash")
         assertEquals("gemini", viewModel.uiState.value.settings.aiProviderId)
         assertEquals("AIzaSyTest123", viewModel.uiState.value.settings.aiApiKey)
-        assertEquals("gemini-2.0-flash", viewModel.uiState.value.settings.aiModel)
+        assertEquals("gemini-3.8-flash", viewModel.uiState.value.settings.aiModel)
     }
 
     @Test
