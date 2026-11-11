@@ -35,6 +35,7 @@ class DefaultGitManagerTest {
     @Test
     fun modifying_file_detects_modified_status_and_staging_works() = runTest {
         val root = "vibe://projects/git-mod"
+        workspaceManager.createFile(root, "README.md", "# Original Content")
         workspaceManager.openProject(Project("g2", "GitMod", root))
 
         val readmeUri = "$root/README.md"

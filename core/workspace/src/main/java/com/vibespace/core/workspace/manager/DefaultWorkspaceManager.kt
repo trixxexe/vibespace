@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 /**
@@ -494,7 +495,7 @@ class DefaultWorkspaceManager(
     }
 
     private fun childUri(parentUri: String, name: String): String =
-        if (parentUri.startsWith("vibe://")) "$parentUri/${Uri.encode(name)}"
+        if (parentUri.startsWith("vibe://")) "$parentUri/${URLEncoder.encode(name, "UTF-8").replace("+", "%20")}"
         else File(toPhysicalFile(parentUri) ?: File(parentUri), name).toURI().toString().trimEnd('/')
 
     override suspend fun writeFile(fileUri: String, content: String): VibeResult<Unit> =

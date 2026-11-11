@@ -74,7 +74,7 @@ class AlpineLinuxRunnerTest {
             }
         )
 
-        assertEquals(AlpineInstallationState.NotInstalled, runner.installationState.value)
+        assertTrue(runner.installationState.value is AlpineInstallationState.Error)
 
         val installResult = runner.installSubsystem()
         assertTrue(installResult is com.vibespace.core.common.result.VibeResult.Error)

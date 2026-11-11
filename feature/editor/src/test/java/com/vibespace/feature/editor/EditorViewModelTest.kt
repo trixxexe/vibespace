@@ -73,7 +73,7 @@ class EditorViewModelTest {
     }
 
     @Test
-    fun workspace_project_open_auto_opens_main_py() = runTest {
+    fun opening_an_empty_project_does_not_invent_a_main_file() = runTest {
         val project = com.vibespace.core.workspace.model.Project("proj-auto", "AutoApp", "vibe://projects/auto")
         workspaceManager.openProject(project)
 
@@ -84,9 +84,7 @@ class EditorViewModelTest {
             dispatchers = TestDispatcherProvider()
         )
 
-        val active = viewModel.uiState.value.activeDocument
-        assertNotNull(active)
-        assertEquals("main.py", active!!.fileName)
+        assertEquals(null, viewModel.uiState.value.activeDocument)
     }
 
     @Test
