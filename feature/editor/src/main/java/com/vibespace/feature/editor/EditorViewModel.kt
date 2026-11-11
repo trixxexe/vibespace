@@ -33,6 +33,7 @@ class EditorViewModel(
 
     private var activeLspClient: com.vibespace.core.language.lsp.LanguageServerClient? = null
     private var autoSaveJob: Job? = null
+    private var completionJob: Job? = null
     private val openedLspDocuments = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private val _uiState = MutableStateFlow(EditorUiState())
@@ -203,6 +204,7 @@ class EditorViewModel(
             if (client != null && client.isRunning) {
                 client.didChange(updatedDocument.uri, updatedDocument.content, updatedDocument.version)
             }
+            requestLspCompletions(updatedDocument, prefix, suggestions)
             if (_uiState.value.autoSave) {
                 autoSaveJob?.cancel()
                 autoSaveJob = viewModelScope.launch(dispatchers.io) {
@@ -222,6 +224,35 @@ class EditorViewModel(
         viewModelScope.launch(dispatchers.default) {
             val suggestions = AutocompleteEngine.getSuggestions(activeDoc.content, prefix, activeDoc.language.id)
             _uiState.update { it.copy(completions = suggestions) }
+            requestLspCompletions(activeDoc, prefix, suggestions)
+        }
+    }
+
+    private fun requestLspCompletions(
+        document: EditorDocument,
+        prefix: String,
+        fallback: List<CompletionItem>
+    ) {
+        val client = activeLspClient?.takeIf {
+            it.isRunning && it.languageId.equals(document.language.id, ignoreCase = true)
+        } ?: return
+        if (prefix.isBlank()) return
+        completionJob?.cancel()
+        completionJob = viewModelScope.launch(dispatchers.default) {
+            delay(LSP_COMPLETION_DEBOUNCE_MS)
+            val cursor = _uiState.value.cursorPosition
+            val result = client.requestCompletion(
+                document.uri,
+                cursor.line,
+                cursor.column
+            )
+            val current = _uiState.value.activeDocument ?: return@launch
+            if (current.documentId != document.documentId || current.content != document.content) return@launch
+            val completions = when (result) {
+                is VibeResult.Success -> (result.data + fallback).distinctBy { it.label }
+                else -> fallback
+            }
+            _uiState.update { it.copy(completions = completions) }
         }
     }
 
@@ -431,6 +462,7 @@ class EditorViewModel(
 
     private companion object {
         const val AUTO_SAVE_DEBOUNCE_MS = 700L
+        const val LSP_COMPLETION_DEBOUNCE_MS = 120L
     }
 
     private fun lspDocumentKey(client: com.vibespace.core.language.lsp.LanguageServerClient, uri: String) =

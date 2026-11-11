@@ -137,6 +137,9 @@ class StdioLanguageServerClientTest {
         val job = launch {
             val req = transport.clientToServer.receive()
             assertTrue(req.contains("textDocument/hover"))
+            val position = org.json.JSONObject(req).getJSONObject("params").getJSONObject("position")
+            assertEquals(4, position.getInt("line"))
+            assertEquals(1, position.getInt("character"))
             transport.emitFromServer("""{"jsonrpc":"2.0","id":1,"result":{"contents":"def print(*values: object) -> None"}}""")
         }
 

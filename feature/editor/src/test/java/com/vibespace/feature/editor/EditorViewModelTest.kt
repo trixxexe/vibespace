@@ -6,6 +6,8 @@ import com.vibespace.core.language.detector.DefaultLanguageDetector
 import com.vibespace.core.workspace.manager.DefaultWorkspaceManager
 import com.vibespace.core.workspace.model.FileNodeType
 import com.vibespace.core.workspace.model.VirtualFile
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -180,6 +182,48 @@ class EditorViewModelTest {
 
         viewModel.clearHover()
         assertEquals(null, viewModel.uiState.value.hoverInfo)
+    }
+
+    @Test
+    fun completion_suggestions_include_real_lsp_results() = runTest {
+        val root = "vibe://projects/test-lsp-completions"
+        workspaceManager.createFile(root, "main.py", "pri")
+        val serverCompletion = com.vibespace.core.language.model.CompletionItem(
+            label = "print_from_server",
+            kind = com.vibespace.core.language.model.CompletionItemKind.FUNCTION
+        )
+        val fakeLsp = object : com.vibespace.core.language.lsp.LanguageServerClient {
+            override val languageId = "python"
+            override val isRunning = true
+            override suspend fun start(workspaceRootUri: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun stop() = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun didOpen(documentUri: String, text: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun didChange(documentUri: String, newText: String, version: Int) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override suspend fun didClose(documentUri: String) = com.vibespace.core.common.result.VibeResult.Success(Unit)
+            override fun observeDiagnostics(documentUri: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.vibespace.core.language.model.Diagnostic>())
+            override suspend fun requestHover(documentUri: String, line: Int, column: Int) =
+                com.vibespace.core.common.result.VibeResult.Success(null)
+            override suspend fun requestCompletion(documentUri: String, line: Int, column: Int) =
+                com.vibespace.core.common.result.VibeResult.Success(listOf(serverCompletion))
+            override suspend fun requestDefinition(documentUri: String, line: Int, column: Int) =
+                com.vibespace.core.common.result.VibeResult.Success(emptyList<com.vibespace.core.language.model.DefinitionLocation>())
+            override suspend fun formatDocument(documentUri: String) =
+                com.vibespace.core.common.result.VibeResult.Success("")
+        }
+        val viewModel = EditorViewModel(
+            editorEngine = editorEngine,
+            workspaceManager = workspaceManager,
+            languageDetector = languageDetector,
+            lspClientProvider = { fakeLsp },
+            dispatchers = TestDispatcherProvider(UnconfinedTestDispatcher(testScheduler))
+        )
+        val file = VirtualFile("$root/main.py", "main.py", FileNodeType.FILE, parentUri = root)
+
+        viewModel.openFile(file)
+        viewModel.updateCompletions("pri")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.completions.any { it.label == "print_from_server" })
     }
 
     @Test

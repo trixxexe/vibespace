@@ -73,7 +73,7 @@ class StdioLanguageServerClient(
                 "capabilities": {
                     "textDocument": {
                         "hover": {"contentFormat": ["markdown", "plaintext"]},
-                        "completion": {"completionItem": {"snippetSupport": true}},
+                        "completion": {"completionItem": {"snippetSupport": false}},
                         "definition": {"linkSupport": true},
                         "publishDiagnostics": {"relatedInformation": true}
                     }
@@ -167,7 +167,7 @@ class StdioLanguageServerClient(
         val params = """
             {
                 "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
-                "position": {"line": ${line - 1}, "character": $column}
+                "position": {"line": ${(line - 1).coerceAtLeast(0)}, "character": ${(column - 1).coerceAtLeast(0)}}
             }
         """.trimIndent()
 
@@ -189,7 +189,7 @@ class StdioLanguageServerClient(
         val params = """
             {
                 "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
-                "position": {"line": ${line - 1}, "character": $column}
+                "position": {"line": ${(line - 1).coerceAtLeast(0)}, "character": ${(column - 1).coerceAtLeast(0)}}
             }
         """.trimIndent()
 
@@ -211,7 +211,7 @@ class StdioLanguageServerClient(
         val params = """
             {
                 "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
-                "position": {"line": ${line - 1}, "character": $column}
+                "position": {"line": ${(line - 1).coerceAtLeast(0)}, "character": ${(column - 1).coerceAtLeast(0)}}
             }
         """.trimIndent()
 
