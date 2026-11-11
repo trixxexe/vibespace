@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,6 +22,7 @@ import java.net.URL
 import java.net.URI
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.net.SocketTimeoutException
 
 /**
  * Real OpenAI-compatible AI Provider supporting OpenAI (GPT-4o, GPT-4o-mini), OpenRouter, Groq,
@@ -115,7 +117,7 @@ class OpenAIAIProvider(
             instanceFollowRedirects = false
             requestMethod = "POST"
             connectTimeout = 15_000
-            readTimeout = 30_000
+            readTimeout = 1_000
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
@@ -129,9 +131,16 @@ class OpenAIAIProvider(
             }
             var receivedDone = false
             var streamedBytes = 0
+            val coroutineContext = kotlinx.coroutines.currentCoroutineContext()
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                 while (true) {
-                    val line = reader.readLine() ?: break
+                    val line = try {
+                        reader.readLine()
+                    } catch (_: SocketTimeoutException) {
+                        coroutineContext.ensureActive()
+                        continue
+                    } ?: break
+                    coroutineContext.ensureActive()
                     if (!line.startsWith("data:")) continue
                     val data = line.removePrefix("data:").trim()
                     streamedBytes += data.length
@@ -148,7 +157,7 @@ class OpenAIAIProvider(
                     if (delta.isNotEmpty()) emit(AIResponseChunk(delta = delta))
                 }
             }
-            if (!receivedDone) emit(AIResponseChunk(delta = "", isComplete = true))
+            if (!receivedDone) throw IOException("OpenAI-compatible stream ended before its completion marker.")
         } finally {
             connection.disconnect()
         }

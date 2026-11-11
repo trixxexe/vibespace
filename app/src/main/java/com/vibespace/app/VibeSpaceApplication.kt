@@ -136,7 +136,7 @@ class VibeSpaceApplication : Application() {
             as? com.vibespace.core.runner.alpine.AlpineLinuxRunner ?: return@withLock null
         val existingClient = lspClients[clientKey]
         if (existingClient == null && !alpine.isLanguageServerInstalled(normalized)) return@withLock null
-        val needsStaging = project.rootPath.isNullOrBlank() || !File(project.rootPath).isDirectory
+        val needsStaging = project.rootPath?.let { !File(it).isDirectory } ?: true
         val stagedWorkspace = if (needsStaging) {
             try {
                 stageLspWorkspace(project)

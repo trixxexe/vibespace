@@ -88,9 +88,8 @@ class AIChatViewModel(
         _uiState.update { it.copy(inputPrompt = "", isGenerating = true, errorMessage = null) }
         viewModelScope.launch(dispatchers.default) {
             try {
-                when (val result = aiService.sendUserPrompt(prompt)) {
-                    is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
-                    else -> Unit
+                aiService.streamUserPrompt(prompt).collect { chunk ->
+                    if (chunk.isComplete) _uiState.update { it.copy(isGenerating = false) }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

@@ -6,12 +6,16 @@ import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.terminal.model.StreamType
 import com.vibespace.core.terminal.service.DefaultTerminalService
 import kotlinx.coroutines.test.runTest
+import org.junit.Rule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TerminalViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val terminalService = DefaultTerminalService(dispatchers = TestDispatcherProvider())
 

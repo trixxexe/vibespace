@@ -28,5 +28,8 @@ class SyntaxDiagnosticsValidatorTest {
         assertTrue(SyntaxDiagnosticsValidator.validate("42", "json").isEmpty())
         assertTrue(SyntaxDiagnosticsValidator.validate("{} false", "json").isNotEmpty())
         assertTrue(SyntaxDiagnosticsValidator.validate("{\"ok\": true}", "json").isEmpty())
+        assertTrue(SyntaxDiagnosticsValidator.validate("{foo: 1}", "json").isNotEmpty())
+        assertTrue(SyntaxDiagnosticsValidator.validate("{'foo': 1}", "json").isNotEmpty())
+        assertTrue(SyntaxDiagnosticsValidator.validate("01", "json").isNotEmpty())
     }
 }

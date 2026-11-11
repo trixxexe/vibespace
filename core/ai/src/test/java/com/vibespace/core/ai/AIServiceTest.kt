@@ -11,7 +11,8 @@ import com.vibespace.core.ai.model.CodeContext
 import com.vibespace.core.ai.provider.AIProvider
 import com.vibespace.core.ai.service.AIService
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,7 +49,11 @@ class AIServiceTest {
                 )
             }
 
-            override fun streamResponse(request: AIRequest): Flow<AIResponseChunk> = emptyFlow()
+            override fun streamResponse(request: AIRequest): Flow<AIResponseChunk> = flow {
+                emit(AIResponseChunk("Code "))
+                emit(AIResponseChunk("analysis complete."))
+                emit(AIResponseChunk("", isComplete = true))
+            }
         }
 
         val service = AIService(dispatchers = TestDispatcherProvider())
@@ -58,5 +63,30 @@ class AIServiceTest {
         val result = service.sendUserPrompt("Refactor this")
         assertTrue(result.isSuccess)
         assertEquals("Code analysis complete.", result.getOrNull()!!.content)
+    }
+
+    @Test
+    fun streamingPromptPublishesPartialAssistantTextIntoConversationState() = runTest {
+        val provider = object : AIProvider {
+            override val providerId = "stream-provider"
+            override val displayName = "Stream Provider"
+            override val supportedModels = listOf("model")
+            override val isConfigured = true
+            override suspend fun generateResponse(request: AIRequest) =
+                VibeResult.Error("Non-streaming path should not be used")
+            override fun streamResponse(request: AIRequest): Flow<AIResponseChunk> = flow {
+                emit(AIResponseChunk("Hello"))
+                emit(AIResponseChunk(" world"))
+                emit(AIResponseChunk("", isComplete = true))
+            }
+        }
+        val service = AIService(dispatchers = TestDispatcherProvider())
+        service.registry.register(provider)
+
+        val chunks = service.streamUserPrompt("Hi").toList()
+
+        assertEquals(3, chunks.size)
+        assertEquals(AIRole.USER, service.messages.value[0].role)
+        assertEquals("Hello world", service.messages.value[1].content)
     }
 }

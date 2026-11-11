@@ -4,6 +4,7 @@ import com.vibespace.core.ai.model.AIConfiguration
 import com.vibespace.core.ai.model.AIMessage
 import com.vibespace.core.ai.model.AIRequest
 import com.vibespace.core.ai.model.AIRole
+import com.vibespace.core.ai.model.AIResponseChunk
 import com.vibespace.core.ai.model.CodeContext
 import com.vibespace.core.ai.provider.AIProviderRegistry
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
@@ -16,6 +17,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.collect
+import java.io.IOException
 
 /**
  * AI Assistant service orchestrating chat conversation history, active code context attachment,
@@ -75,6 +81,43 @@ class AIService(
             }
         }
     }
+
+    /** Streams provider deltas while publishing the growing assistant message to chat state. */
+    fun streamUserPrompt(prompt: String): Flow<AIResponseChunk> = flow {
+        if (prompt.isBlank()) throw IllegalArgumentException("Prompt cannot be empty.")
+        sendMutex.withLock {
+            val provider = registry.getActiveProvider()
+            if (provider == null || !provider.isConfigured) {
+                throw IOException("No AI provider configured. Add an API key in Settings or the AI Assistant panel.")
+            }
+            val userMsg = AIMessage(
+                id = IdGenerator.shortId("msg"),
+                role = AIRole.USER,
+                content = prompt.trim(),
+                attachedCodeContext = _activeContext.value
+            )
+            val requestMessages = _messages.value + userMsg
+            val previousMessages = _messages.value
+            val request = AIRequest(messages = requestMessages, codeContext = _activeContext.value)
+            val assistant = AIMessage(id = IdGenerator.shortId("msg"), role = AIRole.ASSISTANT, content = "")
+            val response = StringBuilder()
+            _messages.value = requestMessages
+            try {
+                provider.streamResponse(request).collect { chunk ->
+                    response.append(chunk.delta)
+                    _messages.value = requestMessages + assistant.copy(content = response.toString())
+                    emit(chunk)
+                }
+                if (response.isEmpty()) {
+                    _messages.value = requestMessages
+                    throw IOException("The AI provider completed without returning any response text.")
+                }
+            } catch (failure: Throwable) {
+                _messages.value = previousMessages
+                throw failure
+            }
+        }
+    }.flowOn(dispatchers.default)
 
     fun clearHistory() {
         _messages.value = emptyList()

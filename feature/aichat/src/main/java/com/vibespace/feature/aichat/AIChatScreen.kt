@@ -67,9 +67,11 @@ fun AIChatScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(uiState.messages.size) {
+    LaunchedEffect(uiState.messages.size, uiState.messages.lastOrNull()?.content, uiState.isGenerating) {
         if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+            val lastItem = uiState.messages.size - 1
+            if (uiState.isGenerating) listState.scrollToItem(lastItem)
+            else listState.animateScrollToItem(lastItem)
         }
     }
 

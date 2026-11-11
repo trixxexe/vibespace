@@ -5,7 +5,6 @@ import com.vibespace.core.language.model.Diagnostic
 import com.vibespace.core.language.model.DiagnosticPosition
 import com.vibespace.core.language.model.DiagnosticRange
 import com.vibespace.core.language.model.DiagnosticSeverity
-import org.json.JSONTokener
 
 /**
  * Real-time syntax and structural code validator.
@@ -146,14 +145,127 @@ object SyntaxDiagnosticsValidator {
     }
 
     private fun validateJson(content: String): List<Diagnostic> {
-        val trimmed = content.trim()
-        if (trimmed.isEmpty()) return emptyList()
+        if (content.isBlank()) return emptyList()
         return try {
-            val tokener = JSONTokener(trimmed)
-            tokener.nextValue()
-            if (tokener.nextClean() == '\u0000') emptyList() else jsonDiagnostic("Unexpected content after the JSON value")
+            StrictJsonParser(content).parse()
+            emptyList()
         } catch (invalid: Exception) {
             jsonDiagnostic(invalid.message ?: "Invalid JSON")
+        }
+    }
+
+    /** Small RFC 8259 grammar parser; Android's JSONTokener accepts non-JSON extensions. */
+    private class StrictJsonParser(private val input: String) {
+        private var index = 0
+
+        fun parse() {
+            whitespace()
+            value()
+            whitespace()
+            if (index != input.length) fail("Unexpected content after the JSON value")
+        }
+
+        private fun value() {
+            whitespace()
+            when (input.getOrNull(index)) {
+                '{' -> objectValue()
+                '[' -> arrayValue()
+                '"' -> stringValue()
+                't' -> literal("true")
+                'f' -> literal("false")
+                'n' -> literal("null")
+                '-', in '0'..'9' -> numberValue()
+                else -> fail("Expected a JSON value")
+            }
+        }
+
+        private fun objectValue() {
+            index++
+            whitespace()
+            if (consume('}')) return
+            while (true) {
+                whitespace()
+                if (input.getOrNull(index) != '"') fail("Object keys must be double-quoted strings")
+                stringValue()
+                whitespace()
+                expect(':')
+                value()
+                whitespace()
+                if (consume('}')) return
+                expect(',')
+            }
+        }
+
+        private fun arrayValue() {
+            index++
+            whitespace()
+            if (consume(']')) return
+            while (true) {
+                value()
+                whitespace()
+                if (consume(']')) return
+                expect(',')
+            }
+        }
+
+        private fun stringValue() {
+            expect('"')
+            while (index < input.length) {
+                val character = input[index++]
+                when {
+                    character == '"' -> return
+                    character.code < 0x20 -> fail("Unescaped control character in string")
+                    character == '\\' -> {
+                        val escape = input.getOrNull(index++) ?: fail("Incomplete string escape")
+                        when (escape) {
+                            '"', '\\', '/' , 'b', 'f', 'n', 'r', 't' -> Unit
+                            'u' -> repeat(4) {
+                                val hex = input.getOrNull(index++) ?: fail("Incomplete Unicode escape")
+                                if (hex.digitToIntOrNull(16) == null) fail("Invalid Unicode escape")
+                            }
+                            else -> fail("Invalid string escape")
+                        }
+                    }
+                }
+            }
+            fail("Unterminated string")
+        }
+
+        private fun numberValue() {
+            val number = JSON_NUMBER.find(input, index) ?: fail("Invalid JSON number")
+            if (number.range.first != index) fail("Invalid JSON number")
+            index = number.range.last + 1
+        }
+
+        private fun literal(expected: String) {
+            if (!input.startsWith(expected, index)) fail("Expected '$expected'")
+            index += expected.length
+        }
+
+        private fun whitespace() {
+            while (input.getOrNull(index)?.let { it in JSON_WHITESPACE } == true) index++
+        }
+
+        private fun expect(character: Char) {
+            if (!consume(character)) fail("Expected '$character'")
+        }
+
+        private fun consume(character: Char): Boolean {
+            if (input.getOrNull(index) != character) return false
+            index++
+            return true
+        }
+
+        private fun fail(message: String): Nothing {
+            val prefix = input.take(index)
+            val line = prefix.count { it == '\n' } + 1
+            val column = prefix.length - (prefix.lastIndexOf('\n') + 1) + 1
+            throw IllegalArgumentException("$message at line $line, column $column")
+        }
+
+        private companion object {
+            val JSON_NUMBER = Regex("-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
+            val JSON_WHITESPACE = setOf(' ', '\t', '\r', '\n')
         }
     }
 

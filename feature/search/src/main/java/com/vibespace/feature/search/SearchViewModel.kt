@@ -74,10 +74,7 @@ class SearchViewModel(
         currentMatches = if (state.useRegex) {
             try {
                 val flags = if (state.matchCase) 0 else Pattern.CASE_INSENSITIVE
-                val matcher = Pattern.compile(state.query, flags).matcher(doc.content)
-                buildList {
-                    while (matcher.find()) add(matcher.start() until matcher.end())
-                }
+                RegexSearch.findMatches(doc.content, Pattern.compile(state.query, flags))
             } catch (invalid: PatternSyntaxException) {
                 _uiState.update { it.copy(matchCount = 0, activeMatchIndex = 0, searchError = "Invalid regular expression: ${invalid.message}") }
                 currentMatches = emptyList()
@@ -279,18 +276,19 @@ class SearchViewModel(
         if (state.scope != SearchScope.FILE || state.query.isEmpty()) return
         viewModelScope.launch(dispatchers.default) {
             if (state.useRegex) {
-                val matcher = try {
-                    Pattern.compile(state.query, if (state.matchCase) 0 else Pattern.CASE_INSENSITIVE).matcher(doc.content)
+                val pattern = try {
+                    Pattern.compile(state.query, if (state.matchCase) 0 else Pattern.CASE_INSENSITIVE)
                 } catch (invalid: PatternSyntaxException) {
                     _uiState.update { it.copy(searchError = "Invalid regular expression: ${invalid.message}") }
                     return@launch
                 }
-                val ranges = buildList {
-                    while (matcher.find()) add(matcher.start() until matcher.end())
+                val updatedContent = try {
+                    RegexSearch.replaceAll(doc.content, pattern, state.replacement)
+                } catch (invalid: IllegalArgumentException) {
+                    _uiState.update { it.copy(searchError = "Invalid replacement: ${invalid.message}") }
+                    return@launch
                 }
-                for (range in ranges.asReversed()) {
-                    editorEngine.replace(doc.documentId, range, state.replacement)
-                }
+                editorEngine.updateDocument(doc.documentId, updatedContent)
             } else {
                 editorEngine.replaceAll(doc.documentId, state.query, state.replacement, state.matchCase)
             }

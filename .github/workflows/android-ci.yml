@@ -45,10 +45,11 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --continue
+        timeout-minutes: 20
+        run: ./gradlew testDebugUnitTest
 
       - name: Run Android Lint
-        run: ./gradlew lintDebug --continue
+        run: ./gradlew lintDebug
 
       - name: Run runtime acceptance tests on Android
         uses: reactivecircus/android-emulator-runner@v2
