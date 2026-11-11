@@ -43,4 +43,16 @@ class DefaultTerminalServiceTest {
         val updated = service.sessions.value.first { it.sessionId == session.sessionId }
         assertTrue(updated.lines.isEmpty())
     }
+
+    @Test
+    fun sendInput_builtins_work_properly() = runTest {
+        val session = service.createSession("Console", "~").getOrNull()!!
+        service.sendInput(session.sessionId, "pwd")
+        service.sendInput(session.sessionId, "which grep")
+        service.sendInput(session.sessionId, "which sh")
+
+        val updated = service.sessions.value.first { it.sessionId == session.sessionId }
+        assertTrue(updated.lines.any { it.text.contains("/bin/grep") })
+        assertTrue(updated.lines.any { it.text.contains("/bin/sh") })
+    }
 }

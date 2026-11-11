@@ -2,6 +2,7 @@ package com.vibespace.core.editor.sora
 
 import android.graphics.Color
 import com.vibespace.core.editor.theme.EditorThemeDefinition
+import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 
 /**
@@ -22,6 +23,28 @@ class VibeEditorColorScheme(
         // Constructor properties are initialized by this point, so the requested preset/custom
         // theme can safely replace the temporary fallback applied during superclass construction.
         applyTheme(theme)
+    }
+
+    override fun getColor(type: Int): Int {
+        if (type >= 255) {
+            val superColor = super.getColor(type)
+            if (superColor != 0) {
+                return superColor
+            }
+            val tmTheme = runCatching { ThemeRegistry.getInstance().currentThemeModel?.theme }.getOrNull()
+            if (tmTheme != null) {
+                val colorHex = runCatching { tmTheme.getColor(type - 255) }.getOrNull()
+                if (colorHex != null && !"@default".equals(colorHex, ignoreCase = true)) {
+                    val parsed = runCatching { Color.parseColor(colorHex) }.getOrNull()
+                    if (parsed != null) {
+                        super.colors.put(type, parsed)
+                        return parsed
+                    }
+                }
+            }
+            return getColor(TEXT_NORMAL)
+        }
+        return super.getColor(type)
     }
 
     private fun applyTheme(theme: EditorThemeDefinition) {

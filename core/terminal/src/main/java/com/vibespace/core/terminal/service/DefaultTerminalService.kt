@@ -153,6 +153,10 @@ class DefaultTerminalService(
                       head [-n N] <f>  - Display beginning of a file
                       tail [-n N] <f>  - Display end of a file
                       wc <file>        - Count lines, words, and characters
+                      grep [-i] <pat> <file> - Search for pattern in file
+                      find [path] [-name pat] - Find files matching name
+                      df               - Report file system disk space usage
+                      free             - Display amount of free and used memory
                       which <cmd>      - Locate a shell command
                       uname [-a]       - Print system architecture information
                       env              - Print environment variables
@@ -335,13 +339,70 @@ class DefaultTerminalService(
                 }
             }
             "which" -> {
-                val builtins = listOf("help", "clear", "echo", "pwd", "ls", "cat", "touch", "mkdir", "rm", "cp", "mv", "head", "tail", "wc", "which", "uname", "env", "date", "version", "whoami", "sh", "bash")
+                val builtins = listOf("help", "clear", "echo", "pwd", "ls", "cat", "touch", "mkdir", "rm", "cp", "mv", "head", "tail", "wc", "grep", "find", "df", "free", "which", "uname", "env", "date", "version", "whoami", "sh", "bash")
                 val query = args.firstOrNull().orEmpty()
                 if (query in builtins) {
                     emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "/bin/$query (vibespace built-in)", StreamType.STDOUT))
                 } else {
                     emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "which: no $query in (/bin:/usr/bin)", StreamType.STDERR))
                 }
+            }
+            "grep" -> {
+                if (args.isEmpty()) {
+                    emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "grep: missing pattern and file operand", StreamType.STDERR))
+                } else {
+                    val caseInsensitive = args.contains("-i")
+                    val cleanArgs = args.filterNot { it.startsWith("-") }
+                    if (cleanArgs.size < 2) {
+                        emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "grep: missing file operand", StreamType.STDERR))
+                    } else {
+                        val pattern = cleanArgs[0]
+                        val file = resolveFile(session.workingDirectory, cleanArgs[1])
+                        if (file.exists() && file.isFile) {
+                            val matches = file.readLines().filter {
+                                if (caseInsensitive) it.contains(pattern, ignoreCase = true) else it.contains(pattern)
+                            }
+                            if (matches.isNotEmpty()) {
+                                emitLine(sessionId, TerminalLine(IdGenerator.shortId(), matches.joinToString("\n"), StreamType.STDOUT))
+                            }
+                        } else {
+                            emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "grep: ${cleanArgs[1]}: No such file or directory", StreamType.STDERR))
+                        }
+                    }
+                }
+            }
+            "find" -> {
+                val startDir = if (args.isNotEmpty() && !args[0].startsWith("-")) resolveFile(session.workingDirectory, args[0]) else File(session.workingDirectory)
+                val nameIdx = args.indexOf("-name")
+                val filter = if (nameIdx != -1 && nameIdx + 1 < args.size) args[nameIdx + 1].trim('"', '\'') else null
+                if (startDir.exists() && startDir.isDirectory) {
+                    val found = startDir.walkTopDown().maxDepth(10).filter { f ->
+                        if (filter == null) true
+                        else if (filter.startsWith("*") && filter.endsWith("*")) f.name.contains(filter.removeSurrounding("*"))
+                        else if (filter.startsWith("*")) f.name.endsWith(filter.removePrefix("*"))
+                        else f.name == filter
+                    }.map { it.relativeToOrSelf(File(session.workingDirectory)).path.replace('\\', '/') }
+                    emitLine(sessionId, TerminalLine(IdGenerator.shortId(), found.joinToString("\n"), StreamType.STDOUT))
+                } else {
+                    emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "find: '${startDir.path}': No such file or directory", StreamType.STDERR))
+                }
+            }
+            "df" -> {
+                val dir = File(session.workingDirectory)
+                val total = dir.totalSpace / (1024 * 1024)
+                val free = dir.freeSpace / (1024 * 1024)
+                val used = total - free
+                val percent = if (total > 0) (used * 100 / total) else 0
+                val out = "Filesystem      1M-blocks    Used Available Use% Mounted on\n/dev/root         ${total}M  ${used}M     ${free}M  ${percent}% /"
+                emitLine(sessionId, TerminalLine(IdGenerator.shortId(), out, StreamType.STDOUT))
+            }
+            "free" -> {
+                val runtime = Runtime.getRuntime()
+                val total = runtime.totalMemory() / (1024 * 1024)
+                val free = runtime.freeMemory() / (1024 * 1024)
+                val used = total - free
+                val out = "               total        used        free\nMem:           ${total}M         ${used}M         ${free}M"
+                emitLine(sessionId, TerminalLine(IdGenerator.shortId(), out, StreamType.STDOUT))
             }
             "uname" -> {
                 val osArch = System.getProperty("os.arch", "unknown")

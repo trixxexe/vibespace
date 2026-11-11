@@ -79,6 +79,14 @@ fun SoraEditorCanvas(
         }
     }
 
+    LaunchedEffect(theme.id, grammarReady) {
+        if (grammarReady) {
+            withContext(Dispatchers.Default) {
+                TextMateLanguageManager.loadThemeForDefinition(theme)
+            }
+        }
+    }
+
     DisposableEffect(controller) {
         onDispose {
             controller.unbind()

@@ -248,6 +248,8 @@ class AlpineLinuxRunner(
                         listOf(
                             "https://$host/alpine/$alpineReleaseBranch/releases/$architecture/alpine-minirootfs-$alpineVersion-$architecture.tar.gz",
                             "https://$host/alpine/latest-stable/releases/$architecture/alpine-minirootfs-$alpineVersion-$architecture.tar.gz",
+                            "https://$host/alpine/latest-stable/releases/$architecture/alpine-minirootfs-3.24.4-$architecture.tar.gz",
+                            "https://$host/alpine/latest-stable/releases/$architecture/alpine-minirootfs-3.24.2-$architecture.tar.gz",
                             "https://$host/alpine/v3.20/releases/$architecture/alpine-minirootfs-3.20.3-$architecture.tar.gz"
                         )
                     }.distinct()
@@ -443,7 +445,7 @@ class AlpineLinuxRunner(
             }
             connection.connect()
             val status = connection.responseCode
-            if (status in listOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308)) {
+            if (status in listOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 303, 307, 308)) {
                 val newUrl = connection.getHeaderField("Location")
                 connection.disconnect()
                 if (newUrl != null) {
@@ -456,6 +458,11 @@ class AlpineLinuxRunner(
         }
 
         val activeConn = connection ?: throw IOException("Could not establish connection to $urlStr")
+        val responseCode = activeConn.responseCode
+        if (responseCode !in 200..299) {
+            activeConn.disconnect()
+            throw IOException("HTTP $responseCode received while fetching $urlStr")
+        }
         val contentLength = activeConn.contentLengthLong
         destFile.parentFile?.mkdirs()
 
