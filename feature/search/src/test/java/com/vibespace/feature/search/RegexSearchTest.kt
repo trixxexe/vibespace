@@ -7,7 +7,8 @@ import org.junit.Test
 class RegexSearchTest {
     @Test
     fun findsZeroWidthMatchesAndEndOfFileMatchesWithoutLooping() {
-        val zeroWidth = RegexSearch.findMatches("aba", Pattern.compile("(?=a)"))
+        // RE2/J deliberately excludes look-around; anchors still exercise valid zero-width matches.
+        val zeroWidth = RegexSearch.findMatches("abc", Pattern.compile("^|$"))
         val endOfFile = RegexSearch.findMatches("abc", Pattern.compile("$"))
 
         assertEquals(listOf(0..-1, 2..1), zeroWidth)
@@ -16,7 +17,7 @@ class RegexSearchTest {
 
     @Test
     fun replacesZeroWidthAndEndOfFileMatchesSafely() {
-        assertEquals("xabxa", RegexSearch.replaceAll("aba", Pattern.compile("(?=a)"), "x"))
+        assertEquals("xabcx", RegexSearch.replaceAll("abc", Pattern.compile("^|$"), "x"))
         assertEquals("abc!", RegexSearch.replaceAll("abc", Pattern.compile("$"), "!"))
     }
 }
