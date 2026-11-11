@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Editor Engine contract as required by Section 8.
- * Decouples the UI from the concrete editor implementation (Default Compose editor vs future Sora Editor).
+ * Decouples editor UI from the document and undo-history implementation used by the Sora canvas.
  */
 interface EditorEngine {
     val documents: StateFlow<List<EditorDocument>>

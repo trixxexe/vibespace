@@ -7,6 +7,7 @@ import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.id.IdGenerator
 import com.vibespace.core.common.result.VibeResult
+import com.vibespace.core.editor.engine.EditorEngine
 import com.vibespace.core.workspace.manager.WorkspaceManager
 import com.vibespace.core.workspace.model.Project
 import com.vibespace.core.workspace.repository.RecentProjectsRepository
@@ -20,7 +21,8 @@ import kotlinx.coroutines.withContext
 class HomeViewModel(
     private val workspaceManager: WorkspaceManager,
     private val recentProjectsRepository: RecentProjectsRepository? = null,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    private val editorEngine: EditorEngine? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
@@ -45,6 +47,7 @@ class HomeViewModel(
 
     fun createNewProject(name: String, onProjectReady: (Project) -> Unit) {
         viewModelScope.launch(dispatchers.io) {
+            if (!saveOpenDocumentsBeforeProjectChange()) return@launch
             val projectId = IdGenerator.shortId("proj")
             val project = Project(
                 id = projectId,
@@ -67,6 +70,7 @@ class HomeViewModel(
 
     fun openDemoProject(onProjectReady: (Project) -> Unit) {
         viewModelScope.launch(dispatchers.io) {
+            if (!saveOpenDocumentsBeforeProjectChange()) return@launch
             val project = Project(
                 id = "demo",
                 name = "DemoProject",
@@ -95,6 +99,7 @@ class HomeViewModel(
         onProjectError: ((String) -> Unit)? = null
     ) {
         viewModelScope.launch(dispatchers.io) {
+            if (!saveOpenDocumentsBeforeProjectChange()) return@launch
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val projectId = IdGenerator.shortId("saf")
             val project = Project(
@@ -128,6 +133,7 @@ class HomeViewModel(
         onProjectError: ((String) -> Unit)? = null
     ) {
         viewModelScope.launch(dispatchers.io) {
+            if (!saveOpenDocumentsBeforeProjectChange()) return@launch
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             when (val res = workspaceManager.openProject(project)) {
                 is VibeResult.Success -> {
@@ -150,5 +156,28 @@ class HomeViewModel(
 
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    private suspend fun saveOpenDocumentsBeforeProjectChange(): Boolean {
+        val engine = editorEngine ?: return true
+        if (workspaceManager.currentProject.value == null) return true
+        // All open documents belong to the active project. URI prefixes are not reliable for
+        // SAF trees, whose document URIs differ from the selected tree URI.
+        val openDocuments = engine.documents.value
+        for (document in openDocuments) {
+            if (!document.isDirty) continue
+            when (val result = workspaceManager.writeFile(document.uri, document.content)) {
+                is VibeResult.Success -> engine.markSaved(document.documentId, document.content)
+                is VibeResult.Error -> {
+                    _uiState.update { it.copy(errorMessage = "Project was not switched. Could not save ${document.fileName}: ${result.message}") }
+                    return false
+                }
+                else -> {
+                    _uiState.update { it.copy(errorMessage = "Project was not switched because ${document.fileName} could not be saved.") }
+                    return false
+                }
+            }
+        }
+        return true
     }
 }

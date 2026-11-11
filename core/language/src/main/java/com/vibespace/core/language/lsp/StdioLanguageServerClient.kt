@@ -247,18 +247,19 @@ class StdioLanguageServerClient(
         val id = nextRequestId.getAndIncrement()
         val deferred = CompletableDeferred<String>()
         pendingRequests[id] = deferred
-
-        val json = """{"jsonrpc":"2.0","id":$id,"method":"$method","params":$paramsJson}"""
-        transport.send(json)
-
-        val response = withTimeoutOrNull(8000L) {
-            deferred.await()
-        } ?: run {
+        return try {
+            val json = """{"jsonrpc":"2.0","id":$id,"method":"$method","params":$paramsJson}"""
+            transport.send(json)
+            val response = withTimeoutOrNull(8000L) { deferred.await() }
+                ?: return VibeResult.Error("LSP request '$method' (id: $id) timed out.")
+            VibeResult.Success(response)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            VibeResult.Error("LSP request '$method' failed: ${error.message ?: "unknown server error"}", error)
+        } finally {
             pendingRequests.remove(id)
-            return VibeResult.Error("LSP request '$method' (id: $id) timed out.")
         }
-
-        return VibeResult.Success(response)
     }
 
     private suspend fun sendNotification(method: String, paramsJson: String) {

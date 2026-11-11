@@ -38,21 +38,6 @@ class VibeSpaceApplication : Application() {
     val dispatchers: DispatcherProvider by lazy { DefaultDispatcherProvider() }
     val logger: VibeLogger by lazy { AndroidVibeLogger() }
 
-    override fun onCreate() {
-        super.onCreate()
-        val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
-            as? com.vibespace.core.runner.alpine.AlpineLinuxRunner ?: return
-        if (alpine.hasBundledRuntime()) {
-            runnerManager.setRunnerMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
-            CoroutineScope(SupervisorJob() + dispatchers.io).launch {
-                val result = alpine.installSubsystem()
-                if (result is com.vibespace.core.common.result.VibeResult.Error) {
-                    logger.e("VibeSpaceApp", "Could not prepare bundled Python and Node runtime: ${result.message}")
-                }
-            }
-        }
-    }
-
     val recentProjectsRepository: RecentProjectsRepository by lazy {
         DataStoreRecentProjectsRepository(this, dispatchers)
     }
@@ -307,6 +292,18 @@ class VibeSpaceApplication : Application() {
             }
         }
         logger.i(TAG, "VibeSpace Application Initialized v0.1.0")
+
+        val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
+            as? com.vibespace.core.runner.alpine.AlpineLinuxRunner
+        if (alpine?.hasBundledRuntime() == true) {
+            runnerManager.setRunnerMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
+            CoroutineScope(SupervisorJob() + dispatchers.io).launch {
+                val result = alpine.installSubsystem()
+                if (result is com.vibespace.core.common.result.VibeResult.Error) {
+                    logger.e("VibeSpaceApp", "Could not prepare bundled Python and Node runtime: ${result.message}")
+                }
+            }
+        }
     }
 
     companion object {

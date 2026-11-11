@@ -12,6 +12,7 @@ import com.vibespace.core.common.result.VibeResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -80,16 +81,56 @@ class GeminiAIProvider(
     }
 
     override fun streamResponse(request: AIRequest): Flow<AIResponseChunk> = flow {
-        when (val result = generateResponse(request)) {
-            is VibeResult.Success -> {
-                emit(AIResponseChunk(delta = result.data.message.content, isComplete = true))
+        if (!isConfigured) throw IOException("No Gemini API key configured.")
+        if (!activeModel.matches(Regex("[A-Za-z0-9._-]+"))) throw IOException("Invalid Gemini model identifier.")
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$activeModel:streamGenerateContent?alt=sse"
+        if (httpTransport != null) {
+            // The injected request/response transport is intended for deterministic tests only;
+            // the real app connection below consumes Gemini's event stream incrementally.
+            when (val result = generateResponse(request)) {
+                is VibeResult.Success -> {
+                    emit(AIResponseChunk(delta = result.data.message.content, isComplete = true))
+                }
+                is VibeResult.Error -> throw IOException(result.message, result.throwable)
+                else -> throw IOException("Gemini returned no response.")
             }
-            is VibeResult.Error -> {
-                throw IOException(result.message, result.throwable)
-            }
-            else -> Unit
+            return@flow
         }
-    }
+
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = false
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("x-goog-api-key", apiKey.trim())
+        }
+        try {
+            connection.outputStream.use { it.write(buildRequestBody(request).toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val message = readLimited(connection.errorStream)
+                throw IOException(extractErrorMessage(status, message))
+            }
+            var streamedBytes = 0
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val data = line.removePrefix("data:").trim()
+                    streamedBytes += data.length
+                    if (streamedBytes > MAX_RESPONSE_BYTES) throw IOException("Gemini stream exceeded the 4 MB limit.")
+                    if (data.isEmpty()) continue
+                    val delta = runCatching { extractCandidateText(data).orEmpty() }.getOrDefault("")
+                    if (delta.isNotEmpty()) emit(AIResponseChunk(delta = delta))
+                }
+            }
+            emit(AIResponseChunk(delta = "", isComplete = true))
+        } finally {
+            connection.disconnect()
+        }
+    }.flowOn(dispatchers.io)
 
     private fun executeHttp(
         urlString: String,

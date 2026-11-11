@@ -153,6 +153,23 @@ class StdioLanguageServerClientTest {
     }
 
     @Test
+    fun lspClient_jsonRpcErrorReturnsFailureInsteadOfThrowing() = runTest {
+        val transport = InMemoryLspTransport()
+        val client = StdioLanguageServerClient("python", transport, dispatchers)
+        val responder = launch {
+            transport.clientToServer.receive()
+            transport.emitFromServer("""{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"server failed"}}""")
+        }
+
+        val result = client.requestHover("file:///workspace/main.py", 1, 1)
+
+        assertTrue(result is com.vibespace.core.common.result.VibeResult.Error)
+        assertTrue((result as com.vibespace.core.common.result.VibeResult.Error).message.contains("server failed"))
+        client.stop()
+        responder.cancel()
+    }
+
+    @Test
     fun lspClient_requestCompletion_returnsItems() = runTest {
         val transport = InMemoryLspTransport()
         val client = StdioLanguageServerClient("python", transport, dispatchers)

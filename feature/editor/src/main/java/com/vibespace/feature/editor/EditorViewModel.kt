@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -76,7 +77,41 @@ class EditorViewModel(
 
     private fun observeWorkspace() {
         viewModelScope.launch(dispatchers.default) {
+            var observedProject: com.vibespace.core.workspace.model.Project? = null
             workspaceManager.currentProject.collect { project ->
+                val previousProject = observedProject
+                if (project != null && previousProject != null &&
+                    (previousProject.id != project.id || previousProject.rootUri != project.rootUri)
+                ) {
+                    val documentsToClose = editorEngine.documents.value.toList()
+                    val clientsToStop = mutableSetOf<com.vibespace.core.language.lsp.LanguageServerClient>()
+                    documentsToClose.forEach { document ->
+                        val client = lspClientProvider?.invoke(document.language.id)
+                        if (client != null && client.isRunning) {
+                            try {
+                                client.didClose(document.uri)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                // Closing tabs must still proceed if an optional language server failed.
+                            }
+                            openedLspDocuments.remove(lspDocumentKey(client, document.uri))
+                            clientsToStop.add(client)
+                        }
+                        editorEngine.closeDocument(document.documentId)
+                    }
+                    clientsToStop.forEach { client ->
+                        try {
+                            client.stop()
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            // A failed optional server shutdown must not retain documents from the old project.
+                        }
+                    }
+                    activeLspClient = null
+                }
+                observedProject = project
                 if (project != null && editorEngine.documents.value.isEmpty()) {
                     val mainPyUri = "${project.rootUri}/main.py"
                     val readResult = workspaceManager.readFile(mainPyUri)

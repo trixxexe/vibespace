@@ -5,6 +5,7 @@ import com.vibespace.core.language.model.Diagnostic
 import com.vibespace.core.language.model.DiagnosticPosition
 import com.vibespace.core.language.model.DiagnosticRange
 import com.vibespace.core.language.model.DiagnosticSeverity
+import org.json.JSONTokener
 
 /**
  * Real-time syntax and structural code validator.
@@ -17,7 +18,7 @@ object SyntaxDiagnosticsValidator {
         if (content.isEmpty()) return emptyList()
 
         // 1. Bracket and Parentheses matching
-        diagnostics.addAll(validateBrackets(content))
+        diagnostics.addAll(validateBrackets(content, languageId))
 
         // 2. Language-specific syntax validation
         when (languageId.lowercase()) {
@@ -29,14 +30,11 @@ object SyntaxDiagnosticsValidator {
         return diagnostics
     }
 
-    private fun validateBrackets(content: String): List<Diagnostic> {
+    private fun validateBrackets(content: String, languageId: String): List<Diagnostic> {
         val diagnostics = mutableListOf<Diagnostic>()
         val stack = ArrayDeque<Triple<Char, Int, Int>>() // char, line, col
-        val lines = content.split("\n")
-
-        var inSingleQuote = false
-        var inDoubleQuote = false
-        var inTripleQuote = false
+        val code = maskStringsAndComments(content, languageId)
+        val lines = code.split("\n")
 
         for (lineIdx in lines.indices) {
             val line = lines[lineIdx]
@@ -45,15 +43,6 @@ object SyntaxDiagnosticsValidator {
             for (colIdx in line.indices) {
                 val c = line[colIdx]
                 val colNum = colIdx + 1
-
-                // Basic quote escaping check
-                if (c == '"' && (colIdx == 0 || line[colIdx - 1] != '\\')) {
-                    inDoubleQuote = !inDoubleQuote
-                } else if (c == '\'' && (colIdx == 0 || line[colIdx - 1] != '\\')) {
-                    inSingleQuote = !inSingleQuote
-                }
-
-                if (inSingleQuote || inDoubleQuote) continue
 
                 when (c) {
                     '(', '[', '{' -> stack.add(Triple(c, lineNum, colNum))
@@ -127,7 +116,7 @@ object SyntaxDiagnosticsValidator {
 
     private fun validatePython(content: String): List<Diagnostic> {
         val diagnostics = mutableListOf<Diagnostic>()
-        val lines = content.split("\n")
+        val lines = maskStringsAndComments(content, "python").split("\n")
         val colonKeywords = listOf("def", "class", "if", "elif", "else", "for", "while", "try", "except", "finally", "with")
 
         for (lineIdx in lines.indices) {
@@ -159,25 +148,74 @@ object SyntaxDiagnosticsValidator {
     private fun validateJson(content: String): List<Diagnostic> {
         val trimmed = content.trim()
         if (trimmed.isEmpty()) return emptyList()
-
-        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            return listOf(
-                createDiagnostic(
-                    message = "JSON document must begin with '{' or '['",
-                    line = 1,
-                    column = 1,
-                    severity = DiagnosticSeverity.ERROR,
-                    source = "json"
-                )
-            )
+        return try {
+            val tokener = JSONTokener(trimmed)
+            tokener.nextValue()
+            if (tokener.nextClean() == '\u0000') emptyList() else jsonDiagnostic("Unexpected content after the JSON value")
+        } catch (invalid: Exception) {
+            jsonDiagnostic(invalid.message ?: "Invalid JSON")
         }
-
-        return emptyList()
     }
+
+    /** Masks literals and comments while preserving every newline and source column. */
+    private fun maskStringsAndComments(content: String, languageId: String): String {
+        val python = languageId.equals("python", ignoreCase = true)
+        val output = content.toCharArray()
+        var index = 0
+        var quote: Char? = null
+        var tripleQuote = false
+        var escaped = false
+        while (index < content.length) {
+            val current = content[index]
+            if (quote != null) {
+                if (current != '\n' && current != '\r') output[index] = ' '
+                if (escaped) escaped = false
+                else if (current == '\\') escaped = true
+                else if (tripleQuote && index + 2 < content.length && content[index] == quote && content[index + 1] == quote && content[index + 2] == quote) {
+                    output[index] = ' '; output[index + 1] = ' '; output[index + 2] = ' '
+                    index += 2
+                    quote = null
+                    tripleQuote = false
+                } else if (!tripleQuote && current == quote) quote = null
+                index++
+                continue
+            }
+            if (!python && current == '/' && index + 1 < content.length && content[index + 1] == '*') {
+                output[index] = ' '; output[index + 1] = ' '
+                index += 2
+                while (index < content.length) {
+                    if (content[index] != '\n' && content[index] != '\r') output[index] = ' '
+                    if (content[index] == '*' && index + 1 < content.length && content[index + 1] == '/') {
+                        output[index] = ' '; output[index + 1] = ' '; index += 2; break
+                    }
+                    index++
+                }
+                continue
+            }
+            val startsLineComment = (python && current == '#') ||
+                (!python && current == '/' && index + 1 < content.length && content[index + 1] == '/')
+            if (startsLineComment) {
+                while (index < content.length && content[index] != '\n') output[index++] = ' '
+                continue
+            }
+            if (current == '\'' || current == '"') {
+                quote = current
+                tripleQuote = python && index + 2 < content.length && content[index + 1] == current && content[index + 2] == current
+                output[index] = ' '
+                if (tripleQuote) { output[index + 1] = ' '; output[index + 2] = ' '; index += 2 }
+            }
+            index++
+        }
+        return String(output)
+    }
+
+    private fun jsonDiagnostic(message: String) = listOf(
+        createDiagnostic(message, 1, 1, DiagnosticSeverity.ERROR, source = "json")
+    )
 
     private fun validateJavaScript(content: String): List<Diagnostic> {
         val diagnostics = mutableListOf<Diagnostic>()
-        val lines = content.split("\n")
+        val lines = maskStringsAndComments(content, "javascript").split("\n")
 
         for (lineIdx in lines.indices) {
             val line = lines[lineIdx].trim()

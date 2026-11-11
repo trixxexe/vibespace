@@ -30,6 +30,7 @@ class SearchViewModel(
 
     private var currentMatches = listOf<IntRange>()
     private var workspaceSearchJob: Job? = null
+    private var workspaceSearchGeneration = 0L
 
     fun onQueryChange(newQuery: String) {
         _uiState.update { it.copy(query = newQuery, searchError = null) }
@@ -52,7 +53,7 @@ class SearchViewModel(
 
     fun toggleRegex() {
         _uiState.update { it.copy(useRegex = !it.useRegex, searchError = null) }
-        if (_uiState.value.scope == SearchScope.WORKSPACE) searchWorkspace()
+        if (_uiState.value.scope == SearchScope.WORKSPACE) searchWorkspace() else performSearch()
     }
 
     fun toggleReplaceMode() {
@@ -70,7 +71,19 @@ class SearchViewModel(
             return
         }
 
-        currentMatches = editorEngine.find(doc.documentId, state.query, state.matchCase)
+        currentMatches = if (state.useRegex) {
+            try {
+                val flags = if (state.matchCase) 0 else Pattern.CASE_INSENSITIVE
+                val matcher = Pattern.compile(state.query, flags).matcher(doc.content)
+                buildList {
+                    while (matcher.find()) add(matcher.start() until matcher.end())
+                }
+            } catch (invalid: PatternSyntaxException) {
+                _uiState.update { it.copy(matchCount = 0, activeMatchIndex = 0, searchError = "Invalid regular expression: ${invalid.message}") }
+                currentMatches = emptyList()
+                return
+            }
+        } else editorEngine.find(doc.documentId, state.query, state.matchCase)
         val first = currentMatches.firstOrNull()
         _uiState.update {
             it.copy(
@@ -111,7 +124,9 @@ class SearchViewModel(
 
     private fun searchWorkspace() {
         workspaceSearchJob?.cancel()
-        val query = _uiState.value.query
+        val generation = ++workspaceSearchGeneration
+        val searchState = _uiState.value
+        val query = searchState.query
         if (query.isBlank()) {
             _uiState.update {
                 it.copy(
@@ -130,7 +145,8 @@ class SearchViewModel(
 
         workspaceSearchJob = viewModelScope.launch(dispatchers.io) {
             delay(180)
-            val options = _uiState.value
+            val options = searchState
+            val projectId = manager.currentProject.value?.id
             val pattern = try {
                 val expression = if (options.useRegex) query else Pattern.quote(query)
                 Pattern.compile(expression, if (options.matchCase) 0 else Pattern.CASE_INSENSITIVE)
@@ -164,7 +180,7 @@ class SearchViewModel(
                     return@launch
                 }
             }
-            if (!isCurrentSearch(query)) return@launch
+            if (!isCurrentSearch(generation, options, projectId, manager)) return@launch
 
             val files = allFiles.filter { it.isFile }
             val parentByUri = allFiles.associateBy { it.uri }
@@ -173,8 +189,8 @@ class SearchViewModel(
             var bytesRead = 0L
             var truncated = false
 
-            for (file in files) {
-                if (!isCurrentSearch(query)) return@launch
+            searchFiles@ for (file in files) {
+                if (!isCurrentSearch(generation, options, projectId, manager)) return@launch
                 if (matches.size >= MAX_MATCHES || bytesRead >= MAX_TOTAL_BYTES) {
                     truncated = true
                     break
@@ -192,12 +208,13 @@ class SearchViewModel(
                             continue
                         }
                         val relativePath = buildRelativePath(file, parentByUri)
-                        content.lineSequence().forEachIndexed { index, line ->
+                        for ((index, line) in content.lineSequence().withIndex()) {
+                            if (!isCurrentSearch(generation, options, projectId, manager)) return@launch
                             val matcher = pattern.matcher(line)
                             while (matcher.find()) {
                                 if (matches.size >= MAX_MATCHES) {
                                     truncated = true
-                                    break
+                                    break@searchFiles
                                 }
                                 matches.add(
                                     WorkspaceSearchMatch(
@@ -215,7 +232,7 @@ class SearchViewModel(
                     else -> skipped++
                 }
             }
-            if (isCurrentSearch(query)) {
+            if (isCurrentSearch(generation, options, projectId, manager)) {
                 _uiState.update {
                     it.copy(
                         workspaceMatches = matches,
@@ -229,8 +246,20 @@ class SearchViewModel(
         }
     }
 
-    private fun isCurrentSearch(query: String) =
-        _uiState.value.query == query && _uiState.value.scope == SearchScope.WORKSPACE
+    private fun isCurrentSearch(
+        generation: Long,
+        requested: SearchUiState,
+        projectId: String?,
+        manager: WorkspaceManager
+    ): Boolean {
+        val current = _uiState.value
+        return generation == workspaceSearchGeneration &&
+            current.query == requested.query &&
+            current.matchCase == requested.matchCase &&
+            current.useRegex == requested.useRegex &&
+            current.scope == SearchScope.WORKSPACE &&
+            manager.currentProject.value?.id == projectId
+    }
 
     private fun buildRelativePath(file: VirtualFile, filesByUri: Map<String, VirtualFile>): String {
         val segments = mutableListOf(file.name)
@@ -249,7 +278,22 @@ class SearchViewModel(
         val doc = editorEngine.activeDocument.value ?: return
         if (state.scope != SearchScope.FILE || state.query.isEmpty()) return
         viewModelScope.launch(dispatchers.default) {
-            editorEngine.replaceAll(doc.documentId, state.query, state.replacement, state.matchCase)
+            if (state.useRegex) {
+                val matcher = try {
+                    Pattern.compile(state.query, if (state.matchCase) 0 else Pattern.CASE_INSENSITIVE).matcher(doc.content)
+                } catch (invalid: PatternSyntaxException) {
+                    _uiState.update { it.copy(searchError = "Invalid regular expression: ${invalid.message}") }
+                    return@launch
+                }
+                val ranges = buildList {
+                    while (matcher.find()) add(matcher.start() until matcher.end())
+                }
+                for (range in ranges.asReversed()) {
+                    editorEngine.replace(doc.documentId, range, state.replacement)
+                }
+            } else {
+                editorEngine.replaceAll(doc.documentId, state.query, state.replacement, state.matchCase)
+            }
             performSearch()
         }
     }

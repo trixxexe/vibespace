@@ -101,14 +101,10 @@ fun EditorScreen(
         // Toolbar
         EditorToolbar(
             onSaveClick = { viewModel.saveActiveDocument() },
-            onUndoClick = {
-                soraController.undo()
-                viewModel.undo()
-            },
-            onRedoClick = {
-                soraController.redo()
-                viewModel.redo()
-            },
+            // EditorEngine is the single source of undo history. Sora edits flow into it;
+            // applying both histories here would undo two separate changes per tap.
+            onUndoClick = { viewModel.undo() },
+            onRedoClick = { viewModel.redo() },
             onSearchClick = onSearchClick,
             onRunClick = onRunClick,
             onAiAssistantClick = onAiAssistantClick,
@@ -228,8 +224,8 @@ fun EditorScreen(
                 onInsertSymbol = { soraController.insertSymbol(it) },
                 onMoveCursorLeft = { soraController.moveCursorLeft() },
                 onMoveCursorRight = { soraController.moveCursorRight() },
-                onUndo = { soraController.undo() },
-                onRedo = { soraController.redo() },
+                onUndo = { viewModel.undo() },
+                onRedo = { viewModel.redo() },
                 modifier = Modifier.imePadding()
             )
         }

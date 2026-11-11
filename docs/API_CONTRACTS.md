@@ -22,7 +22,7 @@ interface EditorEngine {
     suspend fun setActiveDocument(documentId: String): VibeResult<Unit>
     suspend fun updateDocument(documentId: String, newContent: String): VibeResult<EditorDocument>
     suspend fun updateCursorPosition(documentId: String, cursorPosition: CursorPosition): VibeResult<Unit>
-    suspend fun markSaved(documentId: String): VibeResult<Unit>
+    suspend fun markSaved(documentId: String, contentAtSave: String? = null): VibeResult<Unit>
 
     fun getDocument(documentId: String): EditorDocument?
     suspend fun undo(documentId: String): VibeResult<EditorDocument>
@@ -38,6 +38,7 @@ interface EditorEngine {
 - `EditorDocument(documentId, uri, fileName, content, language, isDirty, lineCount, cursorPosition, selection, version)`
 - `CursorPosition(line, column, offset)`
 - `TextSpan(startOffset, endOffset, styleKey)`
+- The production editor canvas uses Sora. `VibeEditorColorScheme` applies the dark fallback during superclass construction, then applies the selected built-in or installed VS Code-compatible theme after initialization.
 
 ---
 
@@ -85,6 +86,7 @@ interface LanguageServerClient {
     suspend fun didChange(documentUri: String, newText: String, version: Int): VibeResult<Unit>
     suspend fun didClose(documentUri: String): VibeResult<Unit>
     fun observeDiagnostics(documentUri: String): Flow<List<Diagnostic>>
+    suspend fun requestHover(documentUri: String, line: Int, column: Int): VibeResult<HoverInfo?>
     suspend fun requestCompletion(documentUri: String, line: Int, column: Int): VibeResult<List<CompletionItem>>
     suspend fun requestDefinition(documentUri: String, line: Int, column: Int): VibeResult<List<DefinitionLocation>>
     suspend fun formatDocument(documentUri: String): VibeResult<String>

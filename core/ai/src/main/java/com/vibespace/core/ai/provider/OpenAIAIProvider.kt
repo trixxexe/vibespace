@@ -12,6 +12,7 @@ import com.vibespace.core.common.result.VibeResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -87,16 +88,71 @@ class OpenAIAIProvider(
     }
 
     override fun streamResponse(request: AIRequest): Flow<AIResponseChunk> = flow {
-        when (val result = generateResponse(request)) {
-            is VibeResult.Success -> {
-                emit(AIResponseChunk(delta = result.data.message.content, isComplete = true))
+        if (!isConfigured) throw IOException("No OpenAI API key configured.")
+        val endpoint = customEndpoint.trim().ifBlank { "https://api.openai.com/v1/chat/completions" }
+        val endpointUri = runCatching { URI(endpoint) }.getOrNull()
+        val host = endpointUri?.host?.lowercase()
+        val localHttpEndpoint = endpointUri?.scheme.equals("http", ignoreCase = true) &&
+            (host == "localhost" || host == "127.0.0.1" || host == "::1")
+        if (endpointUri?.host.isNullOrBlank() || endpointUri?.userInfo != null ||
+            (!endpointUri?.scheme.equals("https", ignoreCase = true) && !localHttpEndpoint)
+        ) throw IOException("Invalid custom endpoint. Use HTTPS or a localhost HTTP proxy.")
+
+        // Injected transports are request/response fakes, so they cannot expose a live byte stream.
+        // Production connections below use the provider's actual SSE streaming endpoint.
+        if (httpTransport != null) {
+            when (val result = generateResponse(request)) {
+                is VibeResult.Success -> {
+                    emit(AIResponseChunk(delta = result.data.message.content, isComplete = true))
+                }
+                is VibeResult.Error -> throw IOException(result.message, result.throwable)
+                else -> throw IOException("AI endpoint returned no response.")
             }
-            is VibeResult.Error -> {
-                throw IOException(result.message, result.throwable)
-            }
-            else -> Unit
+            return@flow
         }
-    }
+
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = false
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
+        }
+        try {
+            connection.outputStream.use { it.write(buildRequestBody(request, stream = true).toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val message = readLimited(connection.errorStream)
+                throw IOException(extractErrorMessage(status, message))
+            }
+            var receivedDone = false
+            var streamedBytes = 0
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val data = line.removePrefix("data:").trim()
+                    streamedBytes += data.length
+                    if (streamedBytes > MAX_RESPONSE_BYTES) throw IOException("AI stream exceeded the 4 MB limit.")
+                    if (data == "[DONE]") {
+                        receivedDone = true
+                        emit(AIResponseChunk(delta = "", isComplete = true))
+                        break
+                    }
+                    val delta = runCatching {
+                        JSONObject(data).optJSONArray("choices")?.optJSONObject(0)
+                            ?.optJSONObject("delta")?.optString("content").orEmpty()
+                    }.getOrDefault("")
+                    if (delta.isNotEmpty()) emit(AIResponseChunk(delta = delta))
+                }
+            }
+            if (!receivedDone) emit(AIResponseChunk(delta = "", isComplete = true))
+        } finally {
+            connection.disconnect()
+        }
+    }.flowOn(dispatchers.io)
 
     private fun executeHttp(
         urlString: String,
@@ -149,7 +205,7 @@ class OpenAIAIProvider(
         }
     }
 
-    private fun buildRequestBody(request: AIRequest): String {
+    private fun buildRequestBody(request: AIRequest, stream: Boolean = false): String {
         return try {
             val root = JSONObject()
             root.put("model", activeModel)
@@ -195,6 +251,7 @@ class OpenAIAIProvider(
             }
 
             root.put("messages", messagesArray)
+            root.put("stream", stream)
             root.toString()
         } catch (t: Throwable) {
             JSONObject().put("model", activeModel).put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", "Code help"))).toString()

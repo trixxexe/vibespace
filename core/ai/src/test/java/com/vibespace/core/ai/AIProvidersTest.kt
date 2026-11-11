@@ -7,6 +7,9 @@ import com.vibespace.core.ai.model.CodeContext
 import com.vibespace.core.ai.provider.GeminiAIProvider
 import com.vibespace.core.ai.provider.OpenAIAIProvider
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.toList
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -148,5 +151,37 @@ class AIProvidersTest {
         assertTrue(result.isError)
         val errorResult = result as com.vibespace.core.common.result.VibeResult.Error
         assertTrue(errorResult.message.contains("Incorrect API key provided"))
+    }
+
+    @Test
+    fun openaiProvider_streamsSseDeltasAsTheyArrive() = runTest {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/v1/chat/completions") { exchange ->
+            val request = exchange.requestBody.bufferedReader().readText()
+            assertTrue(request.contains("\"stream\":true"))
+            val body = listOf(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
+                "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\n",
+                "data: [DONE]\n\n"
+            ).joinToString("").toByteArray()
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val provider = OpenAIAIProvider(
+                apiKey = "test-key",
+                customEndpoint = "http://127.0.0.1:${server.address.port}/v1/chat/completions"
+            )
+            val chunks = provider.streamResponse(
+                AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+            ).toList()
+
+            assertEquals(listOf("Hello", " world"), chunks.filterNot { it.isComplete }.map { it.delta })
+            assertTrue(chunks.last().isComplete)
+        } finally {
+            server.stop(0)
+        }
     }
 }

@@ -29,7 +29,8 @@ class VibeViewModelFactory(
                 HomeViewModel(
                     workspaceManager = app.workspaceManager,
                     recentProjectsRepository = app.recentProjectsRepository,
-                    dispatchers = app.dispatchers
+                    dispatchers = app.dispatchers,
+                    editorEngine = app.editorEngine
                 ) as T
             }
             modelClass.isAssignableFrom(EditorViewModel::class.java) -> {

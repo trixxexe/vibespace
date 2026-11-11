@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -65,7 +68,7 @@ class CrashActivity : ComponentActivity() {
         setContent {
             VibeSpaceTheme(darkTheme = true) {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
                     color = Color(0xFF0F1115)
                 ) {
                     CrashScreen(
@@ -82,15 +85,13 @@ class CrashActivity : ComponentActivity() {
                         },
                         onClearCache = {
                             try {
-                                val datastoreDir = File(filesDir, "datastore")
-                                if (datastoreDir.exists()) {
-                                    datastoreDir.deleteRecursively()
-                                }
+                                cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                                externalCacheDir?.listFiles()?.forEach { it.deleteRecursively() }
                                 val crashFile = File(filesDir, "crash_log.txt")
                                 if (crashFile.exists()) {
                                     crashFile.delete()
                                 }
-                                Toast.makeText(this, "Cache and preferences reset", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this, "Temporary cache cleared; preferences kept", Toast.LENGTH_SHORT).show()
                             } catch (_: Throwable) {}
                             restartApp()
                         },
@@ -229,7 +230,7 @@ private fun CrashScreen(
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().height(46.dp)
         ) {
-            Text("Clear Cache & Reset", color = Color(0xFFEF4444))
+            Text("Clear Temporary Cache & Restart", color = Color(0xFFEF4444))
         }
     }
 }
