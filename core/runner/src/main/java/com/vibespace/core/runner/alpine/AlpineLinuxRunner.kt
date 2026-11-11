@@ -609,8 +609,9 @@ class AlpineLinuxRunner(
         val result = linkedMapOf<String, String>()
         var offset = 0
         while (offset < payload.size) {
-            val space = payload.indexOf(' '.code.toByte(), offset)
-            if (space < 0) break
+            var space = offset
+            while (space < payload.size && payload[space] != ' '.code.toByte()) space++
+            if (space == payload.size) break
             val recordLength = String(payload, offset, space - offset, Charsets.US_ASCII).toIntOrNull() ?: break
             val recordEnd = offset + recordLength
             if (recordLength <= 0 || recordEnd > payload.size) break
