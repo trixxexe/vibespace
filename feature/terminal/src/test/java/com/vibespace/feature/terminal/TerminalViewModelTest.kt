@@ -34,7 +34,7 @@ class TerminalViewModelTest {
     private val testDispatchers get() = TestDispatcherProvider(mainDispatcherRule.dispatcher)
     private val terminalService = DefaultTerminalService(dispatchers = testDispatchers)
 
-    @Test
+    @Test(timeout = 30000)
     fun initial_session_created_and_commands_can_be_sent() = runTest {
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
@@ -51,7 +51,7 @@ class TerminalViewModelTest {
         assertTrue(active!!.lines.any { it.text.contains("MobileIDE") })
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun selectTab_switches_active_tab() = runTest {
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
@@ -62,7 +62,7 @@ class TerminalViewModelTest {
         assertEquals(BottomPanelTab.OUTPUT, viewModel.uiState.value.activeTab)
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun switchRunnerMode_updates_active_mode_in_manager_and_state() = runTest {
         val runnerManager = DefaultRunnerManager(dispatchers = testDispatchers)
         val viewModel = track(TerminalViewModel(
@@ -82,7 +82,7 @@ class TerminalViewModelTest {
         assertEquals(RunnerMode.TERMUX, runnerManager.activeRunnerMode.value)
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun runActiveDocument_dispatches_command_to_runner() = runTest {
         val runnerManager = DefaultRunnerManager(dispatchers = testDispatchers)
         val viewModel = track(TerminalViewModel(
@@ -97,7 +97,7 @@ class TerminalViewModelTest {
         assertTrue(active!!.lines.any { it.text.contains("python") && it.text.contains("script.py") })
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun runActiveDocument_uses_workspace_relative_path_and_real_alpine_runner() = runTest {
         val workspace = com.vibespace.core.workspace.manager.DefaultWorkspaceManager(dispatchers = testDispatchers)
         val project = com.vibespace.core.workspace.model.Project("run-project", "Run Project", "vibe://projects/run-project")
@@ -120,7 +120,7 @@ class TerminalViewModelTest {
         assertTrue(lines.any { it.streamType == StreamType.STDERR && it.text.contains("not installed", ignoreCase = true) })
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun multiple_sessions_can_be_created_switched_and_closed() = runTest {
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
@@ -143,7 +143,7 @@ class TerminalViewModelTest {
         assertEquals(initialCount, viewModel.uiState.value.sessions.size)
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun launchTerminalAgent_creates_session_with_capability_disclosure() = runTest {
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
@@ -157,7 +157,7 @@ class TerminalViewModelTest {
         assertTrue(active.lines.any { it.text.contains("does not bundle CLI coding agents") })
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun updateDiagnostics_updates_problems_count() {
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
@@ -179,7 +179,7 @@ class TerminalViewModelTest {
         assertEquals(1, viewModel.uiState.value.diagnostics.size)
     }
 
-    @Test
+    @Test(timeout = 30000)
     fun command_with_leading_prompt_is_sanitized_and_not_duplicated() = runTest {
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,

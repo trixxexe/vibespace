@@ -146,7 +146,7 @@ fun SoraEditorCanvas(
 
             // Keep independent tab text and caret state when switching documents.
             if (binding?.documentId != documentId || editor.text.toString() != content) {
-                val guard = binding ?: EditorBinding(documentId, language.id)
+                val guard = binding ?: EditorBinding(documentId, language.id, editorLanguage)
                 editor.tag = guard
                 guard.isUpdatingProgrammatically = true
                 try {
