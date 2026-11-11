@@ -225,6 +225,119 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.toggleWordWrap(it) }
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text("Tab Size", style = MaterialTheme.typography.bodyMedium, color = VibeTheme.colors.textPrimary)
+                        Text("Number of spaces per indentation level", style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(2, 4, 8).forEach { size ->
+                                val selected = settings.tabSizeSpaces == size
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (selected) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.gutterBackground,
+                                    border = BorderStroke(1.dp, if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                    modifier = Modifier.clickable { viewModel.setTabSize(size) }
+                                ) {
+                                    Text(
+                                        text = "$size spaces",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
+                                        color = if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text("Font Family", style = MaterialTheme.typography.bodyMedium, color = VibeTheme.colors.textPrimary)
+                        Text("Code editor typeface family", style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            listOf("Monospace", "Fira Code", "JetBrains Mono", "System").forEach { font ->
+                                val selected = settings.fontFamily == font
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (selected) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.gutterBackground,
+                                    border = BorderStroke(1.dp, if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                    modifier = Modifier.clickable { viewModel.setFontFamily(font) }
+                                ) {
+                                    Text(
+                                        text = font,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
+                                        color = if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text("Auto-Save Interval", style = MaterialTheme.typography.bodyMedium, color = VibeTheme.colors.textPrimary)
+                        Text("Automatically persist modified files in background", style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Off", "5s", "10s", "30s").forEach { interval ->
+                                val selected = settings.autoSaveInterval == interval
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (selected) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.gutterBackground,
+                                    border = BorderStroke(1.dp, if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                    modifier = Modifier.clickable { viewModel.setAutoSaveInterval(interval) }
+                                ) {
+                                    Text(
+                                        text = interval,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
+                                        color = if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text("Cursor Style", style = MaterialTheme.typography.bodyMedium, color = VibeTheme.colors.textPrimary)
+                        Text("Caret appearance in editor buffer", style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Line", "Block", "Underline").forEach { style ->
+                                val selected = settings.cursorStyle == style
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (selected) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.gutterBackground,
+                                    border = BorderStroke(1.dp, if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                    modifier = Modifier.clickable { viewModel.setCursorStyle(style) }
+                                ) {
+                                    Text(
+                                        text = style,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
+                                        color = if (selected) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Format On Save", style = MaterialTheme.typography.bodyMedium, color = VibeTheme.colors.textPrimary)
+                                Text("Automatically format code upon saving document", style = MaterialTheme.typography.bodySmall, color = VibeTheme.colors.textSecondary)
+                            }
+                            Switch(
+                                checked = settings.formatOnSave,
+                                onCheckedChange = { viewModel.toggleFormatOnSave(it) }
+                            )
+                        }
                     }
                 }
             }
@@ -422,6 +535,31 @@ fun SettingsScreen(
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text("Groq", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
                                     Text("Ultra-fast Llama 3", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedProvider == "anthropic" || selectedModel.contains("claude")) VibeTheme.colors.accentPrimary.copy(alpha = 0.15f) else VibeTheme.colors.gutterBackground,
+                                border = BorderStroke(1.dp, if (selectedProvider == "anthropic" || selectedModel.contains("claude")) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedProvider = "anthropic"
+                                        selectedModel = "claude-3-7-sonnet"
+                                        inputEndpoint = "https://api.anthropic.com/v1/messages"
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text("Anthropic (Claude)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("Claude 3.7 Sonnet / 3.5 Haiku (Direct & OpenRouter)", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
                                 }
                             }
                         }

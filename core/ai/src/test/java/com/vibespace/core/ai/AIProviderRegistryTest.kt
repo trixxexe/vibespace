@@ -106,7 +106,7 @@ class AIProviderRegistryTest {
     @Test
     fun defaults_registration_handles_configuration_correctly() {
         val registry = AIProviderRegistry(registerDefaults = true)
-        assertEquals(2, registry.getAllProviders().size)
+        assertEquals(5, registry.getAllProviders().size)
         assertEquals("gemini", registry.getActiveProvider()?.providerId)
 
         // Gemini is not configured initially

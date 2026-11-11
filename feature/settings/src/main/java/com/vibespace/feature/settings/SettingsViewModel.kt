@@ -79,6 +79,31 @@ class SettingsViewModel(
         }
     }
 
+    fun setFontFamily(family: String) {
+        viewModelScope.launch(dispatchers.default) {
+            repository.updateSettings(_uiState.value.settings.copy(fontFamily = family))
+        }
+    }
+
+    fun setAutoSaveInterval(interval: String) {
+        viewModelScope.launch(dispatchers.default) {
+            val autoSaveEnabled = interval != "Off"
+            repository.updateSettings(_uiState.value.settings.copy(autoSaveInterval = interval, autoSave = autoSaveEnabled))
+        }
+    }
+
+    fun setCursorStyle(style: String) {
+        viewModelScope.launch(dispatchers.default) {
+            repository.updateSettings(_uiState.value.settings.copy(cursorStyle = style))
+        }
+    }
+
+    fun toggleFormatOnSave(enabled: Boolean) {
+        viewModelScope.launch(dispatchers.default) {
+            repository.updateSettings(_uiState.value.settings.copy(formatOnSave = enabled))
+        }
+    }
+
     fun setAiConfig(providerId: String, apiKey: String, model: String, customEndpoint: String = "") {
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isSavingAiConfig = true, aiConfigError = null) }

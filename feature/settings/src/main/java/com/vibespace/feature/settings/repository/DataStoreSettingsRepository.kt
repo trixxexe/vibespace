@@ -51,6 +51,10 @@ class DataStoreSettingsRepository(
         val SHOW_LINE_NUMBERS = booleanPreferencesKey("show_line_numbers")
         val WORD_WRAP = booleanPreferencesKey("word_wrap")
         val AUTO_SAVE = booleanPreferencesKey("auto_save")
+        val FONT_FAMILY = stringPreferencesKey("font_family")
+        val AUTO_SAVE_INTERVAL = stringPreferencesKey("auto_save_interval")
+        val CURSOR_STYLE = stringPreferencesKey("cursor_style")
+        val FORMAT_ON_SAVE = booleanPreferencesKey("format_on_save")
         val AI_PROVIDER_ID = stringPreferencesKey("ai_provider_id")
         val AI_API_KEY = stringPreferencesKey("ai_api_key")
         val AI_MODEL = stringPreferencesKey("ai_model")
@@ -105,6 +109,10 @@ class DataStoreSettingsRepository(
                             showLineNumbers = preferences[PreferencesKeys.SHOW_LINE_NUMBERS] ?: true,
                             wordWrap = preferences[PreferencesKeys.WORD_WRAP] ?: false,
                             autoSave = preferences[PreferencesKeys.AUTO_SAVE] ?: true,
+                            fontFamily = preferences[PreferencesKeys.FONT_FAMILY] ?: "Monospace",
+                            autoSaveInterval = preferences[PreferencesKeys.AUTO_SAVE_INTERVAL] ?: "10s",
+                            cursorStyle = preferences[PreferencesKeys.CURSOR_STYLE] ?: "Line",
+                            formatOnSave = preferences[PreferencesKeys.FORMAT_ON_SAVE] ?: false,
                             aiProviderId = aiProviderId,
                             aiApiKey = decryptedApiKey,
                             aiModel = aiModel,
@@ -142,6 +150,10 @@ class DataStoreSettingsRepository(
                 preferences[PreferencesKeys.SHOW_LINE_NUMBERS] = settings.showLineNumbers
                 preferences[PreferencesKeys.WORD_WRAP] = settings.wordWrap
                 preferences[PreferencesKeys.AUTO_SAVE] = settings.autoSave
+                preferences[PreferencesKeys.FONT_FAMILY] = settings.fontFamily
+                preferences[PreferencesKeys.AUTO_SAVE_INTERVAL] = settings.autoSaveInterval
+                preferences[PreferencesKeys.CURSOR_STYLE] = settings.cursorStyle
+                preferences[PreferencesKeys.FORMAT_ON_SAVE] = settings.formatOnSave
                 preferences[PreferencesKeys.AI_PROVIDER_ID] = settings.aiProviderId
                 preferences[PreferencesKeys.AI_API_KEY] = encryptedKey
                 preferences[PreferencesKeys.AI_MODEL] = settings.aiModel
