@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.re2j)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

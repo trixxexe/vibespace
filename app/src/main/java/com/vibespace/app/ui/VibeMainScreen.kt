@@ -309,7 +309,11 @@ fun VibeMainScreen(
                 if (isSearchVisible) {
                     SearchPanel(
                         viewModel = searchViewModel,
-                        onClose = { isSearchVisible = false }
+                        onClose = { isSearchVisible = false },
+                        onOpenResult = { file, line ->
+                            editorViewModel.openFile(file, line)
+                            isSearchVisible = false
+                        }
                     )
                 }
 
@@ -541,7 +545,11 @@ fun VibeMainScreen(
                 if (isSearchVisible) {
                     SearchPanel(
                         viewModel = searchViewModel,
-                        onClose = { isSearchVisible = false }
+                        onClose = { isSearchVisible = false },
+                        onOpenResult = { file, line ->
+                            editorViewModel.openFile(file, line)
+                            isSearchVisible = false
+                        }
                     )
                 }
 

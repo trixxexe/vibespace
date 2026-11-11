@@ -74,7 +74,8 @@ class VibeViewModelFactory(
             modelClass.isAssignableFrom(SearchViewModel::class.java) -> {
                 SearchViewModel(
                     editorEngine = app.editorEngine,
-                    dispatchers = app.dispatchers
+                    dispatchers = app.dispatchers,
+                    workspaceManager = app.workspaceManager
                 ) as T
             }
             modelClass.isAssignableFrom(SettingsViewModel::class.java) -> {

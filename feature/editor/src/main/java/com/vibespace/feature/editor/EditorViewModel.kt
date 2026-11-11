@@ -105,7 +105,7 @@ class EditorViewModel(
         }
     }
 
-    fun openFile(file: VirtualFile) {
+    fun openFile(file: VirtualFile, lineNumber: Int? = null) {
         viewModelScope.launch(dispatchers.io) {
             val content = when (val readResult = workspaceManager.readFile(file.uri)) {
                 is VibeResult.Success -> readResult.data
@@ -120,17 +120,26 @@ class EditorViewModel(
             }
             val language = languageDetector.detectByFileName(file.name)
 
-            when (val openResult = editorEngine.openDocument(
+            val openResult = editorEngine.openDocument(
                 uri = file.uri,
                 fileName = file.name,
                 content = content,
                 language = language
-            )) {
+            )
+            when (openResult) {
                 is VibeResult.Error -> {
                     _uiState.update { it.copy(statusMessage = "Could not open ${file.name}: ${openResult.message}") }
                     return@launch
                 }
                 else -> Unit
+            }
+            if (lineNumber != null) {
+                val opened = (openResult as? VibeResult.Success)?.data
+                if (opened != null) {
+                    val safeLine = lineNumber.coerceIn(1, content.count { it == '\n' } + 1)
+                    val offset = content.lineSequence().take(safeLine - 1).sumOf { it.length + 1 }.coerceAtMost(content.length)
+                    editorEngine.updateCursorPosition(opened.documentId, CursorPosition(safeLine, 1, offset))
+                }
             }
             val client = lspClientProvider?.invoke(language.id)
             activeLspClient = client
