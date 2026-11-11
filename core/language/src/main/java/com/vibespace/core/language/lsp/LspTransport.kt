@@ -115,3 +115,26 @@ class StreamLspTransport(
         } catch (_: Exception) {}
     }
 }
+
+/** Stdio transport that also owns and terminates the server process. */
+class ProcessLspTransport(
+    private val process: Process,
+    dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+) : LspTransport {
+    private val delegate = StreamLspTransport(process.inputStream, process.outputStream, dispatchers)
+    private val stderrScope = CoroutineScope(SupervisorJob() + dispatchers.io)
+    private val stderrJob = stderrScope.launch {
+        runCatching { process.errorStream.bufferedReader().useLines { lines -> lines.forEach { /* Drain stderr to prevent the child from blocking. */ } } }
+    }
+
+    override suspend fun send(jsonPayload: String) = delegate.send(jsonPayload)
+    override fun incoming(): Flow<String> = delegate.incoming()
+
+    override fun close() {
+        delegate.close()
+        stderrJob.cancel()
+        stderrScope.cancel()
+        process.destroy()
+        if (process.isAlive) process.destroyForcibly()
+    }
+}

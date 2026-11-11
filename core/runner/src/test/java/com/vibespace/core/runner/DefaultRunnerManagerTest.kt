@@ -78,6 +78,7 @@ class DefaultRunnerManagerTest {
                 }
                 progress(1.0f)
             },
+            prootArchitecture = "aarch64",
             processExecutor = fakeExecutor
         )
         val manager = DefaultRunnerManager(

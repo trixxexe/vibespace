@@ -108,6 +108,40 @@ class TerminalViewModel(
         }
     }
 
+    fun installLanguageServers() {
+        val manager = runnerManager ?: return
+        val session = _uiState.value.activeSession ?: return
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isInstallingLanguageServers = true, languageServerMessage = null) }
+            val command = "apk add --no-cache py3-lsp-server nodejs npm && npm install --global typescript-language-server typescript"
+            when (val result = manager.runCommand(
+                command = command,
+                workingDirectory = session.workingDirectory,
+                preferredRunnerId = RunnerMode.ALPINE.id,
+                sessionId = session.sessionId
+            )) {
+                is VibeResult.Success -> {
+                    result.data.outputs.forEach { out ->
+                        terminalService.appendLine(session.sessionId, out.line, if (out.isError) StreamType.STDERR else StreamType.STDOUT)
+                    }
+                    if (result.data.exitCode == 0) {
+                        terminalService.appendLine(session.sessionId, "Python and TypeScript language servers installed in Alpine.", StreamType.SYSTEM)
+                        _uiState.update { it.copy(isInstallingLanguageServers = false, languageServerMessage = "Python and TypeScript LSP servers are ready.") }
+                    } else {
+                        val message = "Language server installation exited with code ${result.data.exitCode}. See terminal output for details."
+                        terminalService.appendLine(session.sessionId, message, StreamType.STDERR)
+                        _uiState.update { it.copy(isInstallingLanguageServers = false, languageServerMessage = message) }
+                    }
+                }
+                is VibeResult.Error -> {
+                    terminalService.appendLine(session.sessionId, result.message, StreamType.STDERR)
+                    _uiState.update { it.copy(isInstallingLanguageServers = false, languageServerMessage = result.message) }
+                }
+                else -> _uiState.update { it.copy(isInstallingLanguageServers = false) }
+            }
+        }
+    }
+
     fun onCommandInputChange(text: String) {
         _uiState.update { it.copy(commandInput = text) }
     }
@@ -122,7 +156,11 @@ class TerminalViewModel(
             terminalService.appendLine(session.sessionId, "$ $cleanCommand", StreamType.COMMAND)
 
             if (runnerManager != null) {
-                when (val result = runnerManager.runCommand(cleanCommand, session.workingDirectory)) {
+                when (val result = runnerManager.runCommand(
+                    cleanCommand,
+                    session.workingDirectory,
+                    sessionId = session.sessionId
+                )) {
                     is VibeResult.Success -> {
                         for (out in result.data.outputs) {
                             val type = if (out.isError) StreamType.STDERR else StreamType.STDOUT

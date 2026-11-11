@@ -24,5 +24,7 @@ data class TerminalUiState(
     val availableRunnerModes: List<RunnerMode> = RunnerMode.entries,
     val isAlpineInstalled: Boolean = false,
     val alpineInstallationState: AlpineInstallationState = AlpineInstallationState.NotInstalled,
+    val isInstallingLanguageServers: Boolean = false,
+    val languageServerMessage: String? = null,
     val diagnostics: List<Diagnostic> = emptyList()
 )

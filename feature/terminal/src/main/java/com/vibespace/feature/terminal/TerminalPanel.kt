@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -305,7 +306,7 @@ fun TerminalPanel(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "Downloading Alpine Linux aarch64 (${(state.progress * 100).toInt()}%)...",
+                                                text = "Downloading verified Linux runtime (${(state.progress * 100).toInt()}%)...",
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = VibeTheme.colors.accentPrimary
                                             )
@@ -344,14 +345,11 @@ fun TerminalPanel(
                                     }
                                 }
                                 is AlpineInstallationState.Error -> {
-                                    val prootUnavailable = state.message.contains("PRoot executable is missing")
+                                    val unsupportedArchitecture = state.message.contains("No PRoot build is available")
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .then(
-                                                if (prootUnavailable) Modifier
-                                                else Modifier.clickable { viewModel.installAlpineSubsystem() }
-                                            )
+                                            .then(if (unsupportedArchitecture) Modifier else Modifier.clickable { viewModel.installAlpineSubsystem() })
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -364,12 +362,12 @@ fun TerminalPanel(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = if (prootUnavailable) "Alpine runner unavailable" else "Setup Failed: ${state.message}",
+                                                text = if (unsupportedArchitecture) "Alpine is unavailable on this device" else "Alpine setup failed: ${state.message}",
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = MaterialTheme.colorScheme.error
                                             )
                                             Text(
-                                                text = if (prootUnavailable) "Use Embedded or Termux for code execution." else "Tap to retry setup",
+                                                text = if (unsupportedArchitecture) state.message else "Tap to retry setup",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = VibeTheme.colors.textMuted
                                             )
@@ -398,12 +396,47 @@ fun TerminalPanel(
                                                 color = VibeTheme.colors.accentPrimary
                                             )
                                             Text(
-                                                text = "Tap to initialize in-app PRoot container for pip, npm, and apk (~60MB)",
+                                                text = "Tap to install the Alpine Linux userspace and verified PRoot runtime",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = VibeTheme.colors.textMuted
                                             )
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    if (uiState.activeRunnerMode == com.vibespace.core.runner.model.RunnerMode.ALPINE && uiState.isAlpineInstalled) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = VibeTheme.colors.activeLineBackground,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(if (uiState.isInstallingLanguageServers) Modifier else Modifier.clickable { viewModel.installLanguageServers() })
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (uiState.isInstallingLanguageServers) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(VibeIcons.Package, contentDescription = null, tint = VibeTheme.colors.accentPrimary, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = if (uiState.isInstallingLanguageServers) "Installing Python and TypeScript LSP servers…" else "Set up Python and TypeScript language servers",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = VibeTheme.colors.accentPrimary
+                                    )
+                                    Text(
+                                        text = uiState.languageServerMessage ?: "Installs real pylsp and typescript-language-server packages into Alpine.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = VibeTheme.colors.textMuted
+                                    )
                                 }
                             }
                         }
@@ -528,16 +561,20 @@ fun TerminalPanel(
                 }
             }
             BottomPanelTab.CONSOLE -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Text("Runtime status", style = MaterialTheme.typography.titleSmall, color = VibeTheme.colors.textPrimary)
+                    Text("Selected runner: ${uiState.activeRunnerMode.displayName}", style = VibeCodeTypography, color = VibeTheme.colors.textSecondary)
                     Text(
-                        text = "VibeSpace System Console ready.\nAll modules initialized successfully.",
+                        "Alpine Linux: ${if (uiState.isAlpineInstalled) "installed" else "not installed"}",
                         style = VibeCodeTypography,
                         color = VibeTheme.colors.textSecondary
                     )
+                    uiState.languageServerMessage?.let {
+                        Text(it, style = VibeCodeTypography, color = VibeTheme.colors.textSecondary)
+                    }
                 }
             }
         }

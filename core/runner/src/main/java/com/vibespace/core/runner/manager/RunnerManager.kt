@@ -24,7 +24,8 @@ interface RunnerManager {
     suspend fun runCommand(
         command: String,
         workingDirectory: String,
-        preferredRunnerId: String? = null
+        preferredRunnerId: String? = null,
+        sessionId: String? = null
     ): VibeResult<ProcessExecution>
 
     suspend fun stopExecution(executionId: String): VibeResult<Unit>

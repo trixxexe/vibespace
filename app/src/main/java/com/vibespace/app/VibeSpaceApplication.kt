@@ -71,13 +71,27 @@ class VibeSpaceApplication : Application() {
         val alpineDir = java.io.File(filesDir, "alpine")
         val alpineRunner = com.vibespace.core.runner.alpine.AlpineLinuxRunner(
             rootDirectory = alpineDir,
+            prootBinaryPath = java.io.File(alpineDir, "bin/proot").absolutePath,
+            prootArchitecture = when (android.os.Build.SUPPORTED_ABIS.firstOrNull()) {
+                "arm64-v8a" -> "aarch64"
+                "armeabi-v7a", "armeabi" -> "arm"
+                "x86_64" -> "x86_64"
+                "x86" -> "x86"
+                else -> null
+            },
+            dnsServersProvider = {
+                val connectivity = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                val network = connectivity?.activeNetwork
+                connectivity?.getLinkProperties(network)?.dnsServers?.mapNotNull { it.hostAddress }.orEmpty()
+            },
             dispatchers = dispatchers
         )
         DefaultRunnerManager(
             workspaceManager = workspaceManager,
             dispatchers = dispatchers,
             alpineRunner = alpineRunner,
-            termuxRunner = com.vibespace.core.runner.termux.TermuxBridgeRunner(context = this)
+            termuxRunner = com.vibespace.core.runner.termux.TermuxBridgeRunner(context = this),
+            runnerWorkspaceDirectory = java.io.File(filesDir, "runner-workspaces")
         )
     }
 
@@ -96,12 +110,31 @@ class VibeSpaceApplication : Application() {
         lspClients[normalized] = client
     }
 
+    @Synchronized
     fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? {
         val normalized = languageId.trim().lowercase()
         if (normalized.isEmpty()) return null
-        // A test-only in-memory responder must never be presented as a production language server.
-        // A real server client can be registered by a build that packages and manages that runtime.
-        return lspClients[normalized]
+        lspClients[normalized]?.let { return it }
+        if (normalized !in setOf("python", "javascript", "typescript")) return null
+        val project = workspaceManager.currentProject.value ?: return null
+        // SAF URIs are not filesystem paths; do not hand them to a process-based language server.
+        val workspaceRoot = project.rootPath?.let { java.io.File(it) }?.takeIf { it.isDirectory } ?: return null
+        val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
+            as? com.vibespace.core.runner.alpine.AlpineLinuxRunner ?: return null
+        if (!alpine.isLanguageServerInstalled(normalized)) return null
+        return try {
+            val process = alpine.startLanguageServer(normalized, workspaceRoot)
+            val client = com.vibespace.core.language.lsp.StdioLanguageServerClient(
+                languageId = normalized,
+                transport = com.vibespace.core.language.lsp.ProcessLspTransport(process, dispatchers),
+                dispatchers = dispatchers
+            )
+            lspClients[normalized] = client
+            client
+        } catch (failure: Exception) {
+            logger.w("VibeSpaceApp", "Could not start $normalized language server: ${failure.message}")
+            null
+        }
     }
 
     override fun onCreate() {
