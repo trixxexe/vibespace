@@ -5,6 +5,7 @@ import com.vibespace.core.runner.model.ProcessExecution
 import com.vibespace.core.runner.model.ProcessOutput
 import com.vibespace.core.runner.model.RunnerMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -30,4 +31,18 @@ interface RunnerManager {
 
     suspend fun stopExecution(executionId: String): VibeResult<Unit>
     fun observeOutput(executionId: String): Flow<ProcessOutput>
+
+    suspend fun startInteractiveTerminal(sessionId: String, workingDirectory: String): VibeResult<Unit> =
+        VibeResult.Error("This runner does not provide an interactive terminal.")
+
+    suspend fun sendTerminalInput(sessionId: String, input: String): VibeResult<Unit> =
+        VibeResult.Error("No interactive terminal is attached to this session.")
+
+    suspend fun interruptTerminalCommand(sessionId: String): VibeResult<Unit> =
+        VibeResult.Error("No interactive terminal is attached to this session.")
+
+    suspend fun closeInteractiveTerminal(sessionId: String): VibeResult<Unit> =
+        VibeResult.Success(Unit)
+
+    fun observeInteractiveOutput(sessionId: String): Flow<ProcessOutput> = emptyFlow()
 }

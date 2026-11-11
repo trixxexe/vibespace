@@ -391,12 +391,12 @@ fun TerminalPanel(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Set Up Alpine Linux Subsystem",
+                                                text = "Prepare Alpine Python and Node runtime",
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = VibeTheme.colors.accentPrimary
                                             )
                                             Text(
-                                                text = "Tap to install the Alpine Linux userspace and verified PRoot runtime",
+                                                text = "Extracts bundled Python, Node.js, and Alpine tools into app storage",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = VibeTheme.colors.textMuted
                                             )
@@ -471,6 +471,20 @@ fun TerminalPanel(
                             keyboardActions = KeyboardActions(onSend = { viewModel.submitCommand() }),
                             modifier = Modifier.weight(1f)
                         )
+
+                        if (uiState.activeRunnerMode == com.vibespace.core.runner.model.RunnerMode.ALPINE) {
+                            IconButton(
+                                onClick = { viewModel.interruptTerminalCommand() },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = VibeIcons.Interrupt,
+                                    contentDescription = "Interrupt current command",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
 
                         IconButton(
                             onClick = { viewModel.submitCommand() },

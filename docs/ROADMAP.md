@@ -25,8 +25,8 @@
 
 ## Phase 3: Runtime Execution & Terminal (v0.3.0)
 - [x] Developer 4: Termux `RUN_COMMAND` Intent bridge implementation (requires Termux and its permission).
-- [x] Developer 4: Python and Node.js execution in the optional Alpine userspace. Interactive TTY I/O and job control remain unsupported.
-- [x] Developer 4: Downloadable, checksum-verified PRoot runtime and Alpine root filesystem for supported ABIs.
+- [x] Developer 4: Bundle Python 3, Node.js/npm, Alpine, util-linux PTY support, and checksum-pinned PRoot for supported ABIs; install extra packages through Alpine.
+- [x] Developer 4: Persistent interactive Alpine terminal with live output, Ctrl+C, and SAF workspace synchronization.
 - [ ] Developer 2: Code execution keyboard shortcuts (Ctrl+Enter / Run button).
 
 ---

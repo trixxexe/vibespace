@@ -117,7 +117,7 @@ interface RunnerManager {
 ```
 
 ### Runner Options:
-- `RunnerMode`: embedded evaluation, optional Alpine PRoot runtime, and Termux bridge. Alpine downloads a checksum-verified PRoot build and Alpine minirootfs during setup for supported ABIs; it requires network access and device storage. Terminal commands use a non-PTY process with per-session working-directory and exported-variable persistence; interactive TTY applications and job control are not supported. Python and TypeScript language servers are installed separately into Alpine. Termux requires the Termux app and its RUN_COMMAND permission; VibeSpace-managed SAF projects are not automatically shared with Termux.
+- `RunnerMode`: basic embedded evaluation, bundled Alpine PRoot runtime, and Termux bridge. CI builds an Alpine userspace per supported ABI with Python 3, Node.js/npm, util-linux `script`, and checksum-pinned PRoot into the APK; first setup extracts it into app-private storage. Additional packages and Python/TypeScript language servers are installed through Alpine package managers. Alpine is not a security sandbox; launched code runs with VibeSpace's Android app identity and permissions. The Alpine terminal uses a persistent PTY shell with live output and Ctrl+C. Termux requires the Termux app and its RUN_COMMAND permission; VibeSpace-managed SAF projects are staged and synced by VibeSpace rather than shared with Termux.
 - `ProcessExecution(executionId, command, workingDirectoryUri, state, exitCode, startTime, endTime, outputs)`
 - `ProcessOutput(line, isError, timestamp)`
 - `ExecutionState`: `IDLE`, `STARTING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`

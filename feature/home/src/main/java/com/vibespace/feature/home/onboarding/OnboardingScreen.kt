@@ -245,7 +245,7 @@ private fun StepWelcome(
             FeaturePillar(
                 icon = VibeIcons.Terminal,
                 title = "Script Runner & Termux Bridge",
-                description = "Run supported snippets with the embedded evaluator, install the optional Alpine userspace for Linux commands, or connect Termux. Alpine setup downloads PRoot and a root filesystem; it needs network access and a supported device ABI."
+                description = "Run real Python and Node.js files in the bundled Alpine runtime, use its interactive terminal, or connect Termux. Alpine commands use VibeSpace's Android app permissions; installing extra packages needs network access."
             )
             Spacer(modifier = Modifier.height(16.dp))
             FeaturePillar(
@@ -429,7 +429,7 @@ private fun StepIdeTour(
             TourItem(
                 icon = VibeIcons.Terminal,
                 title = "Runner Output & Problems",
-                description = "Use the embedded evaluator for supported snippets, or set up Alpine for Linux command-line tools. The Alpine terminal persists your working directory and exported variables, but it does not provide a PTY or interactive terminal applications."
+                description = "Use bundled Python and Node.js in Alpine for real scripts and Linux commands. Alpine includes an interactive PTY terminal; optional packages and language servers install through its package managers. Commands still use VibeSpace's Android app permissions."
             )
 
             Spacer(modifier = Modifier.height(12.dp))

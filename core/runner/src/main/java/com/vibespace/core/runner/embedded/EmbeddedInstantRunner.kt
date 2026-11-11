@@ -114,13 +114,18 @@ class EmbeddedInstantRunner(
         }
 
         var codeToExecute = codeOrFile
-        if (codeOrFile.endsWith(".py") && workspaceManager != null) {
-            val fileContent = resolveFileContent(codeOrFile, workingDirectory)
+        val fileArgument = codeOrFile.removeSurrounding("\"").removeSurrounding("'")
+        if (fileArgument.endsWith(".py", ignoreCase = true)) {
+            if (workspaceManager == null) {
+                emit("FileNotFoundError: no workspace is attached to the embedded evaluator.", true)
+                return 1
+            }
+            val fileContent = resolveFileContent(fileArgument, workingDirectory)
             if (fileContent != null) {
-                emit("[Running file: $codeOrFile]", false)
+                emit("[Running file with the basic evaluator: $fileArgument]", false)
                 codeToExecute = fileContent
             } else {
-                emit("FileNotFoundError: [Errno 2] No such file or directory: '$codeOrFile'", true)
+                emit("FileNotFoundError: [Errno 2] No such file or directory: '$fileArgument'", true)
                 return 1
             }
         }
@@ -149,13 +154,18 @@ class EmbeddedInstantRunner(
         }
 
         var codeToExecute = codeOrFile
-        if ((codeOrFile.endsWith(".js") || codeOrFile.endsWith(".ts")) && workspaceManager != null) {
-            val fileContent = resolveFileContent(codeOrFile, workingDirectory)
+        val fileArgument = codeOrFile.removeSurrounding("\"").removeSurrounding("'")
+        if (fileArgument.endsWith(".js", ignoreCase = true) || fileArgument.endsWith(".ts", ignoreCase = true)) {
+            if (workspaceManager == null) {
+                emit("Error: no workspace is attached to the embedded evaluator.", true)
+                return 1
+            }
+            val fileContent = resolveFileContent(fileArgument, workingDirectory)
             if (fileContent != null) {
-                emit("[Running file: $codeOrFile]", false)
+                emit("[Running file with the basic evaluator: $fileArgument]", false)
                 codeToExecute = fileContent
             } else {
-                emit("Error: Cannot find module '$codeOrFile'", true)
+                emit("Error: Cannot find module '$fileArgument'", true)
                 return 1
             }
         }

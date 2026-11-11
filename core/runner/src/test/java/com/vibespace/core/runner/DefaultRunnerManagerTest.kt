@@ -46,7 +46,13 @@ class DefaultRunnerManagerTest {
 
     @Test
     fun runnerMode_can_be_switched_to_alpine() = runTest {
-        val fakeExecutor = com.vibespace.core.runner.alpine.AlpineProcessExecutor { _, _, _, onLine ->
+        val fakeExecutor = com.vibespace.core.runner.alpine.AlpineProcessExecutor { command, workingDir, _, onLine ->
+            if (command.contains("/sbin/apk")) {
+                val script = java.io.File(workingDir, "usr/bin/script")
+                script.parentFile?.mkdirs()
+                script.writeText("#!/bin/sh\n")
+                script.setExecutable(true, true)
+            }
             onLine("Successfully installed requests", false)
             0
         }
@@ -121,7 +127,7 @@ class DefaultRunnerManagerTest {
             dispatchers = TestDispatcherProvider()
         )
 
-        val runResult = managerWithWorkspace.runCommand("python main.py", "vibe://projects/p1")
+        val runResult = managerWithWorkspace.runCommand("python \"main.py\"", "vibe://projects/p1")
         assertTrue(runResult.isSuccess)
         val exec = runResult.getOrNull()
         assertNotNull(exec)

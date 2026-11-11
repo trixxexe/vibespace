@@ -38,6 +38,21 @@ class VibeSpaceApplication : Application() {
     val dispatchers: DispatcherProvider by lazy { DefaultDispatcherProvider() }
     val logger: VibeLogger by lazy { AndroidVibeLogger() }
 
+    override fun onCreate() {
+        super.onCreate()
+        val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
+            as? com.vibespace.core.runner.alpine.AlpineLinuxRunner ?: return
+        if (alpine.hasBundledRuntime()) {
+            runnerManager.setRunnerMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
+            CoroutineScope(SupervisorJob() + dispatchers.io).launch {
+                val result = alpine.installSubsystem()
+                if (result is com.vibespace.core.common.result.VibeResult.Error) {
+                    logger.e("VibeSpaceApp", "Could not prepare bundled Python and Node runtime: ${result.message}")
+                }
+            }
+        }
+    }
+
     val recentProjectsRepository: RecentProjectsRepository by lazy {
         DataStoreRecentProjectsRepository(this, dispatchers)
     }
@@ -91,6 +106,9 @@ class VibeSpaceApplication : Application() {
                 val connectivity = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
                 val network = connectivity?.activeNetwork
                 connectivity?.getLinkProperties(network)?.dnsServers?.mapNotNull { it.hostAddress }.orEmpty()
+            },
+            bundledRuntimeArchiveProvider = { architecture ->
+                runCatching { assets.open("runtime/$architecture.tar.gz") }.getOrNull()
             },
             dispatchers = dispatchers
         )

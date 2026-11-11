@@ -15,7 +15,7 @@ jobs:
   build:
     name: Build & Verify VibeSpace
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - name: Checkout Source Code
@@ -35,6 +35,12 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      - name: Enable cross-architecture runtime builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build bundled Python and Node runtimes
+        run: bash .github/scripts/build-bundled-runtime.sh app/build/generated/bundled-runtime
+
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
@@ -44,8 +50,24 @@ jobs:
       - name: Run Android Lint
         run: ./gradlew lintDebug --continue
 
+      - name: Run runtime acceptance tests on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          script: ./gradlew connectedDebugAndroidTest
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug
+
+      - name: Enforce APK size budget
+        run: |
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          size=$(stat -c%s "$apk")
+          limit=$((700 * 1024 * 1024))
+          echo "Debug APK size: $((size / 1024 / 1024)) MiB"
+          test "$size" -le "$limit"
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v7

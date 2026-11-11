@@ -53,6 +53,7 @@ class VibeViewModelFactory(
                 TerminalViewModel(
                     terminalService = app.terminalService,
                     runnerManager = app.runnerManager,
+                    workspaceManager = app.workspaceManager,
                     dispatchers = app.dispatchers
                 ) as T
             }

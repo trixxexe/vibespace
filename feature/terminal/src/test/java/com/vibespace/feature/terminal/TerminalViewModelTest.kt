@@ -79,6 +79,29 @@ class TerminalViewModelTest {
     }
 
     @Test
+    fun runActiveDocument_uses_workspace_relative_path_and_real_alpine_runner() = runTest {
+        val workspace = com.vibespace.core.workspace.manager.DefaultWorkspaceManager(dispatchers = TestDispatcherProvider())
+        val project = com.vibespace.core.workspace.model.Project("run-project", "Run Project", "vibe://projects/run-project")
+        workspace.openProject(project)
+        val directory = workspace.createDirectory(project.rootUri, "src").getOrNull()!!
+        val file = workspace.createFile(directory.uri, "main.py", "print('real runtime')").getOrNull()!!
+        val runnerManager = DefaultRunnerManager(workspaceManager = workspace, dispatchers = TestDispatcherProvider())
+        val viewModel = TerminalViewModel(
+            terminalService = DefaultTerminalService(dispatchers = TestDispatcherProvider()),
+            runnerManager = runnerManager,
+            workspaceManager = workspace,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        viewModel.runActiveDocument("main.py", "python", file.uri)
+
+        val lines = viewModel.uiState.value.activeSession!!.lines
+        assertTrue(lines.any { it.text.contains("/workspace/src/main.py") })
+        assertTrue(lines.none { it.text == "main.py" && it.streamType == StreamType.STDOUT })
+        assertTrue(lines.any { it.streamType == StreamType.STDERR && it.text.contains("not installed", ignoreCase = true) })
+    }
+
+    @Test
     fun multiple_sessions_can_be_created_switched_and_closed() = runTest {
         val viewModel = TerminalViewModel(
             terminalService = terminalService,

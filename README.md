@@ -15,7 +15,7 @@
 
 **VibeSpace** is an open-source, native Android coding workspace for editing project files on phones, tablets, and foldables.
 
-The app includes multi-tab editing, SAF-backed workspaces, workspace-wide regex search, local JGit repositories with optional HTTP(S) remotes, an Alpine Linux userspace runner, and an optional BYOK AI assistant. PRoot and Alpine are downloaded on first setup for supported Android ABIs. Python and TypeScript language servers can be installed into Alpine from its package managers; they are not bundled in the APK. The terminal accepts shell commands and persists working directory and exported variables per session, but does not provide a PTY, job control, or interactive terminal applications.
+The app includes multi-tab editing, SAF-backed workspaces, workspace-wide regex search, local JGit repositories with optional HTTP(S) remotes, an Alpine Linux userspace runner, and an optional BYOK AI assistant. CI packages an architecture-matched Alpine userspace with Python 3, Node.js, npm, util-linux PTY support, and a checksum-pinned PRoot binary into the APK; first launch extracts the matching runtime into app-private storage. Python and TypeScript language servers remain optional packages installed through Alpine. The terminal runs a persistent interactive shell with a PTY, live output, and Ctrl+C. Alpine is a userspace, not an Android security sandbox: commands run with VibeSpace's app permissions.
 
 ---
 
@@ -27,7 +27,7 @@ The app includes multi-tab editing, SAF-backed workspaces, workspace-wide regex 
   - **Phone (< 600dp)**: Editor with an explorer drawer, expandable runner panel, and AI chat bottom sheet.
   - **Tablet (> 840dp)**: Navigation rail, explorer or local change panel, resizable editor and runner panel, and optional AI side panel.
 - **Project Explorer**: Virtual file tree supporting folder navigation, file creation, deletion, and Storage Access Framework (SAF) URI abstraction.
-- **Runner Panel**: Collapsible panel for embedded evaluation, optional Alpine Linux command execution, or the Termux bridge, with output and diagnostics.
+- **Runner Panel**: Collapsible panel for the basic embedded evaluator, the bundled Alpine Python/Node/Linux runtime, or the Termux bridge, with output and diagnostics.
 - **Git Source Control**: Local Git repositories, staging, commits, branches, diffs, and HTTP(S) push/pull. Remote credentials remain in memory for the app process; configure a real commit author identity before committing.
 - **Workspace Search**: Recursive search across project files with case sensitivity and linear-time regular expressions. Backreferences are not supported.
 - **Language Servers**: Python and TypeScript servers can be installed inside Alpine. They provide LSP completions, diagnostics, hover, definitions, and formatting for filesystem-backed and SAF workspaces; SAF files are staged in app-private storage and synced by VibeSpace.

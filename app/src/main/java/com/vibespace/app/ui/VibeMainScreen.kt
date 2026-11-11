@@ -144,7 +144,7 @@ fun VibeMainScreen(
                                 editorViewModel.saveActiveDocument { saved ->
                                     if (saved) {
                                         gitViewModel?.refreshStatus()
-                                        terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                                        terminalViewModel.runActiveDocument(active.fileName, active.language.id, active.uri)
                                     }
                                 }
                             }
@@ -337,7 +337,8 @@ fun VibeMainScreen(
                                                 gitViewModel?.refreshStatus()
                                                 terminalViewModel.runActiveDocument(
                                                     fileName = active.fileName,
-                                                    languageId = active.language.id
+                                                    languageId = active.language.id,
+                                                    documentUri = active.uri
                                                 )
                                             }
                                         }
@@ -370,7 +371,8 @@ fun VibeMainScreen(
                                             gitViewModel?.refreshStatus()
                                             terminalViewModel.runActiveDocument(
                                                 fileName = active.fileName,
-                                                languageId = active.language.id
+                                                languageId = active.language.id,
+                                                documentUri = active.uri
                                             )
                                         }
                                     }
@@ -567,7 +569,8 @@ fun VibeMainScreen(
                                         gitViewModel?.refreshStatus()
                                         terminalViewModel.runActiveDocument(
                                             fileName = active.fileName,
-                                            languageId = active.language.id
+                                            languageId = active.language.id,
+                                            documentUri = active.uri
                                         )
                                     }
                                 }
@@ -632,7 +635,7 @@ fun VibeMainScreen(
                     editorViewModel.saveActiveDocument { saved ->
                         if (saved) {
                             gitViewModel?.refreshStatus()
-                            terminalViewModel.runActiveDocument(active.fileName, active.language.id)
+                            terminalViewModel.runActiveDocument(active.fileName, active.language.id, active.uri)
                             isTerminalVisible = true
                         }
                     }

@@ -132,7 +132,20 @@ class AlpineLinuxRunnerTest {
     @Test
     fun execute_with_process_executor_dispatches_real_command() = runTest {
         val testBaseDir = tempFolder.newFolder("test_alpine_exec")
-        val fakeExecutor = AlpineProcessExecutor { cmd, _, _, onLine ->
+        val fakeExecutor = AlpineProcessExecutor { cmd, workingDir, _, onLine ->
+            if (cmd.contains("/sbin/apk")) {
+                val script = File(workingDir, "usr/bin/script")
+                script.parentFile?.mkdirs()
+                script.writeText("#!/bin/sh\n")
+                script.setExecutable(true, true)
+                listOf("python3", "node").forEach { executable ->
+                    File(workingDir, "usr/bin/$executable").apply {
+                        parentFile?.mkdirs()
+                        writeText("#!/bin/sh\n")
+                        setExecutable(true, true)
+                    }
+                }
+            }
             onLine("Linux vibespace-proot 6.1.0-android #1 PREEMPT", false)
             0
         }

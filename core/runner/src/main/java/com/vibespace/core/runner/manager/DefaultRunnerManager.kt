@@ -21,10 +21,17 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 class DefaultRunnerManager(
@@ -48,6 +55,14 @@ class DefaultRunnerManager(
     private val runnerScope = CoroutineScope(SupervisorJob() + dispatchers.default)
     private val collectionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
     private val executionRunners = java.util.concurrent.ConcurrentHashMap<String, ExternalRunner>()
+    private data class InteractiveTerminal(
+        val process: Process,
+        val input: OutputStream,
+        val output: MutableSharedFlow<ProcessOutput>,
+        val mirror: SafWorkspaceMirror?
+    )
+    private val interactiveTerminals = java.util.concurrent.ConcurrentHashMap<String, InteractiveTerminal>()
+    private val interactiveStartMutex = Mutex()
 
     private data class SafWorkspaceMirror(
         val root: File,
@@ -284,5 +299,98 @@ class DefaultRunnerManager(
             return runner.observeOutput(executionId)
         }
         return outputFlows.getOrPut(executionId) { MutableSharedFlow(replay = 50) }.asSharedFlow()
+    }
+
+    override suspend fun startInteractiveTerminal(sessionId: String, workingDirectory: String): com.vibespace.core.common.result.VibeResult<Unit> = withContext(dispatchers.io) {
+        interactiveStartMutex.withLock {
+            if (interactiveTerminals[sessionId]?.process?.isAlive == true) return@withContext com.vibespace.core.common.result.VibeResult.Success(Unit)
+            val alpine = runners[RunnerMode.ALPINE.id] as? AlpineLinuxRunner
+                ?: return@withContext com.vibespace.core.common.result.VibeResult.Error("The Alpine runner is unavailable.")
+            val mirror = when (val prepared = prepareSafWorkspace()) {
+                is com.vibespace.core.common.result.VibeResult.Success -> prepared.data
+                is com.vibespace.core.common.result.VibeResult.Error -> return@withContext prepared
+                else -> null
+            }
+            val projectRoot = workspaceManager?.currentProject?.value?.rootPath?.let(::File)?.takeIf { it.isDirectory }
+            val root = mirror?.root ?: projectRoot ?: File(workingDirectory).takeIf { it.isDirectory }
+            val process = try {
+                alpine.startInteractiveShell(root)
+            } catch (failure: Exception) {
+                return@withContext com.vibespace.core.common.result.VibeResult.Error(
+                    failure.message ?: "Could not start the interactive Alpine terminal.", failure
+                )
+            }
+            val output = MutableSharedFlow<ProcessOutput>(replay = 100)
+            val terminal = InteractiveTerminal(process, process.outputStream, output, mirror)
+            interactiveTerminals[sessionId] = terminal
+            runnerScope.launch(dispatchers.io) {
+            val reader = BufferedReader(InputStreamReader(process.inputStream, StandardCharsets.UTF_8))
+            try {
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (line.contains(INTERACTIVE_PROMPT_MARKER)) {
+                        if (terminal.mirror != null) {
+                            when (val sync = syncSafWorkspaceBack(terminal.mirror)) {
+                                is com.vibespace.core.common.result.VibeResult.Error -> output.emit(ProcessOutput("SAF sync failed: ${sync.message}", true))
+                                else -> Unit
+                            }
+                        }
+                        val visible = line.replace(INTERACTIVE_PROMPT_MARKER, "$ ").trimEnd()
+                        if (visible.isNotEmpty()) output.emit(ProcessOutput(visible))
+                    } else if (line.isNotEmpty()) {
+                        output.emit(ProcessOutput(line))
+                    }
+                }
+            } catch (failure: Exception) {
+                if (process.isAlive) output.emit(ProcessOutput("Terminal output failed: ${failure.message}", true))
+            } finally {
+                if (interactiveTerminals.remove(sessionId, terminal)) {
+                    val exitCode = runCatching { if (process.isAlive) null else process.exitValue() }.getOrNull()
+                    output.emit(ProcessOutput("[Terminal process exited${exitCode?.let { " with code $it" } ?: ""}]", exitCode?.let { it != 0 } ?: false))
+                }
+            }
+            }
+            com.vibespace.core.common.result.VibeResult.Success(Unit)
+        }
+    }
+
+    override suspend fun sendTerminalInput(sessionId: String, input: String): com.vibespace.core.common.result.VibeResult<Unit> = withContext(dispatchers.io) {
+        val terminal = interactiveTerminals[sessionId]
+            ?: return@withContext com.vibespace.core.common.result.VibeResult.Error("No interactive terminal is attached to this session.")
+        if (!terminal.process.isAlive) return@withContext com.vibespace.core.common.result.VibeResult.Error("The terminal process has exited.")
+        try {
+            terminal.input.write((input.trimEnd('\n', '\r') + "\n").toByteArray(StandardCharsets.UTF_8))
+            terminal.input.flush()
+            com.vibespace.core.common.result.VibeResult.Success(Unit)
+        } catch (failure: Exception) {
+            com.vibespace.core.common.result.VibeResult.Error("Could not send input to the terminal: ${failure.message}", failure)
+        }
+    }
+
+    override suspend fun interruptTerminalCommand(sessionId: String): com.vibespace.core.common.result.VibeResult<Unit> = withContext(dispatchers.io) {
+        val terminal = interactiveTerminals[sessionId]
+            ?: return@withContext com.vibespace.core.common.result.VibeResult.Error("No interactive terminal is attached to this session.")
+        try {
+            terminal.input.write(byteArrayOf(3))
+            terminal.input.flush()
+            com.vibespace.core.common.result.VibeResult.Success(Unit)
+        } catch (failure: Exception) {
+            com.vibespace.core.common.result.VibeResult.Error("Could not interrupt the terminal command: ${failure.message}", failure)
+        }
+    }
+
+    override suspend fun closeInteractiveTerminal(sessionId: String): com.vibespace.core.common.result.VibeResult<Unit> = withContext(dispatchers.io) {
+        interactiveTerminals.remove(sessionId)?.let { terminal ->
+            runCatching { terminal.input.close() }
+            if (terminal.process.isAlive) terminal.process.destroyForcibly()
+        }
+        com.vibespace.core.common.result.VibeResult.Success(Unit)
+    }
+
+    override fun observeInteractiveOutput(sessionId: String): Flow<ProcessOutput> =
+        interactiveTerminals[sessionId]?.output?.asSharedFlow() ?: emptyFlow()
+
+    private companion object {
+        const val INTERACTIVE_PROMPT_MARKER = "__VIBESPACE_PROMPT__"
     }
 }

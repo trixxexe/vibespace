@@ -17,12 +17,12 @@ enum class RunnerMode(
         description = "Lightweight offline script evaluator for Python, JS, and Shell builtins. Zero download."
     ),
 
-    /** Alpine userspace execution downloads a verified PRoot runtime during first setup. */
+    /** Bundled Alpine userspace with Python and Node.js, extracted on first setup. */
     ALPINE(
         id = "alpine",
         displayName = "Alpine Linux",
         shortBadge = "Alpine",
-        description = "Downloads a verified PRoot runtime and Alpine userspace on first setup for supported Android devices."
+        description = "Runs bundled Python and Node in Alpine; installs optional packages through apk and npm."
     ),
 
     /**

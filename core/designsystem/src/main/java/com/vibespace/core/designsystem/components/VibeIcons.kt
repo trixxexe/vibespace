@@ -152,6 +152,10 @@ object VibeIcons {
         moveTo(7f, 5f); lineTo(19f, 12f); lineTo(7f, 19f); close()
     }
 
+    val Interrupt: ImageVector = fillIcon("Interrupt") {
+        moveTo(6f, 6f); lineTo(18f, 6f); lineTo(18f, 18f); lineTo(6f, 18f); close()
+    }
+
     val Save: ImageVector = strokeIcon("Save") {
         moveTo(4f, 4f); lineTo(16f, 4f); lineTo(20f, 8f); lineTo(20f, 20f); lineTo(4f, 20f); close()
         moveTo(7f, 4f); lineTo(7f, 9f); lineTo(15f, 9f); lineTo(15f, 4f)
