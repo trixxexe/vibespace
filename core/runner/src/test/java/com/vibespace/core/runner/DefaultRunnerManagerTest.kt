@@ -52,6 +52,13 @@ class DefaultRunnerManagerTest {
                 script.parentFile?.mkdirs()
                 script.writeText("#!/bin/sh\n")
                 script.setExecutable(true, true)
+                listOf("python3", "node").forEach { executable ->
+                    java.io.File(workingDir, "usr/bin/$executable").apply {
+                        parentFile?.mkdirs()
+                        writeText("#!/bin/sh\n")
+                        setExecutable(true, true)
+                    }
+                }
             }
             onLine("Successfully installed requests", false)
             0
