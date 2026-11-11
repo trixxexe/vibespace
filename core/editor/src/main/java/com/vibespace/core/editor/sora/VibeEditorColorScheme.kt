@@ -13,13 +13,22 @@ class VibeEditorColorScheme(
 
     override fun applyDefault() {
         super.applyDefault()
+        // EditorColorScheme invokes this overridable method from its constructor, before this
+        // subclass's constructor properties have been initialized. Do not read `theme` here.
+        applyTheme(EditorThemeDefinition.VIBE_DARK)
+    }
 
-        fun parseSafe(colorHex: String, fallback: String): Int {
-            return try {
-                Color.parseColor(colorHex)
-            } catch (_: Throwable) {
-                Color.parseColor(fallback)
-            }
+    init {
+        // Constructor properties are initialized by this point, so the requested preset/custom
+        // theme can safely replace the temporary fallback applied during superclass construction.
+        applyTheme(theme)
+    }
+
+    private fun applyTheme(theme: EditorThemeDefinition) {
+        fun parseSafe(colorHex: String, fallback: String): Int = try {
+            Color.parseColor(colorHex)
+        } catch (_: Throwable) {
+            Color.parseColor(fallback)
         }
 
         // Background & Gutter
