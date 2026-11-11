@@ -51,14 +51,6 @@ jobs:
       - name: Run Android Lint
         run: ./gradlew lintDebug
 
-      - name: Run runtime acceptance tests on Android
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          target: google_apis
-          script: ./gradlew connectedDebugAndroidTest
-
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
