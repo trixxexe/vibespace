@@ -186,6 +186,7 @@ class EditorViewModelTest {
     fun saveActiveDocument_triggers_gitManager_refreshStatus() = runTest {
         val root = "vibe://projects/test-save-git"
         val project = com.vibespace.core.workspace.model.Project("proj-git", "GitApp", root)
+        workspaceManager.createFile(root, "main.py", "print('before save')")
         workspaceManager.openProject(project)
 
         var refreshStatusCalled = false

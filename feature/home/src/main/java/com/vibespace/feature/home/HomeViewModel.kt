@@ -91,7 +91,8 @@ class HomeViewModel(
     fun openSafTreeUri(
         treeUri: Uri,
         folderName: String,
-        onProjectReady: (Project) -> Unit
+        onProjectReady: (Project) -> Unit,
+        onProjectError: ((String) -> Unit)? = null
     ) {
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
@@ -113,6 +114,7 @@ class HomeViewModel(
                 is VibeResult.Error -> {
                     withContext(dispatchers.main) {
                         _uiState.update { it.copy(isLoading = false, errorMessage = res.message) }
+                        onProjectError?.invoke(res.message)
                     }
                 }
                 else -> Unit

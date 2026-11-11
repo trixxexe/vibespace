@@ -16,6 +16,7 @@ class ExplorerViewModelTest {
     @Test
     fun project_open_loads_nodes_and_supports_create_file() = runTest {
         val project = Project("p1", "ExpTest", "vibe://projects/exptest")
+        workspaceManager.createFile(project.rootUri, "README.md", "# Project")
         workspaceManager.openProject(project)
 
         val viewModel = ExplorerViewModel(
@@ -34,6 +35,8 @@ class ExplorerViewModelTest {
     @Test
     fun toggleFolder_expands_folder_and_loads_children() = runTest {
         val project = Project("p2", "ToggleTest", "vibe://projects/toggletest")
+        workspaceManager.createDirectory(project.rootUri, "src")
+        workspaceManager.createFile("${project.rootUri}/src", "Main.kt", "fun main() = Unit")
         workspaceManager.openProject(project)
 
         val viewModel = ExplorerViewModel(
