@@ -12,8 +12,10 @@ import com.vibespace.core.common.result.VibeResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,7 +35,8 @@ class GeminiAIProvider(
     var activeModel: String = "gemini-3.8-flash",
     private val httpTransport: ((url: String, method: String, headers: Map<String, String>, body: String) -> Pair<Int, String>)? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
-    internal val streamEndpointOverride: String? = null
+    internal val streamEndpointOverride: String? = null,
+    private val streamTransport: ((url: String, headers: Map<String, String>, body: String) -> Pair<Int, Flow<String>>)? = null
 ) : AIProvider {
 
     override val providerId: String = "gemini"
@@ -94,6 +97,19 @@ class GeminiAIProvider(
         if (endpointUri?.host.isNullOrBlank() || endpointUri?.userInfo != null ||
             (!endpointUri?.scheme.equals("https", ignoreCase = true) && !localHttp)
         ) throw IOException("Invalid Gemini stream endpoint.")
+        val headers = mapOf(
+            "Content-Type" to "application/json",
+            "x-goog-api-key" to apiKey.trim()
+        )
+        val requestBody = buildRequestBody(request)
+        streamTransport?.let { injectedTransport ->
+            val (status, lines) = injectedTransport(endpoint, headers, requestBody)
+            if (status !in 200..299) {
+                throw IOException(extractErrorMessage(status, lines.toList().joinToString("\n")))
+            }
+            consumeSseLines(lines) { chunk -> emit(chunk) }
+            return@flow
+        }
         if (httpTransport != null) {
             // The injected request/response transport is intended for deterministic tests only;
             // the real app connection below consumes Gemini's event stream incrementally.
@@ -113,54 +129,64 @@ class GeminiAIProvider(
             connectTimeout = 15_000
             readTimeout = 1_000
             doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("x-goog-api-key", apiKey.trim())
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }
         try {
-            connection.outputStream.use { it.write(buildRequestBody(request).toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) {
                 val message = readLimited(connection.errorStream)
                 throw IOException(extractErrorMessage(status, message))
             }
-            var streamedBytes = 0
-            var receivedContent = false
-            var receivedTerminalEvent = false
-            val coroutineContext = kotlinx.coroutines.currentCoroutineContext()
-            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                while (true) {
-                    val line = try {
-                        reader.readLine()
-                    } catch (_: SocketTimeoutException) {
+            val lines = flow {
+                val coroutineContext = kotlinx.coroutines.currentCoroutineContext()
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                    while (true) {
+                        val line = try {
+                            reader.readLine()
+                        } catch (_: SocketTimeoutException) {
+                            coroutineContext.ensureActive()
+                            continue
+                        } ?: break
                         coroutineContext.ensureActive()
-                        continue
-                    } ?: break
-                    coroutineContext.ensureActive()
-                    if (!line.startsWith("data:")) continue
-                    val data = line.removePrefix("data:").trim()
-                    streamedBytes += data.length
-                    if (streamedBytes > MAX_RESPONSE_BYTES) throw IOException("Gemini stream exceeded the 4 MB limit.")
-                    if (data.isEmpty()) continue
-                    val payload = runCatching { JSONObject(data) }.getOrNull() ?: continue
-                    val candidate = payload.optJSONArray("candidates")?.optJSONObject(0)
-                    if (!candidate?.optString("finishReason").isNullOrBlank()) receivedTerminalEvent = true
-                    val parts = candidate?.optJSONObject("content")?.optJSONArray("parts")
-                    val delta = parts?.let { values ->
-                        (0 until values.length()).mapNotNull { values.optJSONObject(it)?.optString("text") }
-                            .joinToString("")
-                    }.orEmpty()
-                    if (delta.isNotEmpty()) {
-                        receivedContent = true
-                        emit(AIResponseChunk(delta = delta))
+                        emit(line)
                     }
                 }
             }
-            if (!receivedContent || !receivedTerminalEvent) throw IOException("Gemini stream ended before a complete response was received.")
-            emit(AIResponseChunk(delta = "", isComplete = true))
+            consumeSseLines(lines) { chunk -> emit(chunk) }
         } finally {
             connection.disconnect()
         }
     }.flowOn(dispatchers.io)
+
+    private suspend fun consumeSseLines(lines: Flow<String>, emitChunk: suspend (AIResponseChunk) -> Unit) {
+        var streamedBytes = 0
+        var receivedContent = false
+        var receivedTerminalEvent = false
+        lines.collect { line ->
+            if (!line.startsWith("data:")) return@collect
+            val data = line.removePrefix("data:").trim()
+            streamedBytes += data.length
+            if (streamedBytes > MAX_RESPONSE_BYTES) throw IOException("Gemini stream exceeded the 4 MB limit.")
+            if (data.isEmpty()) return@collect
+            val payload = runCatching { JSONObject(data) }.getOrNull() ?: return@collect
+            val candidate = payload.optJSONArray("candidates")?.optJSONObject(0)
+            if (!candidate?.optString("finishReason").isNullOrBlank()) receivedTerminalEvent = true
+            val parts = candidate?.optJSONObject("content")?.optJSONArray("parts")
+            val delta = parts?.let { values ->
+                (0 until values.length()).mapNotNull { values.optJSONObject(it)?.optString("text") }
+                    .joinToString("")
+            }.orEmpty()
+            if (delta.isNotEmpty()) {
+                receivedContent = true
+                emitChunk(AIResponseChunk(delta = delta))
+            }
+        }
+        if (!receivedContent || !receivedTerminalEvent) {
+            throw IOException("Gemini stream ended before a complete response was received.")
+        }
+        emitChunk(AIResponseChunk(delta = "", isComplete = true))
+    }
 
     private fun executeHttp(
         urlString: String,

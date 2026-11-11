@@ -11,8 +11,10 @@ import com.vibespace.core.common.id.IdGenerator
 import com.vibespace.core.common.result.VibeResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -34,7 +36,8 @@ class OpenAIAIProvider(
     var activeModel: String = "gpt-4o-mini",
     var customEndpoint: String = "",
     private val httpTransport: ((url: String, method: String, headers: Map<String, String>, body: String) -> Pair<Int, String>)? = null,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    private val streamTransport: ((url: String, headers: Map<String, String>, body: String) -> Pair<Int, Flow<String>>)? = null
 ) : AIProvider {
 
     override val providerId: String = "openai"
@@ -100,6 +103,20 @@ class OpenAIAIProvider(
             (!endpointUri?.scheme.equals("https", ignoreCase = true) && !localHttpEndpoint)
         ) throw IOException("Invalid custom endpoint. Use HTTPS or a localhost HTTP proxy.")
 
+        val headers = mapOf(
+            "Content-Type" to "application/json",
+            "Authorization" to "Bearer ${apiKey.trim()}"
+        )
+        val requestBody = buildRequestBody(request, stream = true)
+        streamTransport?.let { injectedTransport ->
+            val (status, lines) = injectedTransport(endpoint, headers, requestBody)
+            if (status !in 200..299) {
+                throw IOException(extractErrorMessage(status, lines.toList().joinToString("\n")))
+            }
+            consumeSseLines(lines) { chunk -> emit(chunk) }
+            return@flow
+        }
+
         // Injected transports are request/response fakes, so they cannot expose a live byte stream.
         // Production connections below use the provider's actual SSE streaming endpoint.
         if (httpTransport != null) {
@@ -119,49 +136,57 @@ class OpenAIAIProvider(
             connectTimeout = 15_000
             readTimeout = 1_000
             doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }
         try {
-            connection.outputStream.use { it.write(buildRequestBody(request, stream = true).toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) {
                 val message = readLimited(connection.errorStream)
                 throw IOException(extractErrorMessage(status, message))
             }
-            var receivedDone = false
-            var streamedBytes = 0
-            val coroutineContext = kotlinx.coroutines.currentCoroutineContext()
-            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                while (true) {
-                    val line = try {
-                        reader.readLine()
-                    } catch (_: SocketTimeoutException) {
+            val lines = flow {
+                val coroutineContext = kotlinx.coroutines.currentCoroutineContext()
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                    while (true) {
+                        val line = try {
+                            reader.readLine()
+                        } catch (_: SocketTimeoutException) {
+                            coroutineContext.ensureActive()
+                            continue
+                        } ?: break
                         coroutineContext.ensureActive()
-                        continue
-                    } ?: break
-                    coroutineContext.ensureActive()
-                    if (!line.startsWith("data:")) continue
-                    val data = line.removePrefix("data:").trim()
-                    streamedBytes += data.length
-                    if (streamedBytes > MAX_RESPONSE_BYTES) throw IOException("AI stream exceeded the 4 MB limit.")
-                    if (data == "[DONE]") {
-                        receivedDone = true
-                        emit(AIResponseChunk(delta = "", isComplete = true))
-                        break
+                        emit(line)
                     }
-                    val delta = runCatching {
-                        JSONObject(data).optJSONArray("choices")?.optJSONObject(0)
-                            ?.optJSONObject("delta")?.optString("content").orEmpty()
-                    }.getOrDefault("")
-                    if (delta.isNotEmpty()) emit(AIResponseChunk(delta = delta))
                 }
             }
-            if (!receivedDone) throw IOException("OpenAI-compatible stream ended before its completion marker.")
+            consumeSseLines(lines) { chunk -> emit(chunk) }
         } finally {
             connection.disconnect()
         }
     }.flowOn(dispatchers.io)
+
+    private suspend fun consumeSseLines(lines: Flow<String>, emitChunk: suspend (AIResponseChunk) -> Unit) {
+        var streamedBytes = 0
+        var receivedDone = false
+        lines.collect { line ->
+            if (!line.startsWith("data:")) return@collect
+            val data = line.removePrefix("data:").trim()
+            streamedBytes += data.length
+            if (streamedBytes > MAX_RESPONSE_BYTES) throw IOException("AI stream exceeded the 4 MB limit.")
+            if (data == "[DONE]") {
+                receivedDone = true
+                emitChunk(AIResponseChunk(delta = "", isComplete = true))
+                return@collect
+            }
+            val delta = runCatching {
+                JSONObject(data).optJSONArray("choices")?.optJSONObject(0)
+                    ?.optJSONObject("delta")?.optString("content").orEmpty()
+            }.getOrDefault("")
+            if (delta.isNotEmpty()) emitChunk(AIResponseChunk(delta = delta))
+        }
+        if (!receivedDone) throw IOException("OpenAI-compatible stream ended before its completion marker.")
+    }
 
     private fun executeHttp(
         urlString: String,

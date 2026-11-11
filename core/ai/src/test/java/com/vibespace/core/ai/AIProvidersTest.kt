@@ -6,12 +6,14 @@ import com.vibespace.core.ai.model.AIRole
 import com.vibespace.core.ai.model.CodeContext
 import com.vibespace.core.ai.provider.GeminiAIProvider
 import com.vibespace.core.ai.provider.OpenAIAIProvider
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.take
-import com.sun.net.httpserver.HttpServer
-import java.net.InetSocketAddress
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -158,173 +160,157 @@ class AIProvidersTest {
 
     @Test
     fun openaiProvider_streamsSseDeltasAsTheyArrive() = runTest {
-        val server = createTestServer()
-        server.createContext("/v1/chat/completions") { exchange ->
-            val request = exchange.requestBody.bufferedReader().readText()
-            assertTrue(request.contains("\"stream\":true"))
-            val body = listOf(
-                "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
-                "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\n",
-                "data: [DONE]\n\n"
-            ).joinToString("").toByteArray()
-            exchange.responseHeaders.add("Content-Type", "text/event-stream")
-            exchange.sendResponseHeaders(200, 0)
-            exchange.responseBody.use { it.write(body) }
-        }
-        server.start()
-        try {
-            val provider = OpenAIAIProvider(
-                apiKey = "test-key",
-                customEndpoint = "http://127.0.0.1:${server.address.port}/v1/chat/completions"
-            )
-            val chunks = provider.streamResponse(
-                AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
-            ).toList()
+        val provider = OpenAIAIProvider(
+            apiKey = "test-key",
+            streamTransport = { url, headers, body ->
+                assertTrue(url.contains("/v1/chat/completions"))
+                assertEquals("Bearer test-key", headers["Authorization"])
+                assertTrue(body.contains("\"stream\":true"))
+                Pair(200, flowOf(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}",
+                    "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}",
+                    "data: [DONE]"
+                ))
+            }
+        )
+        val chunks = provider.streamResponse(
+            AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+        ).toList()
 
-            assertEquals(listOf("Hello", " world"), chunks.filterNot { it.isComplete }.map { it.delta })
-            assertTrue(chunks.last().isComplete)
-        } finally {
-            server.stop(0)
-        }
+        assertEquals(listOf("Hello", " world"), chunks.filterNot { it.isComplete }.map { it.delta })
+        assertTrue(chunks.last().isComplete)
     }
 
     @Test
     fun openaiProvider_rejectsStreamThatEndsWithoutCompletionMarker() = runTest {
-        val server = createTestServer()
-        server.createContext("/v1/chat/completions") { exchange ->
-            exchange.sendResponseHeaders(200, 0)
-            exchange.responseBody.use { it.write("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n".toByteArray()) }
-        }
-        server.start()
-        try {
-            val provider = OpenAIAIProvider("test-key", customEndpoint = "http://127.0.0.1:${server.address.port}/v1/chat/completions")
-            try {
-                provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
-                fail("A truncated SSE response must not report completion")
-            } catch (expected: IOException) {
-                assertTrue(expected.message.orEmpty().contains("completion marker"))
+        val provider = OpenAIAIProvider(
+            apiKey = "test-key",
+            streamTransport = { _, _, _ ->
+                Pair(200, flowOf("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}"))
             }
-        } finally {
-            server.stop(0)
+        )
+        try {
+            provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
+            fail("A truncated SSE response must not report completion")
+        } catch (expected: IOException) {
+            assertTrue(expected.message.orEmpty().contains("completion marker"))
         }
+    }
+
+    @Test
+    fun openaiProvider_reportsHttpStreamErrors() = runTest {
+        val provider = OpenAIAIProvider(
+            apiKey = "test-key",
+            streamTransport = { _, _, _ ->
+                Pair(429, flowOf("{\"error\":{\"message\":\"rate limit exceeded\"}}"))
+            }
+        )
+        try {
+            provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
+            fail("HTTP errors must be surfaced")
+        } catch (expected: IOException) {
+            assertTrue(expected.message.orEmpty().contains("rate limit exceeded"))
+        }
+    }
+
+    @Test
+    fun openaiProvider_cancelsTheEventStreamWhenTheCollectorStops() = runTest {
+        val cancelled = AtomicBoolean(false)
+        val provider = OpenAIAIProvider(
+            apiKey = "test-key",
+            streamTransport = { _, _, _ ->
+                Pair(200, flow {
+                    try {
+                        emit("data: {\"choices\":[{\"delta\":{\"content\":\"first\"}}]}")
+                        awaitCancellation()
+                    } finally {
+                        cancelled.set(true)
+                    }
+                })
+            }
+        )
+        val firstChunk = provider.streamResponse(
+            AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+        ).take(1).toList().single()
+
+        assertEquals("first", firstChunk.delta)
+        assertTrue(cancelled.get())
     }
 
     @Test
     fun geminiProvider_streamsSseDeltasAndRequiresTerminalEvent() = runTest {
-        val server = createTestServer()
-        server.createContext("/stream") { exchange ->
-            val events = listOf(
-                "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello\"}]}}]}\n\n",
-                "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" Gemini\"}]},\"finishReason\":\"STOP\"}]}\n\n"
-            ).joinToString("").toByteArray()
-            exchange.sendResponseHeaders(200, 0)
-            exchange.responseBody.use { it.write(events) }
-        }
-        server.start()
-        try {
-            val provider = GeminiAIProvider(
-                apiKey = "test-key",
-                streamEndpointOverride = "http://127.0.0.1:${server.address.port}/stream"
-            )
-            val chunks = provider.streamResponse(
-                AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
-            ).toList()
+        val provider = GeminiAIProvider(
+            apiKey = "test-key",
+            streamTransport = { url, headers, _ ->
+                assertTrue(url.contains(":streamGenerateContent?alt=sse"))
+                assertEquals("test-key", headers["x-goog-api-key"])
+                Pair(200, flowOf(
+                    "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello\"}]}}]}",
+                    "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" Gemini\"}]},\"finishReason\":\"STOP\"}]}"
+                ))
+            }
+        )
+        val chunks = provider.streamResponse(
+            AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+        ).toList()
 
-            assertEquals(listOf("Hello", " Gemini"), chunks.filterNot { it.isComplete }.map { it.delta })
-            assertTrue(chunks.last().isComplete)
-        } finally {
-            server.stop(0)
-        }
+        assertEquals(listOf("Hello", " Gemini"), chunks.filterNot { it.isComplete }.map { it.delta })
+        assertTrue(chunks.last().isComplete)
     }
 
     @Test
     fun geminiProvider_reportsHttpStreamErrors() = runTest {
-        val server = createTestServer()
-        server.createContext("/stream") { exchange ->
-            val body = "{\"error\":{\"message\":\"quota exhausted\"}}".toByteArray()
-            exchange.sendResponseHeaders(503, body.size.toLong())
-            exchange.responseBody.use { it.write(body) }
-        }
-        server.start()
-        try {
-            val provider = GeminiAIProvider(
-                apiKey = "test-key",
-                streamEndpointOverride = "http://127.0.0.1:${server.address.port}/stream"
-            )
-            try {
-                provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
-                fail("HTTP errors must be surfaced")
-            } catch (expected: IOException) {
-                assertTrue(expected.message.orEmpty().contains("quota exhausted"))
+        val provider = GeminiAIProvider(
+            apiKey = "test-key",
+            streamTransport = { _, _, _ ->
+                Pair(503, flowOf("{\"error\":{\"message\":\"quota exhausted\"}}"))
             }
-        } finally {
-            server.stop(0)
+        )
+        try {
+            provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
+            fail("HTTP errors must be surfaced")
+        } catch (expected: IOException) {
+            assertTrue(expected.message.orEmpty().contains("quota exhausted"))
         }
     }
 
     @Test
     fun geminiProvider_rejectsStreamMissingTheTerminalFinishReason() = runTest {
-        val server = createTestServer()
-        server.createContext("/stream") { exchange ->
-            val body = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n".toByteArray()
-            exchange.sendResponseHeaders(200, 0)
-            exchange.responseBody.use { it.write(body) }
-        }
-        server.start()
-        try {
-            val provider = GeminiAIProvider(
-                apiKey = "test-key",
-                streamEndpointOverride = "http://127.0.0.1:${server.address.port}/stream"
-            )
-            try {
-                provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
-                fail("A Gemini stream without finishReason must not report completion")
-            } catch (expected: IOException) {
-                assertTrue(expected.message.orEmpty().contains("complete response"))
+        val provider = GeminiAIProvider(
+            apiKey = "test-key",
+            streamTransport = { _, _, _ ->
+                Pair(200, flowOf("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}"))
             }
-        } finally {
-            server.stop(0)
+        )
+        try {
+            provider.streamResponse(AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))).toList()
+            fail("A Gemini stream without finishReason must not report completion")
+        } catch (expected: IOException) {
+            assertTrue(expected.message.orEmpty().contains("complete response"))
         }
     }
 
     @Test
     fun geminiProvider_cancelsTheEventStreamWhenTheCollectorStops() = runTest {
-        val server = createTestServer()
-        server.createContext("/stream") { exchange ->
-            exchange.sendResponseHeaders(200, 0)
-            try {
-                exchange.responseBody.use { output ->
-                    output.write("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"first\"}]}}]}\n\n".toByteArray())
-                    output.flush()
-                    while (true) {
-                        Thread.sleep(50)
-                        output.write(": keep-alive\n\n".toByteArray())
-                        output.flush()
+        val cancelled = AtomicBoolean(false)
+        val provider = GeminiAIProvider(
+            apiKey = "test-key",
+            streamTransport = { _, _, _ ->
+                Pair(200, flow {
+                    try {
+                        emit("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"first\"}]}}]}")
+                        awaitCancellation()
+                    } finally {
+                        cancelled.set(true)
                     }
-                }
-            } catch (_: Exception) {
-                // The collector cancellation closes the HTTP connection.
+                })
             }
-        }
-        server.start()
-        try {
-            val provider = GeminiAIProvider(
-                apiKey = "test-key",
-                streamEndpointOverride = "http://127.0.0.1:${server.address.port}/stream"
-            )
-            val firstChunk = provider.streamResponse(
-                AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
-            ).take(1).toList().single()
+        )
+        val firstChunk = provider.streamResponse(
+            AIRequest(messages = listOf(AIMessage("1", AIRole.USER, "Hi")))
+        ).take(1).toList().single()
 
-            assertEquals("first", firstChunk.delta)
-        } finally {
-            server.stop(0)
-        }
-    }
-
-    private fun createTestServer(): HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
-        executor = java.util.concurrent.Executors.newCachedThreadPool { task ->
-            Thread(task, "vibespace-ai-test-http").apply { isDaemon = true }
-        }
+        assertEquals("first", firstChunk.delta)
+        assertTrue(cancelled.get())
     }
 }
