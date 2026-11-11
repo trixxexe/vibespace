@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
 
 class DefaultRunnerManager(
     private val workspaceManager: WorkspaceManager? = null,
@@ -47,6 +48,13 @@ class DefaultRunnerManager(
     private val runnerScope = CoroutineScope(SupervisorJob() + dispatchers.default)
     private val collectionJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
     private val executionRunners = java.util.concurrent.ConcurrentHashMap<String, ExternalRunner>()
+
+    private data class SafWorkspaceMirror(
+        val root: File,
+        val projectId: String,
+        val rootUri: String,
+        val entries: Map<String, String>
+    )
 
     init {
         // Register runner implementations. Availability is reported by each runner at runtime.
@@ -89,12 +97,12 @@ class DefaultRunnerManager(
             }
         } else null
         val runnerWorkingDirectory = if (runner.runnerId == "alpine") {
-            safMirror?.first?.absolutePath ?: workspaceManager?.currentProject?.value?.rootPath ?: workingDirectory
+            safMirror?.root?.absolutePath ?: workspaceManager?.currentProject?.value?.rootPath ?: workingDirectory
         } else workingDirectory
         val environment = sessionId?.let { mapOf("VIBESPACE_TERMINAL_SESSION_ID" to it) }.orEmpty()
         val result = runner.execute(command, runnerWorkingDirectory, environment)
         if (safMirror != null) {
-            val syncResult = syncSafWorkspaceBack(safMirror.first, safMirror.second)
+            val syncResult = syncSafWorkspaceBack(safMirror)
             if (syncResult is com.vibespace.core.common.result.VibeResult.Error) return@withContext syncResult
         }
 
@@ -128,7 +136,7 @@ class DefaultRunnerManager(
         result
     }
 
-    private suspend fun prepareSafWorkspace(): com.vibespace.core.common.result.VibeResult<Pair<File, Map<String, String>>?> {
+    private suspend fun prepareSafWorkspace(): com.vibespace.core.common.result.VibeResult<SafWorkspaceMirror?> {
         val manager = workspaceManager ?: return com.vibespace.core.common.result.VibeResult.Success(null)
         val project = manager.currentProject.value?.takeIf { it.isStorageAccessFramework }
             ?: return com.vibespace.core.common.result.VibeResult.Success(null)
@@ -139,6 +147,9 @@ class DefaultRunnerManager(
         }
         val root = File(runnerWorkspaceDirectory, project.id.toRunnerDirectoryName()).canonicalFile
         root.mkdirs()
+        if (root.walkTopDown().any { Files.isSymbolicLink(it.toPath()) }) {
+            return com.vibespace.core.common.result.VibeResult.Error("The Linux staging workspace contains symbolic links. Remove them before running commands from this SAF workspace.")
+        }
         val uriMap = linkedMapOf<String, String>()
         for (file in files.filter { it.isFile }) {
             val relative = relativeWorkspacePath(file, files, project.rootUri)
@@ -156,17 +167,25 @@ class DefaultRunnerManager(
             uriMap[relative] = file.uri
         }
         root.walkTopDown().filter { it.isFile && it.relativeTo(root).invariantSeparatorsPath !in uriMap }.forEach { it.delete() }
-        return com.vibespace.core.common.result.VibeResult.Success(root to uriMap)
+        return com.vibespace.core.common.result.VibeResult.Success(
+            SafWorkspaceMirror(root, project.id, project.rootUri, uriMap)
+        )
     }
 
-    private suspend fun syncSafWorkspaceBack(root: File, existingUris: Map<String, String>): com.vibespace.core.common.result.VibeResult<Unit> {
+    private suspend fun syncSafWorkspaceBack(mirror: SafWorkspaceMirror): com.vibespace.core.common.result.VibeResult<Unit> {
         val manager = workspaceManager ?: return com.vibespace.core.common.result.VibeResult.Success(Unit)
-        val project = manager.currentProject.value ?: return com.vibespace.core.common.result.VibeResult.Error("The workspace was closed while the command was running.")
+        if (manager.currentProject.value?.let { it.id == mirror.projectId && it.rootUri == mirror.rootUri } != true) {
+            return com.vibespace.core.common.result.VibeResult.Error("The SAF workspace changed while the Linux command was running; its output was not synced.")
+        }
+        val root = mirror.root
+        if (root.walkTopDown().any { Files.isSymbolicLink(it.toPath()) }) {
+            return com.vibespace.core.common.result.VibeResult.Error("Linux command created a symbolic link. Workspace changes were not synced to protect SAF files.")
+        }
         val diskFiles = root.walkTopDown().filter { it.isFile }.map { file ->
             file.relativeTo(root).invariantSeparatorsPath to file
         }.toMap()
-        val relativeToUri = existingUris.toMutableMap()
-        for ((relative, uri) in existingUris) {
+        val relativeToUri = mirror.entries.toMutableMap()
+        for ((relative, uri) in mirror.entries) {
             if (relative !in diskFiles) {
                 val deleted = manager.delete(uri)
                 if (deleted is com.vibespace.core.common.result.VibeResult.Error && !deleted.message.contains("not found", true)) return deleted
@@ -174,7 +193,7 @@ class DefaultRunnerManager(
         }
         for ((relative, file) in diskFiles) {
             if (!isSafeRelativePath(relative)) continue
-            val uri = relativeToUri[relative] ?: resolveWorkspaceUri(project.rootUri, relative, createFile = true) ?:
+            val uri = relativeToUri[relative] ?: resolveWorkspaceUri(mirror.rootUri, relative, createFile = true) ?:
                 return com.vibespace.core.common.result.VibeResult.Error("Could not create workspace file '$relative' from the Linux command.")
             when (val written = manager.writeBytes(uri, file.readBytes())) {
                 is com.vibespace.core.common.result.VibeResult.Error -> return com.vibespace.core.common.result.VibeResult.Error("Could not sync '$relative' back to the SAF workspace: ${written.message}", written.throwable)
