@@ -127,9 +127,6 @@ fun VibeNavigation(
                 onNavigateToSettings = {
                     navController.navigate(VibeDestination.Settings.route)
                 },
-                onToggleLineNumbers = {
-                    settingsViewModel.toggleLineNumbers(!settingsState.settings.showLineNumbers)
-                },
                 onNavigateToExtensions = {
                     navController.navigate(VibeDestination.Extensions.route)
                 },
@@ -250,6 +247,9 @@ fun VibeNavigation(
                 },
                 onNavigateToSettings = {
                     navController.navigate(VibeDestination.Settings.route)
+                },
+                onToggleLineNumbers = {
+                    settingsViewModel.toggleLineNumbers(!settingsState.settings.showLineNumbers)
                 },
                 onNavigateToExtensions = {
                     navController.navigate(VibeDestination.Extensions.route)
