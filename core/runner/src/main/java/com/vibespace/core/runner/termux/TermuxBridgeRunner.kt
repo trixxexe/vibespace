@@ -119,14 +119,10 @@ class TermuxBridgeRunner(
                 putExtra(TermuxContract.EXTRA_BACKGROUND, true)
                 putExtra(TermuxContract.EXTRA_SESSION_ACTION, "0")
             }
-            if (context != null) {
-                context.startService(intent)
-                dispatchSucceeded = true
-                emitLine("[Termux] Command dispatched to background Termux session.", false)
-                emitLine("[Termux] Note: Fire-and-forget execution; command runs independently in Termux.", false)
-            } else {
-                emitLine("[Termux Bridge] Android context unavailable to send intent.", true)
-            }
+            termuxContext.startService(intent)
+            dispatchSucceeded = true
+            emitLine("[Termux] Command dispatched to background Termux session.", false)
+            emitLine("[Termux] Note: Fire-and-forget execution; command runs independently in Termux.", false)
         } catch (e: Throwable) {
             emitLine("Failed to dispatch Termux command: ${e.message}", true)
             emitLine("Check the RUN_COMMAND permission and Termux's allow-external-apps setting.", false)

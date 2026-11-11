@@ -81,4 +81,85 @@ class EmbeddedInstantRunnerTest {
         assertEquals(0, exec.exitCode)
         assertTrue(exec.outputs.any { it.line.contains("VibeSpace JS") })
     }
+
+    @Test
+    fun python_module_execution_returns_exit_code_1_and_guides_to_full_runtime() = runTest {
+        val result = runner.execute("python -m pip install requests", "/workspace")
+        assertTrue(result.isSuccess)
+        val exec = result.getOrNull()!!
+        assertEquals(ExecutionState.FAILED, exec.state)
+        assertEquals(1, exec.exitCode)
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("Running Python modules ('-m pip') is unsupported in Instant Evaluator") })
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("Switch runner mode to 'Alpine Linux' or 'Termux'") })
+    }
+
+    @Test
+    fun python_generic_module_flag_returns_exit_code_1() = runTest {
+        val result = runner.execute("python -m unittest", "/workspace")
+        assertTrue(result.isSuccess)
+        val exec = result.getOrNull()!!
+        assertEquals(ExecutionState.FAILED, exec.state)
+        assertEquals(1, exec.exitCode)
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("Running Python modules ('-m unittest') is unsupported in Instant Evaluator") })
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("Alpine Linux") })
+    }
+
+    @Test
+    fun direct_pip_invocation_returns_exit_code_127_and_guides_to_full_runtime() = runTest {
+        val result = runner.execute("pip install requests", "/workspace")
+        assertTrue(result.isSuccess)
+        val exec = result.getOrNull()!!
+        assertEquals(ExecutionState.FAILED, exec.state)
+        assertEquals(127, exec.exitCode)
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("'pip' package manager is unavailable in Instant Evaluator") })
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("Switch runner mode to 'Alpine Linux' or 'Termux'") })
+    }
+
+    @Test
+    fun direct_npm_invocation_returns_exit_code_127_and_guides_to_full_runtime() = runTest {
+        val result = runner.execute("npm install express", "/workspace")
+        assertTrue(result.isSuccess)
+        val exec = result.getOrNull()!!
+        assertEquals(ExecutionState.FAILED, exec.state)
+        assertEquals(127, exec.exitCode)
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("'npm' package manager is unavailable in Instant Evaluator") })
+        assertTrue(exec.outputs.any { it.isError && it.line.contains("Switch runner mode to 'Alpine Linux' or 'Termux'") })
+    }
+
+    @Test
+    fun other_package_managers_return_exit_code_127_and_guide_to_full_runtime() = runTest {
+        for (pkgTool in listOf("pip3", "npx", "yarn", "pnpm", "cargo", "gem", "go", "apk", "apt")) {
+            val result = runner.execute("$pkgTool build", "/workspace")
+            assertTrue(result.isSuccess)
+            val exec = result.getOrNull()!!
+            assertEquals(ExecutionState.FAILED, exec.state)
+            assertEquals(127, exec.exitCode)
+            assertTrue(exec.outputs.any { it.isError && it.line.contains("unavailable in Instant Evaluator") })
+            assertTrue(exec.outputs.any { it.isError && it.line.contains("Alpine Linux") })
+        }
+    }
+
+    @Test
+    fun python_version_flags_return_exit_code_0_and_version_string() = runTest {
+        for (flag in listOf("-V", "--version", "-v")) {
+            val result = runner.execute("python $flag", "/workspace")
+            assertTrue(result.isSuccess)
+            val exec = result.getOrNull()!!
+            assertEquals(ExecutionState.SUCCEEDED, exec.state)
+            assertEquals(0, exec.exitCode)
+            assertTrue(exec.outputs.any { !it.isError && it.line.contains("Python 3.12 (VibeSpace Instant Evaluator)") })
+        }
+    }
+
+    @Test
+    fun node_version_flags_return_exit_code_0_and_version_string() = runTest {
+        for (flag in listOf("-v", "-V", "--version")) {
+            val result = runner.execute("node $flag", "/workspace")
+            assertTrue(result.isSuccess)
+            val exec = result.getOrNull()!!
+            assertEquals(ExecutionState.SUCCEEDED, exec.state)
+            assertEquals(0, exec.exitCode)
+            assertTrue(exec.outputs.any { !it.isError && it.line.contains("Node.js v20.18.0 (VibeSpace Instant Evaluator)") })
+        }
+    }
 }

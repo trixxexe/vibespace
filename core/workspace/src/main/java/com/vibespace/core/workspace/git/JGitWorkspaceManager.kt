@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.diff.DiffFormatter
+import org.eclipse.jgit.lib.Config
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.PersonIdent
 import org.eclipse.jgit.lib.Repository
@@ -65,7 +66,7 @@ class JGitWorkspaceManager(
             dir.mkdirs()
             val gitDir = File(dir, ".git")
             val repo = if (gitDir.exists()) {
-                FileRepositoryBuilder().setGitDir(gitDir).setWorkTree(dir).readEnvironment().findGitDir().build()
+                FileRepositoryBuilder().setGitDir(gitDir).setWorkTree(dir).findGitDir().build()
             } else {
                 Git.init().setDirectory(dir).setInitialBranch("main").call().repository
             }
@@ -215,8 +216,8 @@ class JGitWorkspaceManager(
             commits = commits,
             remoteUrl = remote,
             remoteBranch = ctx.repo.config.getString("branch", ctx.repo.branch, "remote"),
-            authorName = ctx.repo.config.getString("user", null, "name"),
-            authorEmail = ctx.repo.config.getString("user", null, "email"),
+            authorName = localConfigString(ctx.repo.config, "user", "name"),
+            authorEmail = localConfigString(ctx.repo.config, "user", "email"),
             isClean = status.isClean,
             errorMessage = null
         )
@@ -287,14 +288,15 @@ class JGitWorkspaceManager(
             return@withRepository VibeResult.Error("No staged changes to commit.")
         }
         val config = ctx.repo.config
-        val authorName = config.getString("user", null, "name")?.trim().orEmpty()
-        val authorEmail = config.getString("user", null, "email")?.trim().orEmpty()
+        val authorName = localConfigString(config, "user", "name")?.trim().orEmpty()
+        val authorEmail = localConfigString(config, "user", "email")?.trim().orEmpty()
         if (authorName.isEmpty() || authorEmail.isEmpty()) {
             return@withRepository VibeResult.Error("Configure your Git author name and email before creating a commit.")
         }
         config.save()
         val commit = Git.wrap(ctx.repo).commit().setMessage(trimmed)
-            .setAuthor(PersonIdent(authorName, authorEmail)).call()
+            .setAuthor(PersonIdent(authorName, authorEmail))
+            .setCommitter(PersonIdent(authorName, authorEmail)).call()
         val model = GitCommit(commit.name, commit.name.take(7), commit.shortMessage, commit.authorIdent.name, commit.commitTime * 1000L)
         refreshStatusInContext(ctx)
         VibeResult.Success(model)
@@ -488,6 +490,15 @@ class JGitWorkspaceManager(
             }
         }
         return lines
+    }
+
+    private fun localConfigString(config: Config, section: String, name: String): String? {
+        val names = config.getNames(section, false)
+        return if (names.any { it.equals(name, ignoreCase = true) }) {
+            config.getString(section, null, name)
+        } else {
+            null
+        }
     }
 
     private fun String.toSha256(): String = MessageDigest.getInstance("SHA-256")

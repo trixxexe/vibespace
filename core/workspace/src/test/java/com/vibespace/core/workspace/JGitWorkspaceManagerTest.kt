@@ -35,6 +35,12 @@ class JGitWorkspaceManagerTest {
             dispatchers = dispatchers
         )
 
+        val initialStatus = git.refreshStatus()
+        assertTrue(initialStatus is VibeResult.Success)
+        val initialData = (initialStatus as VibeResult.Success).data
+        assertEquals(null, initialData.authorName)
+        assertEquals(null, initialData.authorEmail)
+
         assertTrue(git.stageAll().isSuccess)
         val withoutIdentity = git.commit("Add source")
         assertTrue(withoutIdentity is VibeResult.Error)
@@ -46,5 +52,7 @@ class JGitWorkspaceManagerTest {
         val success = status as VibeResult.Success
         assertEquals(true, success.data.isClean)
         assertEquals("Test Author", success.data.commits.first().author)
+        assertEquals("Test Author", success.data.authorName)
+        assertEquals("author@example.test", success.data.authorEmail)
     }
 }

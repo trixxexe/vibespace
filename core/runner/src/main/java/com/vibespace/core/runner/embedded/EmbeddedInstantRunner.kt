@@ -113,6 +113,19 @@ class EmbeddedInstantRunner(
             return 0
         }
 
+        if (codeOrFile in listOf("-V", "--version", "-v")) {
+            emit("Python 3.12 (VibeSpace Instant Evaluator)", false)
+            return 0
+        }
+
+        if (codeOrFile == "-m" || codeOrFile.startsWith("-m ") || codeOrFile.startsWith("-m\t") || (codeOrFile.startsWith("-m") && !codeOrFile.endsWith(".py", ignoreCase = true))) {
+            val module = codeOrFile.removePrefix("-m").trim().split("\\s+".toRegex()).firstOrNull().orEmpty()
+            val moduleSuffix = if (module.isNotBlank()) " ('-m $module')" else ""
+            emit("Error: Running Python modules$moduleSuffix is unsupported in Instant Evaluator.", true)
+            emit("Package management and external modules require a full runtime. Switch runner mode to 'Alpine Linux' or 'Termux' using the runner menu in the terminal toolbar.", true)
+            return 1
+        }
+
         var codeToExecute = codeOrFile
         val fileArgument = codeOrFile.removeSurrounding("\"").removeSurrounding("'")
         if (fileArgument.endsWith(".py", ignoreCase = true)) {
@@ -150,6 +163,11 @@ class EmbeddedInstantRunner(
         val codeOrFile = extractCodeFromCommand(command, "node", "js")
         if (codeOrFile.isBlank()) {
             emit("JavaScript runtime ready. Use 'Run' toolbar button to execute scripts.", false)
+            return 0
+        }
+
+        if (codeOrFile in listOf("-V", "--version", "-v")) {
+            emit("Node.js v20.18.0 (VibeSpace Instant Evaluator)", false)
             return 0
         }
 
@@ -236,6 +254,21 @@ class EmbeddedInstantRunner(
             "clear" -> {
                 emit("\u001b[2J\u001b[H", false)
                 0
+            }
+            "pip", "pip3" -> {
+                emit("Error: '$binary' package manager is unavailable in Instant Evaluator.", true)
+                emit("Package management requires a full runtime. Switch runner mode to 'Alpine Linux' or 'Termux' using the runner menu in the terminal toolbar.", true)
+                127
+            }
+            "npm", "npx", "yarn", "pnpm" -> {
+                emit("Error: '$binary' package manager is unavailable in Instant Evaluator.", true)
+                emit("Package management requires a full runtime. Switch runner mode to 'Alpine Linux' or 'Termux' using the runner menu in the terminal toolbar.", true)
+                127
+            }
+            "cargo", "gem", "go", "apk", "apt" -> {
+                emit("Error: '$binary' package manager / tool is unavailable in Instant Evaluator.", true)
+                emit("Package management and tools require a full runtime. Switch runner mode to 'Alpine Linux' or 'Termux' using the runner menu in the terminal toolbar.", true)
+                127
             }
             else -> {
                 emit("sh: $binary: command not found", true)

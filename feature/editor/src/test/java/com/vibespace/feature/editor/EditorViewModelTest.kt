@@ -6,6 +6,7 @@ import com.vibespace.core.language.detector.DefaultLanguageDetector
 import com.vibespace.core.workspace.manager.DefaultWorkspaceManager
 import com.vibespace.core.workspace.model.FileNodeType
 import com.vibespace.core.workspace.model.VirtualFile
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -184,6 +185,7 @@ class EditorViewModelTest {
         assertEquals(null, viewModel.uiState.value.hoverInfo)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun completion_suggestions_include_real_lsp_results() = runTest {
         val root = "vibe://projects/test-lsp-completions"

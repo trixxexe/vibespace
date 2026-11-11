@@ -37,7 +37,8 @@ class AIProviderRegistry(
 
     fun register(provider: AIProvider) {
         providers[provider.providerId] = provider
-        if (activeProviderId == null || (activeProviderId == "gemini" && !providers["gemini"]!!.isConfigured && provider.isConfigured)) {
+        val currentActive = activeProviderId?.let { providers[it] }
+        if (currentActive == null || (!currentActive.isConfigured && provider.isConfigured)) {
             activeProviderId = provider.providerId
         }
     }

@@ -109,8 +109,14 @@ class TerminalViewModel(
         runnerManager?.setRunnerMode(mode)
         _uiState.update { it.copy(activeRunnerMode = mode) }
         val session = _uiState.value.activeSession ?: return
-        if (mode == RunnerMode.ALPINE) startInteractiveTerminal(session.sessionId, session.workingDirectory)
-        else viewModelScope.launch(dispatchers.io) { runnerManager?.closeInteractiveTerminal(session.sessionId) }
+        if (mode == RunnerMode.ALPINE) {
+            startInteractiveTerminal(session.sessionId, session.workingDirectory)
+        } else {
+            interactiveCollectors.remove(session.sessionId)?.cancel()
+            viewModelScope.launch(dispatchers.io) {
+                runnerManager?.closeInteractiveTerminal(session.sessionId)
+            }
+        }
     }
 
     private fun startInteractiveTerminal(sessionId: String, workingDirectory: String) {

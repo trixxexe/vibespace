@@ -11,7 +11,7 @@ class RegexSearchTest {
         val zeroWidth = RegexSearch.findMatches("abc", Pattern.compile("^|$"))
         val endOfFile = RegexSearch.findMatches("abc", Pattern.compile("$"))
 
-        assertEquals(listOf(0..-1, 2..1), zeroWidth)
+        assertEquals(listOf(0..-1, 3..2), zeroWidth)
         assertEquals(listOf(3..2), endOfFile)
     }
 

@@ -445,9 +445,9 @@ fun GitSourceControlPanel(
     }
 
     // Diff Viewer Dialog if active
-    if (uiState.activeDiff != null) {
+    uiState.activeDiff?.let { diff ->
         MobileDiffViewerDialog(
-            diff = uiState.activeDiff!!,
+            diff = diff,
             onStageFile = {
                 uiState.activeDiffFile?.let { viewModel.stageFile(it) }
             },
