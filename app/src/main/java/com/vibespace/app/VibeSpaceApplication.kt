@@ -68,11 +68,15 @@ class VibeSpaceApplication : Application() {
 
     val runnerManager: RunnerManager by lazy {
         val alpineDir = java.io.File(filesDir, "alpine")
-        val alpineRunner = com.vibespace.core.runner.alpine.AlpineLinuxRunner(rootDirectory = alpineDir)
+        val alpineRunner = com.vibespace.core.runner.alpine.AlpineLinuxRunner(
+            rootDirectory = alpineDir,
+            dispatchers = dispatchers
+        )
         DefaultRunnerManager(
             workspaceManager = workspaceManager,
             dispatchers = dispatchers,
-            alpineRunner = alpineRunner
+            alpineRunner = alpineRunner,
+            termuxRunner = com.vibespace.core.runner.termux.TermuxBridgeRunner(context = this)
         )
     }
 

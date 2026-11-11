@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +24,6 @@ import com.vibespace.core.designsystem.components.VibeIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,7 +32,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,9 +65,11 @@ fun ExtensionsScreen(
                 val inputStream = context.contentResolver.openInputStream(uri)
                 if (inputStream != null) {
                     viewModel.installFromVsix(inputStream)
+                } else {
+                    viewModel.reportError("Unable to open the selected VSIX file.")
                 }
             } catch (e: Exception) {
-                // Handled gracefully in viewmodel state
+                viewModel.reportError("Unable to open the selected VSIX file: ${e.message}")
             }
         }
     }
@@ -91,7 +90,7 @@ fun ExtensionsScreen(
         ) {
             IconButton(
                 onClick = onNavigateBack,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     imageVector = VibeIcons.Back,
@@ -117,7 +116,7 @@ fun ExtensionsScreen(
             // Install from VSIX button
             OutlinedButton(
                 onClick = { vsixLauncher.launch(arrayOf("*/*")) },
-                modifier = Modifier.height(34.dp)
+                modifier = Modifier.height(44.dp)
             ) {
                 Icon(
                     imageVector = VibeIcons.FolderOpen,
@@ -128,6 +127,13 @@ fun ExtensionsScreen(
                 Text("Install .VSIX", fontSize = 12.sp)
             }
         }
+
+        Text(
+            text = "VSIX installs currently support declarative color themes. Other extension types are shown for discovery but cannot run in VibeSpace yet.",
+            style = MaterialTheme.typography.bodySmall,
+            color = VibeTheme.colors.textSecondary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
 
         // Search bar
         Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -329,21 +335,30 @@ private fun ExtensionCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (extension.isInstalled) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
+                        if (extension.isBuiltIn) {
                             Text(
-                                text = if (extension.isEnabled) "Enabled" else "Disabled",
+                                text = "Built in",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (extension.isEnabled) VibeTheme.colors.statusSuccess else VibeTheme.colors.textMuted
+                                color = VibeTheme.colors.statusSuccess,
+                                modifier = Modifier.padding(end = 8.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Switch(
-                                checked = extension.isEnabled,
-                                onCheckedChange = onToggle,
-                                modifier = Modifier.height(32.dp)
-                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (extension.isEnabled) "Enabled" else "Disabled",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (extension.isEnabled) VibeTheme.colors.statusSuccess else VibeTheme.colors.textMuted
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Switch(
+                                    checked = extension.isEnabled,
+                                    onCheckedChange = onToggle,
+                                    modifier = Modifier.height(32.dp)
+                                )
+                            }
                         }
 
                         if (!extension.isBuiltIn) {
@@ -379,17 +394,29 @@ private fun ExtensionCard(
                             )
                         }
                     } else {
-                        Button(
-                            onClick = onInstall,
-                            modifier = Modifier.height(44.dp)
-                        ) {
-                            Icon(
-                                imageVector = VibeIcons.Download,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Install")
+                        val canInstall = extension.category == ExtensionCategory.THEME &&
+                                !extension.downloadUrl.isNullOrBlank()
+                        if (canInstall) {
+                            Button(
+                                onClick = onInstall,
+                                modifier = Modifier.height(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = VibeIcons.Download,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Install theme")
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = {},
+                                enabled = false,
+                                modifier = Modifier.height(44.dp)
+                            ) {
+                                Text("Not supported")
+                            }
                         }
                     }
                 }

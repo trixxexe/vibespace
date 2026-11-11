@@ -84,7 +84,8 @@ class VibeViewModelFactory(
             modelClass.isAssignableFrom(ExtensionsViewModel::class.java) -> {
                 ExtensionsViewModel(
                     extensionManager = app.extensionManager,
-                    dispatchers = app.dispatchers
+                    dispatchers = app.dispatchers,
+                    settingsRepository = app.settingsRepository
                 ) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

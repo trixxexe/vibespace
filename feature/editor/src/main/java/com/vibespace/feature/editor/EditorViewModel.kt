@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
 import com.vibespace.core.common.dispatchers.DispatcherProvider
-import com.vibespace.core.common.result.getOrDefault
+import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.editor.engine.EditorEngine
 import com.vibespace.core.editor.model.CursorPosition
 import com.vibespace.core.editor.model.EditorDocument
@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class EditorViewModel(
@@ -30,6 +32,7 @@ class EditorViewModel(
 ) : ViewModel() {
 
     private var activeLspClient: com.vibespace.core.language.lsp.LanguageServerClient? = null
+    private var autoSaveJob: Job? = null
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -98,16 +101,31 @@ class EditorViewModel(
 
     fun openFile(file: VirtualFile) {
         viewModelScope.launch(dispatchers.io) {
-            val readResult = workspaceManager.readFile(file.uri)
-            val content = readResult.getOrDefault("")
+            val content = when (val readResult = workspaceManager.readFile(file.uri)) {
+                is VibeResult.Success -> readResult.data
+                is VibeResult.Error -> {
+                    _uiState.update { it.copy(statusMessage = "Could not open ${file.name}: ${readResult.message}") }
+                    return@launch
+                }
+                else -> {
+                    _uiState.update { it.copy(statusMessage = "Could not open ${file.name}: file contents are unavailable.") }
+                    return@launch
+                }
+            }
             val language = languageDetector.detectByFileName(file.name)
 
-            editorEngine.openDocument(
+            when (val openResult = editorEngine.openDocument(
                 uri = file.uri,
                 fileName = file.name,
                 content = content,
                 language = language
-            )
+            )) {
+                is VibeResult.Error -> {
+                    _uiState.update { it.copy(statusMessage = "Could not open ${file.name}: ${openResult.message}") }
+                    return@launch
+                }
+                else -> Unit
+            }
             val client = lspClientProvider?.invoke(language.id)
             activeLspClient = client
             if (client != null) {
@@ -133,6 +151,9 @@ class EditorViewModel(
                     val rootUri = workspaceManager.currentProject.value?.rootUri ?: doc.uri
                     client.start(rootUri)
                 }
+                if (client?.isRunning == true) {
+                    client.didOpen(doc.uri, doc.content)
+                }
             }
         }
     }
@@ -153,13 +174,23 @@ class EditorViewModel(
     fun onContentChanged(newContent: String) {
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
-            editorEngine.updateDocument(activeDoc.documentId, newContent)
+            val updatedDocument = when (val result = editorEngine.updateDocument(activeDoc.documentId, newContent)) {
+                is VibeResult.Success -> result.data
+                else -> return@launch
+            }
             val diags = SyntaxDiagnosticsValidator.validate(newContent, activeDoc.language.id)
             val suggestions = AutocompleteEngine.getSuggestions(newContent, "", activeDoc.language.id)
             _uiState.update { it.copy(diagnostics = diags, completions = suggestions) }
             val client = activeLspClient
             if (client != null && client.isRunning) {
-                client.didChange(activeDoc.uri, newContent, activeDoc.version)
+                client.didChange(updatedDocument.uri, updatedDocument.content, updatedDocument.version)
+            }
+            if (_uiState.value.autoSave) {
+                autoSaveJob?.cancel()
+                autoSaveJob = viewModelScope.launch(dispatchers.io) {
+                    delay(AUTO_SAVE_DEBOUNCE_MS)
+                    saveDocument(activeDoc.documentId)
+                }
             }
         }
     }
@@ -197,19 +228,38 @@ class EditorViewModel(
 
     fun saveActiveDocument() {
         val activeDoc = _uiState.value.activeDocument ?: return
-        viewModelScope.launch(dispatchers.io) {
-            _uiState.update { it.copy(isSaving = true) }
-            when (val writeResult = workspaceManager.writeFile(activeDoc.uri, activeDoc.content)) {
-                is com.vibespace.core.common.result.VibeResult.Success -> {
-                    editorEngine.markSaved(activeDoc.documentId)
-                    gitManager?.refreshStatus()
-                    _uiState.update { it.copy(isSaving = false, statusMessage = "Saved ${activeDoc.fileName}") }
+        autoSaveJob?.cancel()
+        viewModelScope.launch(dispatchers.io) { saveDocument(activeDoc.documentId) }
+    }
+
+    private suspend fun saveDocument(documentId: String) {
+        val document = editorEngine.getDocument(documentId) ?: return
+        _uiState.update { it.copy(isSaving = true) }
+        when (val writeResult = workspaceManager.writeFile(document.uri, document.content)) {
+            is VibeResult.Success -> {
+                val latestDocument = editorEngine.getDocument(documentId)
+                if (latestDocument?.content == document.content) {
+                    editorEngine.markSaved(documentId)
                 }
-                is com.vibespace.core.common.result.VibeResult.Error -> {
-                    _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: ${writeResult.message}") }
+                gitManager?.refreshStatus()
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        statusMessage = if (latestDocument?.content == document.content) "Saved ${document.fileName}" else "Saved ${document.fileName}; newer edits are still unsaved"
+                    )
                 }
-                else -> Unit
+                if (latestDocument?.content != document.content && _uiState.value.autoSave) {
+                    autoSaveJob?.cancel()
+                    autoSaveJob = viewModelScope.launch(dispatchers.io) {
+                        delay(AUTO_SAVE_DEBOUNCE_MS)
+                        saveDocument(documentId)
+                    }
+                }
             }
+            is VibeResult.Error -> {
+                _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: ${writeResult.message}") }
+            }
+            else -> _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: no result returned") }
         }
     }
 
@@ -252,6 +302,10 @@ class EditorViewModel(
                 themeId = themeId,
                 autoSave = autoSave
             )
+        }
+        if (!autoSave) {
+            autoSaveJob?.cancel()
+            autoSaveJob = null
         }
     }
 
@@ -341,5 +395,9 @@ class EditorViewModel(
                 else -> Unit
             }
         }
+    }
+
+    private companion object {
+        const val AUTO_SAVE_DEBOUNCE_MS = 700L
     }
 }

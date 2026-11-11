@@ -26,10 +26,11 @@ import kotlinx.coroutines.withContext
 class DefaultRunnerManager(
     private val workspaceManager: WorkspaceManager? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
-    alpineRunner: AlpineLinuxRunner? = null
+    alpineRunner: AlpineLinuxRunner? = null,
+    termuxRunner: TermuxBridgeRunner? = null
 ) : RunnerManager {
 
-    constructor(dispatchers: DispatcherProvider) : this(null, dispatchers, null)
+    constructor(dispatchers: DispatcherProvider) : this(null, dispatchers, null, null)
 
     private val runners = mutableMapOf<String, ExternalRunner>()
     private val _activeExecutions = MutableStateFlow<List<ProcessExecution>>(emptyList())
@@ -47,7 +48,7 @@ class DefaultRunnerManager(
         // Register out-of-the-box Tri-Mode Runners
         registerRunner(EmbeddedInstantRunner(workspaceManager = workspaceManager))
         registerRunner(alpineRunner ?: AlpineLinuxRunner())
-        registerRunner(TermuxBridgeRunner())
+        registerRunner(termuxRunner ?: TermuxBridgeRunner())
     }
 
     override fun registerRunner(runner: ExternalRunner) {
@@ -75,7 +76,12 @@ class DefaultRunnerManager(
         val runner = runners[targetRunnerId] ?: runners["embedded"]
             ?: return@withContext VibeResult.Error("No runner available for target: $targetRunnerId")
 
-        val result = runner.execute(command, workingDirectory)
+        val runnerWorkingDirectory = if (runner.runnerId == "alpine") {
+            workspaceManager?.currentProject?.value?.rootPath ?: workingDirectory
+        } else {
+            workingDirectory
+        }
+        val result = runner.execute(command, runnerWorkingDirectory)
 
         if (result is VibeResult.Success) {
             val execution = result.data
@@ -110,13 +116,20 @@ class DefaultRunnerManager(
     override suspend fun stopExecution(executionId: String): VibeResult<Unit> = withContext(dispatchers.default) {
         val current = _activeExecutions.value.firstOrNull { it.executionId == executionId }
             ?: return@withContext VibeResult.Error("Execution not found: $executionId")
+        if (current.state != ExecutionState.RUNNING) {
+            return@withContext VibeResult.Error("Execution '$executionId' is not running.")
+        }
+        val runner = executionRunners[executionId]
+            ?: return@withContext VibeResult.Error("No runner is attached to execution '$executionId'.")
 
-        // Cancel output collection job
+        when (val stopResult = runner.stop(executionId)) {
+            is VibeResult.Error -> return@withContext stopResult
+            is VibeResult.Success -> Unit
+            else -> return@withContext VibeResult.Error("Runner did not confirm that execution stopped.")
+        }
+
         collectionJobs.remove(executionId)?.cancel()
         executionRunners.remove(executionId)
-
-        // Notify runners
-        runners.values.forEach { it.stop(executionId) }
 
         val updated = current.copy(
             state = ExecutionState.CANCELLED,

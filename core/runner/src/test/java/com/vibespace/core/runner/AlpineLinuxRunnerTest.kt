@@ -64,7 +64,7 @@ class AlpineLinuxRunnerTest {
     }
 
     @Test
-    fun installSubsystem_with_transport_extracts_rootfs_and_marks_installed() = runTest {
+    fun installSubsystem_without_proot_does_not_download_rootfs() = runTest {
         val testBaseDir = tempFolder.newFolder("test_alpine")
         val runner = AlpineLinuxRunner(
             rootDirectory = testBaseDir,
@@ -77,24 +77,13 @@ class AlpineLinuxRunnerTest {
         assertEquals(AlpineInstallationState.NotInstalled, runner.installationState.value)
 
         val installResult = runner.installSubsystem()
-        assertTrue(installResult.isSuccess)
-        assertTrue(runner.installationState.value is AlpineInstallationState.Installed)
-        assertTrue(runner.isAvailable())
-
-        // Verify rootfs was physically extracted to disk
-        val rootfsDir = runner.getRootfsDir()
-        assertTrue(rootfsDir.exists())
-        val releaseFile = File(rootfsDir, "etc/alpine-release")
-        assertTrue(releaseFile.exists())
-        val releaseText = releaseFile.readText()
-        assertTrue(releaseText.contains("3.19.1"))
-
-        val shFile = File(rootfsDir, "bin/sh")
-        assertTrue(shFile.exists())
+        assertTrue(installResult is com.vibespace.core.common.result.VibeResult.Error)
+        assertTrue(runner.installationState.value is AlpineInstallationState.Error)
+        assertTrue(!runner.getRootfsDir().exists())
     }
 
     @Test
-    fun installSubsystem_download_failure_reports_error() = runTest {
+    fun installSubsystem_without_proot_reports_error_without_network_access() = runTest {
         val testBaseDir = tempFolder.newFolder("test_alpine_fail")
         val runner = AlpineLinuxRunner(
             rootDirectory = testBaseDir,
@@ -109,7 +98,7 @@ class AlpineLinuxRunnerTest {
     }
 
     @Test
-    fun execute_when_not_installed_returns_friendly_guidance() = runTest {
+    fun execute_when_proot_is_missing_returns_friendly_guidance() = runTest {
         val testBaseDir = tempFolder.newFolder("test_alpine_uninstalled")
         val runner = AlpineLinuxRunner(rootDirectory = testBaseDir)
 
@@ -117,11 +106,11 @@ class AlpineLinuxRunnerTest {
         assertTrue(result.isSuccess)
         val exec = result.getOrNull()!!
         assertEquals(127, exec.exitCode)
-        assertTrue(exec.outputs.any { it.line.contains("Alpine Linux Subsystem Not Installed") })
+        assertTrue(exec.outputs.any { it.line.contains("PRoot executable is missing") })
     }
 
     @Test
-    fun execute_when_installed_but_proot_missing_returns_code_126() = runTest {
+    fun execute_does_not_claim_installation_without_proot() = runTest {
         val testBaseDir = tempFolder.newFolder("test_alpine_no_proot")
         val runner = AlpineLinuxRunner(
             rootDirectory = testBaseDir,
@@ -130,13 +119,14 @@ class AlpineLinuxRunnerTest {
                 progress(1.0f)
             }
         )
-        runner.installSubsystem()
+        val install = runner.installSubsystem()
+        assertTrue(install is com.vibespace.core.common.result.VibeResult.Error)
 
         val result = runner.execute("uname -a", "/")
         assertTrue(result.isSuccess)
         val exec = result.getOrNull()!!
-        assertEquals(126, exec.exitCode)
-        assertTrue(exec.outputs.any { it.line.contains("PRoot binary not found") })
+        assertEquals(127, exec.exitCode)
+        assertTrue(exec.outputs.any { it.line.contains("PRoot executable is missing") })
     }
 
     @Test

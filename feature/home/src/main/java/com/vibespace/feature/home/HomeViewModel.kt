@@ -66,14 +66,32 @@ class HomeViewModel(
     }
 
     fun openDemoProject(onProjectReady: (Project) -> Unit) {
-        createNewProject("DemoProject", onProjectReady)
+        viewModelScope.launch(dispatchers.io) {
+            val project = Project(
+                id = "demo",
+                name = "DemoProject",
+                rootUri = "vibe://demo"
+            )
+            when (val result = workspaceManager.openProject(project)) {
+                is VibeResult.Success -> {
+                    recentProjectsRepository?.addRecentProject(result.data)
+                    withContext(dispatchers.main) {
+                        _uiState.update { it.copy(isLoading = false) }
+                        onProjectReady(result.data)
+                    }
+                }
+                is VibeResult.Error -> withContext(dispatchers.main) {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+                }
+                else -> Unit
+            }
+        }
     }
 
     fun openSafTreeUri(
         treeUri: Uri,
         folderName: String,
-        onProjectReady: (Project) -> Unit,
-        onProjectError: (String) -> Unit
+        onProjectReady: (Project) -> Unit
     ) {
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
@@ -95,7 +113,6 @@ class HomeViewModel(
                 is VibeResult.Error -> {
                     withContext(dispatchers.main) {
                         _uiState.update { it.copy(isLoading = false, errorMessage = res.message) }
-                        onProjectError(res.message)
                     }
                 }
                 else -> Unit

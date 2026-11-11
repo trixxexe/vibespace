@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeViewModelTest {
@@ -31,6 +32,23 @@ class HomeViewModelTest {
         assertNotNull(openedProject)
         assertEquals("VibeTest", openedProject!!.name)
         assertEquals(openedProject, workspaceManager.currentProject.value)
+    }
+
+    @Test
+    fun openDemoProject_uses_a_dedicated_seeded_workspace() = runTest {
+        val viewModel = HomeViewModel(
+            workspaceManager = workspaceManager,
+            recentProjectsRepository = recentRepo,
+            dispatchers = TestDispatcherProvider()
+        )
+
+        var openedProject: Project? = null
+        viewModel.openDemoProject { openedProject = it }
+
+        assertNotNull(openedProject)
+        assertEquals("demo", openedProject!!.id)
+        assertEquals("vibe://demo", openedProject!!.rootUri)
+        assertTrue(workspaceManager.listFiles("vibe://demo").getOrNull().orEmpty().any { it.name == "main.py" })
     }
 
     @Test

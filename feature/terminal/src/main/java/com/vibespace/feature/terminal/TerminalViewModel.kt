@@ -193,8 +193,8 @@ class TerminalViewModel(
             val result = terminalService.createSession(title, "~")
             if (result is VibeResult.Success) {
                 val sessionId = result.data.sessionId
-                terminalService.appendLine(sessionId, "=== VibeSpace AI Terminal Agent ===", StreamType.SYSTEM)
-                terminalService.appendLine(sessionId, "Paired session ready. Run CLI agents (agy, aider, codegen) or interactive tools.", StreamType.SYSTEM)
+                terminalService.appendLine(sessionId, "=== Agent Terminal ===", StreamType.SYSTEM)
+                terminalService.appendLine(sessionId, "VibeSpace does not bundle CLI coding agents. Configure a supported runner or use the AI Assistant panel.", StreamType.SYSTEM)
                 terminalService.appendLine(sessionId, "$ ", StreamType.SYSTEM)
             }
         }

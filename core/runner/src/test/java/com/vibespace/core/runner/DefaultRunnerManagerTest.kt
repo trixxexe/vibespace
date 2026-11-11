@@ -97,15 +97,15 @@ class DefaultRunnerManagerTest {
     }
 
     @Test
-    fun stopExecution_cancels_active_execution() = runTest {
+    fun stopExecution_does_not_mark_a_completed_execution_as_cancelled() = runTest {
         val runResult = runnerManager.runCommand("echo running", "vibe://projects/test")
         val execId = runResult.getOrNull()!!.executionId
 
         val stopResult = runnerManager.stopExecution(execId)
-        assertTrue(stopResult.isSuccess)
+        assertTrue(stopResult.isError)
 
         val updated = runnerManager.activeExecutions.value.first { it.executionId == execId }
-        assertEquals(ExecutionState.CANCELLED, updated.state)
+        assertEquals(ExecutionState.SUCCEEDED, updated.state)
     }
 
     @Test

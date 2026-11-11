@@ -1,5 +1,7 @@
 package com.vibespace.core.runner.alpine
 
+import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
+import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.id.IdGenerator
 import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.runner.manager.ExternalRunner
@@ -7,13 +9,14 @@ import com.vibespace.core.runner.model.ExecutionState
 import com.vibespace.core.runner.model.ProcessExecution
 import com.vibespace.core.runner.model.ProcessOutput
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -44,13 +47,15 @@ fun interface AlpineProcessExecutor {
     ): Int
 }
 
-class DefaultAlpineProcessExecutor : AlpineProcessExecutor {
+class DefaultAlpineProcessExecutor(
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+) : AlpineProcessExecutor {
     override suspend fun execute(
         command: List<String>,
         workingDir: File,
         environment: Map<String, String>,
         onOutputLine: (line: String, isError: Boolean) -> Unit
-    ): Int = withContext(Dispatchers.IO) {
+    ): Int = withContext(dispatchers.io) {
         val pb = ProcessBuilder(command)
         pb.directory(workingDir)
         pb.environment().putAll(environment)
@@ -68,10 +73,12 @@ class DefaultAlpineProcessExecutor : AlpineProcessExecutor {
                         lines.forEach { onOutputLine(it, true) }
                     }
                 }
-                val exitCode = process.waitFor()
+                while (!process.waitFor(100, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                    currentCoroutineContext().ensureActive()
+                }
                 stdoutJob.join()
                 stderrJob.join()
-                exitCode
+                process.exitValue()
             }
         } finally {
             process.destroyForcibly()
@@ -80,15 +87,15 @@ class DefaultAlpineProcessExecutor : AlpineProcessExecutor {
 }
 
 /**
- * In-app Linux container runner using Alpine Linux + PRoot.
- * Allows users to download official Alpine Linux minirootfs (~60MB), unpack it into
- * app-private storage, and execute real processes within the PRoot container.
+ * In-app Linux container runner using Alpine Linux + PRoot. Execution remains unavailable
+ * when the build does not provide a compatible PRoot binary.
  */
 class AlpineLinuxRunner(
     private val rootDirectory: File? = null,
     private val downloadTransport: (suspend (url: String, destFile: File, onProgress: (Float) -> Unit) -> Unit)? = null,
     private val prootBinaryPath: String? = null,
-    private val processExecutor: AlpineProcessExecutor? = null
+    private val processExecutor: AlpineProcessExecutor? = null,
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : ExternalRunner {
 
     override val runnerId: String = "alpine"
@@ -100,14 +107,14 @@ class AlpineLinuxRunner(
     private val outputFlows = mutableMapOf<String, MutableSharedFlow<ProcessOutput>>()
     private val activeRuns = mutableMapOf<String, ProcessExecution>()
 
-    private val installedPackages = mutableListOf("python3", "py3-pip", "nodejs", "npm", "bash", "git")
-
     private val alpineCdnUrl = "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/aarch64/alpine-minirootfs-3.19.1-aarch64.tar.gz"
 
     init {
         val rootfsDir = getRootfsDir()
-        if (rootfsDir.exists() && File(rootfsDir, "etc/alpine-release").exists()) {
-            _installationState.value = AlpineInstallationState.Installed(installedPackages)
+        _installationState.value = when {
+            !hasExecutableProot() -> AlpineInstallationState.Error(prootUnavailableMessage())
+            rootfsDir.exists() && File(rootfsDir, "etc/alpine-release").exists() -> AlpineInstallationState.Installed(emptyList())
+            else -> AlpineInstallationState.NotInstalled
         }
     }
 
@@ -115,16 +122,28 @@ class AlpineLinuxRunner(
         return rootDirectory ?: File(System.getProperty("java.io.tmpdir", "."), "vibespace_alpine")
     }
 
+    private fun prootFile(): File = prootBinaryPath?.let(::File) ?: File(getBaseDir(), "bin/proot")
+
+    private fun hasExecutableProot(): Boolean =
+        processExecutor != null || (prootFile().exists() && prootFile().canExecute())
+
+    private fun prootUnavailableMessage(): String =
+        "PRoot executable is missing from this build. Alpine setup is unavailable; use the Embedded or Termux runner."
+
     fun getRootfsDir(): File {
         return File(getBaseDir(), "rootfs")
     }
 
     override fun isAvailable(): Boolean {
-        return _installationState.value is AlpineInstallationState.Installed ||
-                (File(getRootfsDir(), "etc/alpine-release").exists())
+        return File(getRootfsDir(), "etc/alpine-release").exists() && hasExecutableProot()
     }
 
-    suspend fun installSubsystem(): VibeResult<Unit> = withContext(Dispatchers.IO) {
+    suspend fun installSubsystem(): VibeResult<Unit> = withContext(dispatchers.io) {
+        if (!hasExecutableProot()) {
+            val message = prootUnavailableMessage()
+            _installationState.value = AlpineInstallationState.Error(message)
+            return@withContext VibeResult.Error(message)
+        }
         try {
             val baseDir = getBaseDir()
             baseDir.mkdirs()
@@ -147,7 +166,7 @@ class AlpineLinuxRunner(
             rootfsDir.mkdirs()
             extractTarGz(archiveFile, rootfsDir)
 
-            _installationState.value = AlpineInstallationState.Installed(installedPackages)
+            _installationState.value = AlpineInstallationState.Installed(emptyList())
             VibeResult.Success(Unit)
         } catch (e: Throwable) {
             val errMsg = e.message ?: "Failed to set up Alpine Linux rootfs"
@@ -156,7 +175,7 @@ class AlpineLinuxRunner(
         }
     }
 
-    suspend fun uninstallSubsystem(): VibeResult<Unit> = withContext(Dispatchers.IO) {
+    suspend fun uninstallSubsystem(): VibeResult<Unit> = withContext(dispatchers.io) {
         try {
             val baseDir = getBaseDir()
             if (baseDir.exists()) {
@@ -323,8 +342,11 @@ class AlpineLinuxRunner(
         }
 
         if (_installationState.value !is AlpineInstallationState.Installed) {
-            emitLine("[Alpine Linux Subsystem Not Installed]", true)
-            emitLine("To run 'pip', 'npm', and compiled packages inside VibeSpace, set up Alpine Linux Subsystem (~60MB) via the Terminal switcher or Settings.", false)
+            val unavailable = _installationState.value as? AlpineInstallationState.Error
+            emitLine(unavailable?.message ?: "[Alpine Linux Subsystem Not Installed]", true)
+            if (unavailable == null) {
+                emitLine("Install the Alpine Linux Subsystem after a compatible PRoot runtime is available.", false)
+            }
             emitLine("Tip: Switch to 'Instant Embedded' mode to run Python/JS without downloads.", false)
 
             val failed = execution.copy(
@@ -339,11 +361,21 @@ class AlpineLinuxRunner(
 
         emitLine("[Alpine Linux PRoot Container] $ $command", false)
         val rootfsDir = getRootfsDir()
-        val prootFile = prootBinaryPath?.let { File(it) } ?: File(getBaseDir(), "bin/proot")
+        val prootFile = prootFile()
+        val hostWorkingDirectory = File(workingDirectory)
+        val canBindProject = hostWorkingDirectory.isDirectory
+        val containerWorkingDirectory = if (canBindProject) "/workspace" else "/root"
+        if (canBindProject) File(rootfsDir, "workspace").mkdirs()
+        val workspaceBindArgs = if (canBindProject) {
+            listOf("-b", "${hostWorkingDirectory.canonicalPath}:/workspace")
+        } else {
+            emptyList()
+        }
 
         val exitCode: Int
         if (processExecutor != null) {
-            val prootCommand = listOf(prootFile.absolutePath, "-0", "-r", rootfsDir.absolutePath, "-w", workingDirectory, "/bin/sh", "-c", command)
+            val prootCommand = listOf(prootFile.absolutePath, "-0", "-r", rootfsDir.absolutePath) +
+                    workspaceBindArgs + listOf("-w", containerWorkingDirectory, "/bin/sh", "-c", command)
             exitCode = processExecutor.execute(
                 prootCommand,
                 rootfsDir,
@@ -352,8 +384,9 @@ class AlpineLinuxRunner(
                 emitLine(line, isError)
             }
         } else if (prootFile.exists() && prootFile.canExecute()) {
-            val prootCommand = listOf(prootFile.absolutePath, "-0", "-r", rootfsDir.absolutePath, "-w", workingDirectory, "/bin/sh", "-c", command)
-            val defaultExecutor = DefaultAlpineProcessExecutor()
+            val prootCommand = listOf(prootFile.absolutePath, "-0", "-r", rootfsDir.absolutePath) +
+                    workspaceBindArgs + listOf("-w", containerWorkingDirectory, "/bin/sh", "-c", command)
+            val defaultExecutor = DefaultAlpineProcessExecutor(dispatchers)
             exitCode = defaultExecutor.execute(
                 prootCommand,
                 rootfsDir,
@@ -387,15 +420,11 @@ class AlpineLinuxRunner(
 
     override suspend fun stop(executionId: String): VibeResult<Unit> {
         val current = activeRuns[executionId] ?: return VibeResult.Error("Execution not found: $executionId")
-        val flow = outputFlows[executionId]
-        val stopped = current.copy(
-            state = ExecutionState.CANCELLED,
-            endTime = System.currentTimeMillis()
-        )
-        activeRuns[executionId] = stopped
-        val cancelOutput = ProcessOutput("Process stopped by user.", isError = true)
-        flow?.tryEmit(cancelOutput)
-        return VibeResult.Success(Unit)
+        return if (current.state == ExecutionState.RUNNING) {
+            VibeResult.Error("The Alpine process executor does not currently support interruption.")
+        } else {
+            VibeResult.Error("Execution is no longer running.")
+        }
     }
 
     override fun observeOutput(executionId: String): Flow<ProcessOutput> {

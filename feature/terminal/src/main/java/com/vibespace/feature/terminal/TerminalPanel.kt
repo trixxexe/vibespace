@@ -271,33 +271,6 @@ fun TerminalPanel(
                             )
                         }
 
-                        // Pair Agent Button
-                        Surface(
-                            onClick = { viewModel.launchTerminalAgent() },
-                            shape = RoundedCornerShape(4.dp),
-                            color = VibeTheme.colors.accentPrimary.copy(alpha = 0.15f),
-                            modifier = Modifier
-                                .height(24.dp)
-                                .padding(start = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = VibeIcons.TerminalAgent,
-                                    contentDescription = null,
-                                    tint = VibeTheme.colors.accentPrimary,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Pair Agent",
-                                    style = VibeCodeTypography.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                    color = VibeTheme.colors.accentPrimary
-                                )
-                            }
-                        }
                     }
 
                     // Lines list
@@ -371,10 +344,14 @@ fun TerminalPanel(
                                     }
                                 }
                                 is AlpineInstallationState.Error -> {
+                                    val prootUnavailable = state.message.contains("PRoot executable is missing")
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable { viewModel.installAlpineSubsystem() }
+                                            .then(
+                                                if (prootUnavailable) Modifier
+                                                else Modifier.clickable { viewModel.installAlpineSubsystem() }
+                                            )
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -387,12 +364,12 @@ fun TerminalPanel(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Setup Failed: ${state.message}",
+                                                text = if (prootUnavailable) "Alpine runner unavailable" else "Setup Failed: ${state.message}",
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = MaterialTheme.colorScheme.error
                                             )
                                             Text(
-                                                text = "Tap to retry setup",
+                                                text = if (prootUnavailable) "Use Embedded or Termux for code execution." else "Tap to retry setup",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = VibeTheme.colors.textMuted
                                             )

@@ -36,7 +36,7 @@ class ExtensionsViewModelTest {
     }
 
     @Test
-    fun install_and_uninstall_flow_works() = runTest {
+    fun extension_without_package_is_not_reported_as_installed() = runTest {
         val ext = ExtensionMetadata(
             id = "nord.theme",
             name = "nord",
@@ -49,7 +49,8 @@ class ExtensionsViewModelTest {
 
         viewModel.installExtension(ext)
         var state = viewModel.uiState.value
-        assertTrue(state.installedExtensions.any { it.id == ext.id })
+        assertFalse(state.installedExtensions.any { it.id == ext.id })
+        assertTrue(state.errorMessage != null)
 
         viewModel.uninstallExtension(ext.id)
         state = viewModel.uiState.value

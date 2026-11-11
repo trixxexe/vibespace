@@ -102,7 +102,7 @@ class TerminalViewModelTest {
     }
 
     @Test
-    fun launchTerminalAgent_creates_dedicated_agent_session() = runTest {
+    fun launchTerminalAgent_creates_session_with_capability_disclosure() = runTest {
         val viewModel = TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
@@ -112,7 +112,7 @@ class TerminalViewModelTest {
         val active = viewModel.uiState.value.activeSession
         assertNotNull(active)
         assertTrue(active!!.title.contains("Code Agent"))
-        assertTrue(active.lines.any { it.text.contains("VibeSpace AI Terminal Agent") })
+        assertTrue(active.lines.any { it.text.contains("does not bundle CLI coding agents") })
     }
 
     @Test

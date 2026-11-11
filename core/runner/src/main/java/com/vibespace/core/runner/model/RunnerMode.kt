@@ -20,15 +20,12 @@ enum class RunnerMode(
         description = "Lightweight offline script evaluator for Python, JS, and Shell builtins. Zero download."
     ),
 
-    /**
-     * In-app Alpine Linux container running via PRoot.
-     * Supports real apk, pip install, and npm install directly inside VibeSpace.
-     */
+    /** In-app Alpine execution is available only in builds that package a compatible PRoot runtime. */
     ALPINE(
         id = "alpine",
-        displayName = "Alpine Linux Subsystem",
-        shortBadge = "Alpine PRoot",
-        description = "In-app Linux container. Supports pip install, npm install, and apk packages."
+        displayName = "Alpine (Unavailable)",
+        shortBadge = "Unavailable",
+        description = "This build does not include PRoot. Use Embedded or Termux execution."
     ),
 
     /**
@@ -39,6 +36,6 @@ enum class RunnerMode(
         id = "termux",
         displayName = "Termux Bridge",
         shortBadge = "Termux Bridge",
-        description = "External Termux bridge. Hardware-accelerated native Android environment."
+        description = "Runs in Termux separately. Requires RUN_COMMAND permission; VibeSpace project files are not shared."
     )
 }

@@ -109,6 +109,6 @@ data class EditorThemeDefinition(
         val BUILTIN_THEMES = listOf(VIBE_DARK, ONE_DARK_PRO, DRACULA, MONOKAI_PRO, NORD)
 
         fun fromId(id: String): EditorThemeDefinition =
-            BUILTIN_THEMES.find { it.id == id } ?: VIBE_DARK
+            CustomEditorThemeRegistry.find(id) ?: BUILTIN_THEMES.find { it.id == id } ?: VIBE_DARK
     }
 }

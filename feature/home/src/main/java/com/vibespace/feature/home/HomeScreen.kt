@@ -1,6 +1,5 @@
 package com.vibespace.feature.home
 
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -66,18 +65,12 @@ fun HomeScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { treeUri: Uri? ->
         if (treeUri != null) {
-            try {
-                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(treeUri, flags)
-            } catch (_: Throwable) {}
-
             val folderDoc = DocumentFile.fromTreeUri(context, treeUri)
             val folderName = folderDoc?.name ?: "Workspace"
             viewModel.openSafTreeUri(
                 treeUri = treeUri,
                 folderName = folderName,
-                onProjectReady = { onNavigateToEditor() },
-                onProjectError = {}
+                onProjectReady = { onNavigateToEditor() }
             )
         }
     }

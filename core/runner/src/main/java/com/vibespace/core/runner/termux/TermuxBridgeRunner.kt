@@ -2,6 +2,7 @@ package com.vibespace.core.runner.termux
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import com.vibespace.core.common.id.IdGenerator
 import com.vibespace.core.common.result.VibeResult
 import com.vibespace.core.runner.manager.ExternalRunner
@@ -64,7 +65,8 @@ class TermuxBridgeRunner(
             flow.tryEmit(out)
         }
 
-        if (!isAvailable()) {
+        val termuxContext = context
+        if (termuxContext == null || !isAvailable()) {
             emitLine("[Termux Bridge] Termux app not detected on this device.", true)
             emitLine("To use Termux execution, install Termux from F-Droid (https://f-droid.org/packages/com.termux/).", false)
             emitLine("Tip: Switch to 'Instant Embedded' or 'Alpine Linux' mode to run code directly inside VibeSpace.", false)
@@ -79,8 +81,33 @@ class TermuxBridgeRunner(
             return VibeResult.Success(failed)
         }
 
+        if (termuxContext.checkSelfPermission(TermuxContract.PERMISSION_RUN_COMMAND) != PackageManager.PERMISSION_GRANTED) {
+            emitLine("VibeSpace is missing Termux's 'Run commands in Termux environment' permission.", true)
+            emitLine("Grant it in Android Settings > Apps > VibeSpace > Permissions > Additional permissions.", false)
+            val failed = execution.copy(
+                state = ExecutionState.FAILED,
+                exitCode = 1,
+                endTime = System.currentTimeMillis(),
+                outputs = outputs
+            )
+            activeRuns[executionId] = failed
+            return VibeResult.Success(failed)
+        }
+
         emitLine("[Termux Native Runner] Connecting to Termux service...", false)
         emitLine("[Termux RUN_COMMAND] $ $command", false)
+        emitLine("Termux must have allow-external-apps=true in ~/.termux/termux.properties.", false)
+
+        val termuxHome = "/data/data/${TermuxContract.TERMUX_PACKAGE}/files/home"
+        val termuxWorkingDirectory = when {
+            workingDirectory.isBlank() || workingDirectory == "~" -> termuxHome
+            workingDirectory.startsWith("/data/data/${TermuxContract.TERMUX_PACKAGE}/") ||
+                    workingDirectory.startsWith("/storage/emulated/0/") -> workingDirectory
+            else -> {
+                emitLine("Termux uses its own home directory; this VibeSpace project is not shared with Termux.", true)
+                termuxHome
+            }
+        }
 
         var dispatchSucceeded = false
         try {
@@ -88,7 +115,7 @@ class TermuxBridgeRunner(
                 setClassName(TermuxContract.TERMUX_PACKAGE, TermuxContract.TERMUX_SERVICE)
                 putExtra(TermuxContract.EXTRA_COMMAND_PATH, "/data/data/com.termux/files/usr/bin/bash")
                 putExtra(TermuxContract.EXTRA_ARGUMENTS, arrayOf("-c", command))
-                putExtra(TermuxContract.EXTRA_WORKDIR, workingDirectory)
+                putExtra(TermuxContract.EXTRA_WORKDIR, termuxWorkingDirectory)
                 putExtra(TermuxContract.EXTRA_BACKGROUND, true)
                 putExtra(TermuxContract.EXTRA_SESSION_ACTION, "0")
             }
@@ -102,6 +129,7 @@ class TermuxBridgeRunner(
             }
         } catch (e: Throwable) {
             emitLine("Failed to dispatch Termux command: ${e.message}", true)
+            emitLine("Check the RUN_COMMAND permission and Termux's allow-external-apps setting.", false)
         }
 
         val resultState = if (dispatchSucceeded) ExecutionState.RUNNING else ExecutionState.FAILED
@@ -118,15 +146,10 @@ class TermuxBridgeRunner(
 
     override suspend fun stop(executionId: String): VibeResult<Unit> {
         val current = activeRuns[executionId] ?: return VibeResult.Error("Execution not found: $executionId")
-        val flow = outputFlows[executionId]
-        val stopped = current.copy(
-            state = ExecutionState.CANCELLED,
-            endTime = System.currentTimeMillis()
-        )
-        activeRuns[executionId] = stopped
-        val cancelOutput = ProcessOutput("Termux process stopped.", isError = true)
-        flow?.tryEmit(cancelOutput)
-        return VibeResult.Success(Unit)
+        if (current.state != ExecutionState.RUNNING) {
+            return VibeResult.Error("Termux execution is no longer running.")
+        }
+        return VibeResult.Error("Termux runs commands independently; VibeSpace cannot stop this process.")
     }
 
     override fun observeOutput(executionId: String): Flow<ProcessOutput> {

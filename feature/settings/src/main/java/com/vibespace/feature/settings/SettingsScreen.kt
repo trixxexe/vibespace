@@ -258,9 +258,9 @@ fun SettingsScreen(
 
                         RuntimeOptionRow(
                             icon = VibeIcons.RunnerAlpine,
-                            badge = "Alpine PRoot",
+                            badge = "Unavailable",
                             title = "Alpine Linux Subsystem",
-                            subtitle = "PRoot container inside app. Real apk, pip install, and npm install."
+                            subtitle = "This build does not include the required PRoot runtime. Use Embedded or Termux execution."
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))

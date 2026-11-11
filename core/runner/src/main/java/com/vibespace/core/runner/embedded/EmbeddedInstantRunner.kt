@@ -92,15 +92,11 @@ class EmbeddedInstantRunner(
 
     override suspend fun stop(executionId: String): VibeResult<Unit> {
         val current = activeRuns[executionId] ?: return VibeResult.Error("Execution not found: $executionId")
-        val flow = outputFlows[executionId]
-        val stopped = current.copy(
-            state = ExecutionState.CANCELLED,
-            endTime = System.currentTimeMillis()
-        )
-        activeRuns[executionId] = stopped
-        val cancelOutput = ProcessOutput("Process stopped by user.", isError = true)
-        flow?.tryEmit(cancelOutput)
-        return VibeResult.Success(Unit)
+        return if (current.state == ExecutionState.RUNNING) {
+            VibeResult.Error("The embedded evaluator cannot interrupt a command while it is running.")
+        } else {
+            VibeResult.Error("Execution is no longer running.")
+        }
     }
 
     override fun observeOutput(executionId: String): Flow<ProcessOutput> {

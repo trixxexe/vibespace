@@ -14,7 +14,7 @@ class DefaultWorkspaceManagerTest {
     private val workspaceManager = DefaultWorkspaceManager(dispatchers = TestDispatcherProvider())
 
     @Test
-    fun openProject_initializes_project_structure_and_can_read_files() = runTest {
+    fun openProject_creates_an_empty_project_without_demo_files() = runTest {
         val project = Project(
             id = "proj-1",
             name = "TestProject",
@@ -29,14 +29,22 @@ class DefaultWorkspaceManagerTest {
         assertTrue(listResult.isSuccess)
         val files = listResult.getOrNull()
         assertNotNull(files)
-        assertTrue(files!!.any { it.name == "src" && it.isDirectory })
-        assertTrue(files.any { it.name == "README.md" && it.isFile })
+        assertTrue(files!!.isEmpty())
+        assertTrue(workspaceManager.readFile("vibe://projects/proj-1/README.md").isError)
+    }
+
+    @Test
+    fun openDemoProject_seeds_sample_files() = runTest {
+        val project = Project(id = "demo", name = "DemoProject", rootUri = "vibe://demo")
+
+        assertTrue(workspaceManager.openProject(project).isSuccess)
+        val files = workspaceManager.listFiles(project.rootUri).getOrNull().orEmpty()
         assertTrue(files.any { it.name == "main.py" && it.isFile })
         assertTrue(files.any { it.name == "index.js" && it.isFile })
 
-        val readResult = workspaceManager.readFile("vibe://projects/proj-1/README.md")
-        assertTrue(readResult.isSuccess)
-        assertTrue(readResult.getOrNull()!!.contains("TestProject"))
+        val readme = workspaceManager.readFile("vibe://demo/README.md")
+        assertTrue(readme.isSuccess)
+        assertTrue(readme.getOrNull()!!.contains("DemoProject"))
     }
 
     @Test
@@ -62,9 +70,14 @@ class DefaultWorkspaceManagerTest {
         val project = Project(id = "proj-nested", name = "NestedTest", rootUri = root)
         workspaceManager.openProject(project)
 
+        workspaceManager.createDirectory(root, "src")
+        workspaceManager.createFile("$root/src", "Main.kt", "fun main() = Unit")
+        workspaceManager.createFile(root, "main.py", "print('hello')")
+        workspaceManager.createFile(root, "index.js", "console.log('hello')")
+
         val allFiles = workspaceManager.getAllProjectFiles(root).getOrNull()
         assertNotNull(allFiles)
-        // Should contain root files and also src/Main.kt which is nested inside src
+        // Traversal includes files created at the root and in nested folders.
         assertTrue(allFiles!!.any { it.name == "Main.kt" })
         assertTrue(allFiles.any { it.name == "main.py" })
         assertTrue(allFiles.any { it.name == "index.js" })
