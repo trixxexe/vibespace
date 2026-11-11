@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +44,8 @@ fun FileTreeItem(
     onClick: () -> Unit,
     gitStatus: GitStatusType? = null,
     onDeleteClick: (() -> Unit)? = null,
+    onRenameClick: (() -> Unit)? = null,
+    onDuplicateClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val indentPadding = (level * 16 + 8).dp
@@ -106,9 +114,11 @@ fun FileTreeItem(
             )
         }
 
-        if (onDeleteClick != null) {
+        var showMenu by remember { mutableStateOf(false) }
+
+        Box {
             IconButton(
-                onClick = onDeleteClick,
+                onClick = { showMenu = true },
                 modifier = Modifier.size(24.dp)
             ) {
                 Icon(
@@ -117,6 +127,39 @@ fun FileTreeItem(
                     tint = VibeTheme.colors.textMuted,
                     modifier = Modifier.size(14.dp)
                 )
+            }
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                if (onRenameClick != null) {
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        onClick = {
+                            showMenu = false
+                            onRenameClick()
+                        }
+                    )
+                }
+                if (file.isFile && onDuplicateClick != null) {
+                    DropdownMenuItem(
+                        text = { Text("Duplicate") },
+                        onClick = {
+                            showMenu = false
+                            onDuplicateClick()
+                        }
+                    )
+                }
+                if (onDeleteClick != null) {
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            showMenu = false
+                            onDeleteClick()
+                        }
+                    )
+                }
             }
         }
     }

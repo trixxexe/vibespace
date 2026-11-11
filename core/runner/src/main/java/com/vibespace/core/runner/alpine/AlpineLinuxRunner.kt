@@ -115,6 +115,7 @@ class AlpineLinuxRunner(
     private val activeRuns = mutableMapOf<String, ProcessExecution>()
 
     private val alpineVersion = "3.24.0"
+    private val alpineReleaseBranch = "v3.24"
     private val alpineArchitecture = when (prootArchitecture) {
         "aarch64" -> "aarch64"
         "arm" -> "armv7"
@@ -237,16 +238,45 @@ class AlpineLinuxRunner(
                     }
                 }
                 else {
-                    val alpineUrl = "https://dl-cdn.alpinelinux.org/alpine/v$alpineVersion/releases/$architecture/alpine-minirootfs-$alpineVersion-$architecture.tar.gz"
+                    val mirrors = listOf(
+                        "dl-cdn.alpinelinux.org",
+                        "uk.alpinelinux.org",
+                        "mirrors.edge.kernel.org"
+                    )
+                    val urlsToTry = mirrors.flatMap { host ->
+                        listOf(
+                            "https://$host/alpine/$alpineReleaseBranch/releases/$architecture/alpine-minirootfs-$alpineVersion-$architecture.tar.gz",
+                            "https://$host/alpine/latest-stable/releases/$architecture/alpine-minirootfs-$alpineVersion-$architecture.tar.gz",
+                            "https://$host/alpine/v3.20/releases/$architecture/alpine-minirootfs-3.20.3-$architecture.tar.gz"
+                        )
+                    }.distinct()
                     _installationState.value = AlpineInstallationState.Downloading(0.05f)
-                    if (downloadTransport != null) {
-                        downloadTransport.invoke(alpineUrl, archiveFile) { progress ->
-                            _installationState.value = AlpineInstallationState.Downloading(progress)
+                    var downloaded = false
+                    var lastDownloadError: Throwable? = null
+
+                    for (url in urlsToTry) {
+                        for (retry in 0..1) {
+                            try {
+                                if (downloadTransport != null) {
+                                    downloadTransport.invoke(url, archiveFile) { progress ->
+                                        _installationState.value = AlpineInstallationState.Downloading(progress)
+                                    }
+                                } else {
+                                    downloadArchive(url, archiveFile) { progress ->
+                                        _installationState.value = AlpineInstallationState.Downloading(progress)
+                                    }
+                                }
+                                downloaded = true
+                                break
+                            } catch (e: Throwable) {
+                                lastDownloadError = e
+                            }
                         }
-                    } else {
-                        downloadArchive(alpineUrl, archiveFile) { progress ->
-                            _installationState.value = AlpineInstallationState.Downloading(progress)
-                        }
+                        if (downloaded) break
+                    }
+
+                    if (!downloaded || !archiveFile.exists() || archiveFile.length() == 0L) {
+                        throw IllegalStateException("Failed to download Alpine minirootfs: ${lastDownloadError?.message}", lastDownloadError)
                     }
                     _installationState.value = AlpineInstallationState.Extracting
                     rootfsDir.mkdirs()
@@ -397,18 +427,38 @@ class AlpineLinuxRunner(
     }
 
     private fun downloadArchive(urlStr: String, destFile: File, onProgress: (Float) -> Unit) {
-        val url = URL(urlStr)
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10000
-            readTimeout = 25000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "VibeSpace-Android/1.0")
+        var currentUrl = urlStr
+        var connection: HttpURLConnection? = null
+        val maxRedirects = 5
+        var redirectCount = 0
+
+        while (redirectCount < maxRedirects) {
+            val url = URL(currentUrl)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000
+                readTimeout = 30000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "VibeSpace-Android/1.0")
+            }
+            connection.connect()
+            val status = connection.responseCode
+            if (status in listOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, 307, 308)) {
+                val newUrl = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (newUrl != null) {
+                    currentUrl = if (newUrl.startsWith("http")) newUrl else URL(url, newUrl).toString()
+                    redirectCount++
+                    continue
+                }
+            }
+            break
         }
-        connection.connect()
-        val contentLength = connection.contentLengthLong
+
+        val activeConn = connection ?: throw IOException("Could not establish connection to $urlStr")
+        val contentLength = activeConn.contentLengthLong
         destFile.parentFile?.mkdirs()
 
-        connection.inputStream.use { input ->
+        activeConn.inputStream.use { input ->
             FileOutputStream(destFile).use { output ->
                 val buffer = ByteArray(8192)
                 var bytesRead = 0L

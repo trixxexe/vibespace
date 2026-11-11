@@ -162,4 +162,47 @@ class ExplorerViewModel(
             }
         }
     }
+
+    fun renameFile(fileUri: String, newName: String) {
+        if (newName.isBlank()) return
+        viewModelScope.launch(dispatchers.io) {
+            when (val result = workspaceManager.rename(fileUri, newName.trim())) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    refreshFiles()
+                    gitManager?.refreshStatus()
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                }
+                else -> _uiState.update { it.copy(errorMessage = "Could not rename the selected item.") }
+            }
+        }
+    }
+
+    fun duplicateFile(fileUri: String) {
+        viewModelScope.launch(dispatchers.io) {
+            val bytesResult = workspaceManager.readBytes(fileUri)
+            if (bytesResult is com.vibespace.core.common.result.VibeResult.Success) {
+                val originalName = fileUri.substringAfterLast('/')
+                val dotIndex = originalName.lastIndexOf('.')
+                val copyName = if (dotIndex > 0) {
+                    "${originalName.substring(0, dotIndex)}_copy.${originalName.substring(dotIndex + 1)}"
+                } else {
+                    "${originalName}_copy"
+                }
+                val parentUri = fileUri.substringBeforeLast('/')
+                when (val createResult = workspaceManager.createFile(parentUri, copyName)) {
+                    is com.vibespace.core.common.result.VibeResult.Success -> {
+                        workspaceManager.writeBytes(createResult.data.uri, bytesResult.data)
+                        refreshFiles()
+                        gitManager?.refreshStatus()
+                    }
+                    is com.vibespace.core.common.result.VibeResult.Error -> {
+                        _uiState.update { it.copy(errorMessage = createResult.message) }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
 }

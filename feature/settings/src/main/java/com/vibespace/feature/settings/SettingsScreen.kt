@@ -360,7 +360,7 @@ fun SettingsScreen(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text("Google Gemini", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
-                                    Text("Provider pricing or free tier applies", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                    Text("Official Gemini Studio", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
                                 }
                             }
 
@@ -373,11 +373,55 @@ fun SettingsScreen(
                                     .clickable {
                                         selectedProvider = "openai"
                                         selectedModel = "gpt-4o-mini"
+                                        inputEndpoint = "https://api.openai.com/v1/chat/completions"
                                     }
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Text("OpenAI-compatible API", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
-                                    Text("OpenAI or a compatible provider", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                    Text("OpenAI / Custom", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("GPT-4o or Proxy", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedProvider == "openai" && inputEndpoint.contains("deepseek")) VibeTheme.colors.accentPrimary.copy(alpha = 0.15f) else VibeTheme.colors.gutterBackground,
+                                border = BorderStroke(1.dp, if (selectedProvider == "openai" && inputEndpoint.contains("deepseek")) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedProvider = "openai"
+                                        selectedModel = "deepseek-chat"
+                                        inputEndpoint = "https://api.deepseek.com/chat/completions"
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text("DeepSeek", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("DeepSeek-V3/R1", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedProvider == "openai" && inputEndpoint.contains("groq")) VibeTheme.colors.accentPrimary.copy(alpha = 0.15f) else VibeTheme.colors.gutterBackground,
+                                border = BorderStroke(1.dp, if (selectedProvider == "openai" && inputEndpoint.contains("groq")) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedProvider = "openai"
+                                        selectedModel = "llama-3.3-70b-versatile"
+                                        inputEndpoint = "https://api.groq.com/openai/v1/chat/completions"
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text("Groq", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("Ultra-fast Llama 3", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
                                 }
                             }
                         }

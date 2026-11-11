@@ -66,9 +66,12 @@ class TerminalViewModel(
             }
         }
         viewModelScope.launch(dispatchers.default) {
+            var lastActiveSessionId: String? = null
             terminalService.activeSession.collect { active ->
+                val sessionChanged = active?.sessionId != lastActiveSessionId
+                lastActiveSessionId = active?.sessionId
                 _uiState.update { it.copy(activeSession = active) }
-                if (active != null && _uiState.value.activeRunnerMode == RunnerMode.ALPINE) {
+                if (sessionChanged && active != null && _uiState.value.activeRunnerMode == RunnerMode.ALPINE) {
                     startInteractiveTerminal(active.sessionId, active.workingDirectory)
                 }
             }
@@ -361,5 +364,11 @@ class TerminalViewModel(
                 terminalService.appendLine(sessionId, "$ ", StreamType.SYSTEM)
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        interactiveCollectors.values.forEach { it.cancel() }
+        interactiveCollectors.clear()
     }
 }

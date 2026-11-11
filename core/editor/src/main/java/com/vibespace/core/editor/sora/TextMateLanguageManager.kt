@@ -50,7 +50,7 @@ object TextMateLanguageManager {
         val scopeName = getScopeNameForLanguage(definition) ?: return EmptyLanguage()
 
         return try {
-            TextMateLanguage.create(scopeName, true)
+            TextMateLanguage.create(scopeName, false)
         } catch (_: Throwable) {
             EmptyLanguage()
         }

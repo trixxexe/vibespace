@@ -28,11 +28,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private class EditorBinding(
-    val documentId: String,
-    val languageId: String,
-    val editorLanguage: Language
+    var documentId: String,
+    var languageId: String,
+    var editorLanguage: Language
 ) {
     var isUpdatingProgrammatically: Boolean = false
+    var lastEmittedContent: String? = null
 }
 
 /**
@@ -97,18 +98,24 @@ fun SoraEditorCanvas(
                 tabWidth = tabSize
                 setTextSize(fontSizeSp)
 
-                // Set TextMate syntax highlighting for active language
+                // Set syntax highlighting for active language
                 setEditorLanguage(editorLanguage)
 
                 // Initialize document content
                 setText(content)
                 restoreCursor(this, content, cursorPosition)
-                tag = EditorBinding(documentId, language.id, editorLanguage)
+                val binding = EditorBinding(documentId, language.id, editorLanguage).apply {
+                    lastEmittedContent = content
+                }
+                tag = binding
 
                 // Listen for content changes
                 subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
-                    if ((tag as? EditorBinding)?.isUpdatingProgrammatically != true) {
-                        onContentChange(text.toString())
+                    val b = tag as? EditorBinding
+                    if (b?.isUpdatingProgrammatically != true) {
+                        val currentText = text.toString()
+                        b?.lastEmittedContent = currentText
+                        onContentChange(currentText)
                     }
                 }
 
@@ -143,11 +150,16 @@ fun SoraEditorCanvas(
             editor.colorScheme = VibeEditorColorScheme(theme)
 
             val binding = editor.tag as? EditorBinding
+            val isNewDocument = binding?.documentId != documentId
+            val currentEditorText = editor.text.toString()
+            val isExternalChange = !isNewDocument && currentEditorText != content && content != binding?.lastEmittedContent
 
-            // Keep independent tab text and caret state when switching documents.
-            if (binding?.documentId != documentId || editor.text.toString() != content) {
+            // Keep independent tab text and caret state when switching documents or on external changes.
+            if (isNewDocument || isExternalChange) {
                 val guard = binding ?: EditorBinding(documentId, language.id, editorLanguage)
                 editor.tag = guard
+                guard.documentId = documentId
+                guard.lastEmittedContent = content
                 guard.isUpdatingProgrammatically = true
                 try {
                     editor.setText(content)
@@ -158,10 +170,11 @@ fun SoraEditorCanvas(
             }
 
             // Update language syntax if language changed
-            if (binding?.languageId != language.id || binding.editorLanguage !== editorLanguage) {
+            if (binding?.languageId != language.id || binding?.editorLanguage !== editorLanguage) {
                 editor.setEditorLanguage(editorLanguage)
+                binding?.languageId = language.id
+                binding?.editorLanguage = editorLanguage
             }
-            editor.tag = EditorBinding(documentId, language.id, editorLanguage)
         },
         onRelease = { editor ->
             controller.unbind()

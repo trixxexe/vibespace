@@ -64,7 +64,17 @@ class TerminalViewModelTest {
 
     @Test(timeout = 30000)
     fun switchRunnerMode_updates_active_mode_in_manager_and_state() = runTest {
-        val runnerManager = DefaultRunnerManager(dispatchers = testDispatchers)
+        val fakeExecutor = com.vibespace.core.runner.alpine.AlpineProcessExecutor { _, _, _, onLine ->
+            onLine("Linux vibespace 6.1.0 #1 PREEMPT", false)
+            0
+        }
+        val customAlpine = com.vibespace.core.runner.alpine.AlpineLinuxRunner(
+            processExecutor = fakeExecutor
+        )
+        val runnerManager = DefaultRunnerManager(
+            alpineRunner = customAlpine,
+            dispatchers = testDispatchers
+        )
         val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             runnerManager = runnerManager,

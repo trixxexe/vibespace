@@ -49,6 +49,8 @@ fun ExplorerScreen(
     var newFolderName by remember { mutableStateOf("") }
 
     var fileToDelete by remember { mutableStateOf<VirtualFile?>(null) }
+    var fileToRename by remember { mutableStateOf<VirtualFile?>(null) }
+    var renameNewName by remember { mutableStateOf("") }
 
     if (showNewFileDialog) {
         VibeDialog(
@@ -111,6 +113,30 @@ fun ExplorerScreen(
             }
         ) {
             Text("Are you sure you want to delete '${file.name}'? This cannot be undone.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+
+    fileToRename?.let { file ->
+        VibeDialog(
+            title = "Rename ${file.name}",
+            onDismissRequest = { fileToRename = null },
+            confirmButtonText = "Rename",
+            isConfirmEnabled = renameNewName.isNotBlank() && renameNewName.trim() != file.name,
+            onConfirm = {
+                viewModel.renameFile(file.uri, renameNewName.trim())
+                fileToRename = null
+            }
+        ) {
+            Column {
+                Text("Enter new name:", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = renameNewName,
+                    onValueChange = { renameNewName = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 
@@ -213,6 +239,13 @@ fun ExplorerScreen(
                             },
                             onDeleteClick = {
                                 fileToDelete = node.file
+                            },
+                            onRenameClick = {
+                                fileToRename = node.file
+                                renameNewName = node.file.name
+                            },
+                            onDuplicateClick = {
+                                viewModel.duplicateFile(node.file.uri)
                             }
                         )
                     }
