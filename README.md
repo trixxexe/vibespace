@@ -1,6 +1,6 @@
 # VibeSpace
 
-> **Professional Native Android Coding IDE & Mobile Developer Environment**  
+> **Native Android coding workspace**
 > *Inspired by VS Code — Built natively with Jetpack Compose & Kotlin*
 
 [![Android CI](https://github.com/trixxexe/vibespace/actions/workflows/android-ci.yml/badge.svg)](https://github.com/trixxexe/vibespace/actions/workflows/android-ci.yml)
@@ -13,9 +13,9 @@
 
 ## Overview
 
-**VibeSpace** is an open-source, native Android Integrated Development Environment designed from the ground up for mobile coding. 
+**VibeSpace** is an open-source, native Android coding workspace for editing project files on phones, tablets, and foldables.
 
-Unlike browser wrappers or desktop ports, VibeSpace delivers high-performance native text editing, multi-tab workspaces, responsive phone/tablet layouts, integrated terminal consoles, and AI-assisted workflows directly on Android devices.
+Its current build includes a multi-tab editor, SAF-backed workspaces, local change snapshots, limited in-app script evaluators, a Termux bridge, and an optional BYOK AI assistant. It does not include a full Linux shell, Git repository support, or bundled language servers.
 
 ---
 
@@ -23,11 +23,11 @@ Unlike browser wrappers or desktop ports, VibeSpace delivers high-performance na
 
 - **Multi-Tab Code Editor**: Full tab switching, dirty state tracking (`*`), line number gutters, undo/redo history stacks, and search/replace.
 - **Dark-First Developer Aesthetic**: Deep charcoal themes (`#0F1115`), subtle borders, monospace code typography, and full light theme support.
-- **Adaptive Responsive Layouts**:
-  - **Phone (< 600dp)**: Prioritizes full-screen editing with sliding explorer drawers, expandable terminal panels, and bottom sheet AI chat.
-  - **Tablet (> 840dp)**: Persistent 56dp Navigation Rail, permanent 260dp explorer sidebar, split-screen code editing, bottom dockable terminal, and right-hand AI companion.
+- **Adaptive Layouts**:
+  - **Phone (< 600dp)**: Editor with an explorer drawer, expandable runner panel, and AI chat bottom sheet.
+  - **Tablet (> 840dp)**: Navigation rail, explorer or local change panel, resizable editor and runner panel, and optional AI side panel.
 - **Project Explorer**: Virtual file tree supporting folder navigation, file creation, deletion, and Storage Access Framework (SAF) URI abstraction.
-- **Built-in Safe Terminal**: Collapsible bottom panel with Terminal, Output, Problems, and Console tabs.
+- **Runner Panel**: Collapsible panel for the limited in-app command interpreter, selected runner output, syntax diagnostics, and console messages.
 - **AI Coding Assistant**: Chat interface with attached code context from the active file, starter prompts, and diff review models.
 - **Settings & Persistence**: Theme mode selection (Dark, Light, System), font size slider (10sp - 22sp), tab size preferences, and local persistence.
 
@@ -53,7 +53,7 @@ VibeSpace/
     ├── editor/           # Multi-tab editor workspace, canvas with line numbers, toolbar
     ├── terminal/         # Bottom collapsible panel (Terminal, Output, Problems, Console)
     ├── aichat/           # AI Assistant chat panel with active code context
-    ├── search/           # Search and replace overlay with regex and match count
+    ├── search/           # In-document text search and replace, plus file and command picker
     └── settings/         # Theme selection, font size slider, editor preferences
 ```
 

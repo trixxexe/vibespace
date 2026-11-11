@@ -47,7 +47,7 @@ data class CommandAction(
 
 /**
  * Mobile-First VS Code-style Command Palette (Ctrl+P / Quick Open).
- * Allows instant navigation to any project file or executing IDE actions with zero friction.
+ * Searches indexed file names and paths and exposes the IDE actions currently available.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +60,9 @@ fun CommandPaletteDialog(
     onOpenAi: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
+    hasActiveDocument: Boolean = true,
+    onToggleTerminal: (() -> Unit)? = null,
+    onToggleLineNumbers: (() -> Unit)? = null,
     onFormatDocument: (() -> Unit)? = null,
     onShowHover: (() -> Unit)? = null,
     onGoToDefinition: (() -> Unit)? = null,
@@ -68,20 +71,20 @@ fun CommandPaletteDialog(
     var query by remember { mutableStateOf("") }
 
     val allActions = listOfNotNull(
-        CommandAction(
+        if (hasActiveDocument) CommandAction(
             title = "Run Active File",
-            subtitle = "Execute current file via Tri-Mode Runner",
+            subtitle = "Run the current file with the selected runner",
             icon = VibeIcons.Run,
             shortcut = "Ctrl+Enter",
             action = onRunScript
-        ),
-        CommandAction(
+        ) else null,
+        if (hasActiveDocument) CommandAction(
             title = "Save Document",
             subtitle = "Save changes to storage",
             icon = VibeIcons.Save,
             shortcut = "Ctrl+S",
             action = onSaveFile
-        ),
+        ) else null,
         onFormatDocument?.let {
             CommandAction(
                 title = "Format Document",
@@ -109,13 +112,29 @@ fun CommandPaletteDialog(
                 action = it
             )
         },
-        CommandAction(
+        if (hasActiveDocument) CommandAction(
             title = "Find in Document",
             subtitle = "Search and replace text",
             icon = VibeIcons.Search,
             shortcut = "Ctrl+F",
             action = onOpenSearch
-        ),
+        ) else null,
+        onToggleTerminal?.let {
+            CommandAction(
+                title = "Toggle Runner Panel",
+                subtitle = "Show or hide runner output and diagnostics",
+                icon = VibeIcons.Terminal,
+                action = it
+            )
+        },
+        onToggleLineNumbers?.let {
+            CommandAction(
+                title = "Toggle Line Numbers",
+                subtitle = "Show or hide the editor line number gutter",
+                icon = VibeIcons.Editor,
+                action = it
+            )
+        },
         CommandAction(
             title = "Ask AI Assistant",
             subtitle = "Open AI coding assistant with code context",
@@ -176,7 +195,7 @@ fun CommandPaletteDialog(
                     onValueChange = { query = it },
                     placeholder = {
                         Text(
-                            text = "Search files or commands...",
+                            text = "Search file names, paths, or commands...",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     },
@@ -312,6 +331,17 @@ fun CommandPaletteDialog(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if (matchingFiles.isEmpty() && matchingActions.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No matching files or commands",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = VibeTheme.colors.textMuted,
+                                modifier = Modifier.padding(12.dp)
+                            )
                         }
                     }
                 }

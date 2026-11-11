@@ -245,6 +245,22 @@ fun ExtensionsScreen(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if (filteredList.isEmpty()) {
+                    item {
+                        Text(
+                            text = when {
+                                uiState.activeFilter == ExtensionFilter.INSTALLED -> "No extensions are installed. Only declarative color themes can be installed in this build."
+                                uiState.searchQuery.isNotBlank() -> "No extensions match this search."
+                                else -> "No extensions are available in this category."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = VibeTheme.colors.textMuted,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 24.dp)
+                        )
+                    }
+                }
                 items(filteredList, key = { it.id }) { ext ->
                     ExtensionCard(
                         extension = ext,

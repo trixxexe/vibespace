@@ -116,8 +116,8 @@ interface RunnerManager {
 }
 ```
 
-### Models & Tri-Mode Architecture:
-- `RunnerMode`: `EMBEDDED` ("⚡ Instant"), `ALPINE` ("🐧 Alpine"), `TERMUX` ("🚀 Termux")
+### Runner Options:
+- `RunnerMode`: embedded evaluation, optional Alpine PRoot runtime, and Termux bridge. The Alpine option is unavailable in the current app build because PRoot is not packaged. Termux requires the Termux app, its permission, and accessible project files.
 - `ProcessExecution(executionId, command, workingDirectoryUri, state, exitCode, startTime, endTime, outputs)`
 - `ProcessOutput(line, isError, timestamp)`
 - `ExecutionState`: `IDLE`, `STARTING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`

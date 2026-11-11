@@ -212,7 +212,7 @@ class EmbeddedInstantRunner(
                 0
             }
             "help" -> {
-                emit("VibeSpace Tri-Mode Shell Builtins:", false)
+                emit("VibeSpace Safe Command Built-ins:", false)
                 emit("  echo <text>   - Print text to console", false)
                 emit("  pwd           - Print active working directory", false)
                 emit("  date          - Print current date and time", false)

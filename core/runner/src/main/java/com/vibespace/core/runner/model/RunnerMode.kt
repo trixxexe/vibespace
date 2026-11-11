@@ -1,7 +1,7 @@
 package com.vibespace.core.runner.model
 
 /**
- * Execution modes supported by VibeSpace's Tri-Mode Runner Architecture.
+ * Execution options exposed by VibeSpace. Some options may be unavailable in a given build.
  */
 enum class RunnerMode(
     val id: String,
@@ -9,10 +9,7 @@ enum class RunnerMode(
     val shortBadge: String,
     val description: String
 ) {
-    /**
-     * Out-of-the-box instant offline script evaluator for JavaScript, Python, Web/HTML, and Shell.
-     * Zero setup, zero download required for lightweight scripts and logic.
-     */
+    /** Lightweight in-app evaluators and safe command built-ins; not complete language runtimes. */
     EMBEDDED(
         id = "embedded",
         displayName = "Instant Script Evaluator",
@@ -29,8 +26,8 @@ enum class RunnerMode(
     ),
 
     /**
-     * Native Android Termux environment accessed via RUN_COMMAND intent bridge.
-     * For power users requiring hardware-accelerated compilers and tools.
+     * Separate Termux app accessed via its RUN_COMMAND intent contract.
+     * Availability and project-file access depend on the device's Termux configuration.
      */
     TERMUX(
         id = "termux",

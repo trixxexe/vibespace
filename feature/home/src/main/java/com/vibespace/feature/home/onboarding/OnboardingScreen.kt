@@ -229,7 +229,7 @@ private fun StepWelcome(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "VibeSpace gives you desktop-grade coding capabilities designed specifically for Android touchscreens, tablets, foldables, and Samsung DeX.",
+                text = "VibeSpace is a native coding workspace designed for Android phones, tablets, foldables, and desktop-mode displays.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = VibeTheme.colors.textSecondary
             )
@@ -239,19 +239,19 @@ private fun StepWelcome(
             FeaturePillar(
                 icon = VibeIcons.Editor,
                 title = "100% Native Architecture",
-                description = "Built entirely with Jetpack Compose and Material 3. Zero sluggish WebView wrappers."
+                description = "The interface is built with native Android UI using Jetpack Compose and Material 3."
             )
             Spacer(modifier = Modifier.height(16.dp))
             FeaturePillar(
                 icon = VibeIcons.Terminal,
-                title = "Tri-Mode Execution Engine",
-                description = "Execute lightweight scripts instantly, run packages inside an in-app Alpine Linux container, or bridge to Termux."
+                title = "Script Runner & Termux Bridge",
+                description = "Run supported Python and JavaScript snippets with the in-app evaluator, or use Termux when it is installed and configured. Alpine execution is unavailable in this build because it does not include PRoot."
             )
             Spacer(modifier = Modifier.height(16.dp))
             FeaturePillar(
                 icon = VibeIcons.SourceControl,
-                title = "Truthful Git & Language Intelligence",
-                description = "Real workspace diffs, branch management, local commit persistence, and RFC-8259 JSON-RPC Language Server Protocol."
+                title = "Local Snapshots & Code Checks",
+                description = "Review and save workspace-local change snapshots. Built-in syntax checks are available; language-server features require a separately configured server."
             )
         }
 
@@ -336,7 +336,7 @@ private fun StepProjectChoice(
                 icon = VibeIcons.Logo,
                 badge = "Recommended for First Launch",
                 title = "Explore Sample Project",
-                description = "Launches an isolated Python & Web sandbox with runnable scripts. Zero risk to your real files.",
+                description = "Opens sample Python and web files in VibeSpace's private workspace so you can explore the editor without changing another project.",
                 onClick = onTrySampleProject
             )
 
@@ -395,7 +395,7 @@ private fun StepIdeTour(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Every major tool you rely on in desktop editors is built natively into VibeSpace.",
+                text = "Here is what the current build can do and where its limits are.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = VibeTheme.colors.textSecondary
             )
@@ -421,23 +421,23 @@ private fun StepIdeTour(
             TourItem(
                 icon = VibeIcons.CommandPalette,
                 title = "Command Palette (Ctrl + P)",
-                description = "Instant fuzzy file finder and command runner. Accessible from the top navigation bar or keyboard shortcut."
+                description = "Search file names and paths, or run available editor commands. Open it from the top bar or with Ctrl+P on a hardware keyboard."
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             TourItem(
                 icon = VibeIcons.Terminal,
-                title = "Terminal, Output & Problem Streams",
-                description = "Dockable multi-session console. Run commands, inspect compile errors, and stream task outputs."
+                title = "Runner Output & Problems",
+                description = "View output from the selected runner and lightweight syntax diagnostics. The in-app command interpreter supports a limited set of commands; it is not a general Linux shell or build system."
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             TourItem(
                 icon = VibeIcons.SourceControl,
-                title = "Integrated Git Source Control",
-                description = "Track modified and untracked files, stage changes, commit with messages, and view line-by-line diffs."
+                title = "Local Change Tracking",
+                description = "Review workspace changes, stage them into local snapshots, and inspect line-by-line diffs. This is not a Git repository and does not provide branches or remote sync."
             )
         }
 

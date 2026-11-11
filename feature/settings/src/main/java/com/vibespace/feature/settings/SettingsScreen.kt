@@ -231,16 +231,16 @@ fun SettingsScreen(
 
             // Execution Runtimes Section
             item {
-                SectionHeader("EXECUTION RUNTIMES (TRI-MODE)")
+                SectionHeader("EXECUTION OPTIONS")
                 VibeCard {
                     Column {
                         Text(
-                            text = "Tri-Mode Runner Architecture",
+                            text = "Available execution options",
                             style = MaterialTheme.typography.titleSmall,
                             color = VibeTheme.colors.textPrimary
                         )
                         Text(
-                            text = "Choose your preferred engine to execute code on Android",
+                            text = "The in-app evaluators support a limited subset of Python and JavaScript. Termux is a separate app integration; Alpine is unavailable in this build.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeTheme.colors.textSecondary
                         )
@@ -251,7 +251,7 @@ fun SettingsScreen(
                             icon = VibeIcons.RunnerInstant,
                             badge = "Instant",
                             title = "Instant Embedded",
-                            subtitle = "Zero download. Pre-bundled JS, Python, HTML & Shell."
+                            subtitle = "Limited Python and JavaScript evaluators with safe built-in commands. Not full language runtimes."
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -269,7 +269,7 @@ fun SettingsScreen(
                             icon = VibeIcons.RunnerTermux,
                             badge = "Termux Bridge",
                             title = "Termux Bridge",
-                            subtitle = "Direct bridge to Termux app for hardware-accelerated binaries."
+                            subtitle = "Requires Termux installed, its RUN_COMMAND permission enabled, and project files accessible to Termux."
                         )
                     }
                 }

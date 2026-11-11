@@ -38,6 +38,13 @@ class EditorViewModel(
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
+    /** True only when a configured language server is currently running for the active file. */
+    val hasRunningLanguageServer: Boolean
+        get() {
+            val activeLanguage = _uiState.value.activeDocument?.language?.id ?: return false
+            return activeLspClient?.let { it.isRunning && it.languageId.equals(activeLanguage, ignoreCase = true) } == true
+        }
+
     init {
         observeEditorEngine()
         observeWorkspace()

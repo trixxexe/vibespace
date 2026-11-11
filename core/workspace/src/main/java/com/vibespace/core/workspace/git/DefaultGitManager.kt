@@ -19,7 +19,7 @@ import org.json.JSONObject
 
 /**
  * Mobile Git source control manager.
- * Tracks file modifications, staging, commits, branch management, and provides line diffs.
+ * Tracks workspace-local modifications, staged snapshots, snapshot labels, and line diffs.
  * Truthful: Remote operations fail closed with clear status explaining mobile sandbox boundaries.
  */
 class DefaultGitManager(

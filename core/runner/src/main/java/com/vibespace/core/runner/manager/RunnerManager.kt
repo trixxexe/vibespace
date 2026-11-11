@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * RunnerManager contract orchestrating language runtimes, execution tasks, and terminal links.
- * Supports the Tri-Mode Runner Architecture (Embedded, Alpine Linux Subsystem, Termux Bridge).
+ * Coordinates embedded evaluation, an optional Alpine subsystem, and the Termux bridge.
+ * Runtime availability depends on the current build and device configuration.
  */
 interface RunnerManager {
     val activeExecutions: StateFlow<List<ProcessExecution>>

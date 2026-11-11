@@ -45,7 +45,7 @@ class DefaultRunnerManager(
     private val executionRunners = java.util.concurrent.ConcurrentHashMap<String, ExternalRunner>()
 
     init {
-        // Register out-of-the-box Tri-Mode Runners
+        // Register runner implementations. Availability is reported by each runner at runtime.
         registerRunner(EmbeddedInstantRunner(workspaceManager = workspaceManager))
         registerRunner(alpineRunner ?: AlpineLinuxRunner())
         registerRunner(termuxRunner ?: TermuxBridgeRunner())

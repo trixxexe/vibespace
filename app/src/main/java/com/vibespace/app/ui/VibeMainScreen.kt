@@ -86,6 +86,7 @@ fun VibeMainScreen(
     searchViewModel: SearchViewModel,
     onNavigateToHome: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onToggleLineNumbers: (() -> Unit)? = null,
     gitViewModel: com.vibespace.feature.explorer.git.GitViewModel? = null,
     onNavigateToExtensions: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -612,6 +613,7 @@ fun VibeMainScreen(
         val allFiles = explorerUiState.allProjectFiles.ifEmpty { explorerUiState.rootNodes.map { it.file } }
         CommandPaletteDialog(
             files = allFiles,
+            hasActiveDocument = editorUiState.activeDocument != null,
             onOpenFile = { file ->
                 editorViewModel.openFile(file)
                 isCommandPaletteVisible = false
@@ -634,18 +636,6 @@ fun VibeMainScreen(
                 gitViewModel?.refreshStatus()
                 isCommandPaletteVisible = false
             },
-            onFormatDocument = {
-                editorViewModel.formatDocument()
-                isCommandPaletteVisible = false
-            },
-            onShowHover = {
-                editorViewModel.requestHover()
-                isCommandPaletteVisible = false
-            },
-            onGoToDefinition = {
-                editorViewModel.requestDefinition(onNavigateToFile = { editorViewModel.openFile(it) })
-                isCommandPaletteVisible = false
-            },
             onOpenSearch = {
                 isSearchVisible = true
                 isCommandPaletteVisible = false
@@ -658,6 +648,28 @@ fun VibeMainScreen(
                 onNavigateToSettings()
                 isCommandPaletteVisible = false
             },
+            onToggleTerminal = {
+                isTerminalVisible = !isTerminalVisible
+                isCommandPaletteVisible = false
+            },
+            onToggleLineNumbers = onToggleLineNumbers?.let { toggle ->
+                {
+                    toggle()
+                    isCommandPaletteVisible = false
+                }
+            },
+            onFormatDocument = if (editorViewModel.hasRunningLanguageServer) ({
+                editorViewModel.formatDocument()
+                isCommandPaletteVisible = false
+            }) else null,
+            onShowHover = if (editorViewModel.hasRunningLanguageServer) ({
+                editorViewModel.requestHover()
+                isCommandPaletteVisible = false
+            }) else null,
+            onGoToDefinition = if (editorViewModel.hasRunningLanguageServer) ({
+                editorViewModel.requestDefinition(onNavigateToFile = { editorViewModel.openFile(it) })
+                isCommandPaletteVisible = false
+            }) else null,
             onDismiss = { isCommandPaletteVisible = false }
         )
     }
