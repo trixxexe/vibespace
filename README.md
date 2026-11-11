@@ -30,7 +30,7 @@ The app includes multi-tab editing, SAF-backed workspaces, workspace-wide regex 
 - **Runner Panel**: Collapsible panel for embedded evaluation, optional Alpine Linux command execution, or the Termux bridge, with output and diagnostics.
 - **Git Source Control**: Local Git repositories, staging, commits, branches, diffs, and HTTP(S) push/pull. Remote credentials remain in memory for the app process; configure a real commit author identity before committing.
 - **Workspace Search**: Recursive search across project files with case sensitivity and linear-time regular expressions. Backreferences are not supported.
-- **Language Servers**: Python and TypeScript servers can be installed inside Alpine. They provide LSP completions, diagnostics, hover, definitions, and formatting for filesystem-backed workspaces.
+- **Language Servers**: Python and TypeScript servers can be installed inside Alpine. They provide LSP completions, diagnostics, hover, definitions, and formatting for filesystem-backed and SAF workspaces; SAF files are staged in app-private storage and synced by VibeSpace.
 - **AI Coding Assistant**: Chat interface with attached code context from the active file, starter prompts, and diff review models.
 - **Settings & Persistence**: Theme mode selection (Dark, Light, System), font size slider (10sp - 22sp), tab size preferences, and local persistence.
 

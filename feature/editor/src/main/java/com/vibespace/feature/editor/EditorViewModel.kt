@@ -26,7 +26,7 @@ class EditorViewModel(
     private val editorEngine: EditorEngine,
     private val workspaceManager: WorkspaceManager,
     private val languageDetector: LanguageDetector,
-    private val lspClientProvider: ((String) -> com.vibespace.core.language.lsp.LanguageServerClient?)? = null,
+    private val lspClientProvider: (suspend (String) -> com.vibespace.core.language.lsp.LanguageServerClient?)? = null,
     private val gitManager: com.vibespace.core.workspace.git.GitManager? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : ViewModel() {

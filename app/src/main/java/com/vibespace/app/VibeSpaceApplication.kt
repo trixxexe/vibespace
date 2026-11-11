@@ -23,6 +23,10 @@ import com.vibespace.feature.settings.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.File
+import java.nio.file.Files
 
 /**
  * Application class serving as dependency container for VibeSpace.
@@ -108,21 +112,38 @@ class VibeSpaceApplication : Application() {
 
     private val lspClients = java.util.concurrent.ConcurrentHashMap<String, com.vibespace.core.language.lsp.LanguageServerClient>()
     private val lspCleanupScope by lazy { CoroutineScope(SupervisorJob() + dispatchers.io) }
+    private val lspClientMutex = Mutex()
+    private val lspWorkspaceUriMaps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, String>>()
 
     fun registerLspClient(languageId: String, client: com.vibespace.core.language.lsp.LanguageServerClient) {
         val normalized = languageId.trim().lowercase()
         lspClients["manual:$normalized"] = client
     }
 
-    @Synchronized
-    fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? {
+    suspend fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? = lspClientMutex.withLock {
         val normalized = languageId.trim().lowercase()
-        if (normalized.isEmpty()) return null
-        lspClients["manual:$normalized"]?.let { return it }
-        if (normalized !in setOf("python", "javascript", "typescript")) return null
-        val project = workspaceManager.currentProject.value ?: return null
+        if (normalized.isEmpty()) return@withLock null
+        lspClients["manual:$normalized"]?.let { return@withLock it }
+        if (normalized !in setOf("python", "javascript", "typescript")) return@withLock null
+        val project = workspaceManager.currentProject.value ?: return@withLock null
         val clientKey = managedLspKey(project.id, normalized)
-        lspClients[clientKey]?.let { return it }
+        val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
+            as? com.vibespace.core.runner.alpine.AlpineLinuxRunner ?: return@withLock null
+        val existingClient = lspClients[clientKey]
+        if (existingClient == null && !alpine.isLanguageServerInstalled(normalized)) return@withLock null
+        val needsStaging = project.rootPath.isNullOrBlank() || !File(project.rootPath).isDirectory
+        val stagedWorkspace = if (needsStaging) {
+            try {
+                stageLspWorkspace(project)
+            } catch (failure: Exception) {
+                logger.w("VibeSpaceApp", "Could not stage the workspace for $normalized: ${failure.message}")
+                null
+            } ?: return@withLock null
+        } else null
+        val workspaceRoot = project.rootPath?.let(::File)?.takeIf { it.isDirectory } ?: stagedWorkspace?.first
+            ?: return@withLock null
+        val uriMap = stagedWorkspace?.second ?: java.util.concurrent.ConcurrentHashMap()
+        existingClient?.let { return@withLock it }
         // A language server is rooted in one workspace. Stop old workspace processes rather than
         // accidentally reusing their index after the active project changes.
         val currentProjectPrefix = "managed:${project.id}:"
@@ -133,12 +154,7 @@ class VibeSpaceApplication : Application() {
                     lspCleanupScope.launch { runCatching { entry.value.stop() } }
                 }
             }
-        // SAF URIs are not filesystem paths; do not hand them to a process-based language server.
-        val workspaceRoot = project.rootPath?.let { java.io.File(it) }?.takeIf { it.isDirectory } ?: return null
-        val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
-            as? com.vibespace.core.runner.alpine.AlpineLinuxRunner ?: return null
-        if (!alpine.isLanguageServerInstalled(normalized)) return null
-        return try {
+        try {
             val process = alpine.startLanguageServer(normalized, workspaceRoot)
             fun toServerUri(uri: String): String {
                 val relativePath = runCatching {
@@ -161,7 +177,8 @@ class VibeSpaceApplication : Application() {
                 val path = runCatching { java.net.URI(uri).path }.getOrNull() ?: return uri
                 if (path != "/workspace" && !path.startsWith("/workspace/")) return uri
                 val relative = path.removePrefix("/workspace").trimStart('/')
-                val target = java.io.File(workspaceRoot, relative).canonicalFile
+                uriMap[relative]?.let { return it }
+                val target = File(workspaceRoot, relative).canonicalFile
                 return if (target.toPath().startsWith(workspaceRoot.canonicalFile.toPath())) target.toURI().toString() else uri
             }
             val client = com.vibespace.core.language.lsp.StdioLanguageServerClient(
@@ -178,6 +195,72 @@ class VibeSpaceApplication : Application() {
             null
         }
     }
+
+    private suspend fun stageLspWorkspace(
+        project: com.vibespace.core.workspace.model.Project
+    ): Pair<File, java.util.concurrent.ConcurrentHashMap<String, String>>? {
+        val files = when (val result = workspaceManager.getAllProjectFiles(project.rootUri)) {
+            is com.vibespace.core.common.result.VibeResult.Success -> result.data
+            else -> {
+                logger.w("VibeSpaceApp", "Could not list workspace files for the language server.")
+                return null
+            }
+        }
+        val root = File(filesDir, "runner-workspaces/${project.id.toLspDirectoryName()}").canonicalFile
+        root.mkdirs()
+        if (root.walkTopDown().any { Files.isSymbolicLink(it.toPath()) }) {
+            logger.w("VibeSpaceApp", "Language-server staging workspace contains symbolic links.")
+            return null
+        }
+        val entries = linkedMapOf<String, String>()
+        for (file in files.filter { it.isFile }) {
+            val relative = workspaceRelativePath(file, files, project.rootUri) ?: return null
+            if (!isSafeLspPath(relative)) return null
+            val bytes = when (val result = workspaceManager.readBytes(file.uri)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> result.data
+                else -> return null
+            }
+            val destination = safeLspFile(root, relative) ?: return null
+            destination.parentFile?.mkdirs()
+            if (!destination.exists() || !destination.readBytes().contentEquals(bytes)) destination.writeBytes(bytes)
+            entries[relative] = file.uri
+        }
+        root.walkTopDown().filter { it.isFile && it.relativeTo(root).invariantSeparatorsPath !in entries }.forEach { it.delete() }
+        val sharedMap = lspWorkspaceUriMaps.computeIfAbsent(project.id) { java.util.concurrent.ConcurrentHashMap() }
+        sharedMap.clear()
+        sharedMap.putAll(entries)
+        return root to sharedMap
+    }
+
+    private fun workspaceRelativePath(
+        file: com.vibespace.core.workspace.model.VirtualFile,
+        files: List<com.vibespace.core.workspace.model.VirtualFile>,
+        rootUri: String
+    ): String? {
+        val byUri = files.associateBy { it.uri }
+        val parts = mutableListOf(file.name)
+        var parent = file.parentUri ?: return null
+        val seen = mutableSetOf<String>()
+        while (parent != rootUri) {
+            if (!seen.add(parent)) return null
+            val directory = byUri[parent]?.takeIf { it.isDirectory } ?: return null
+            parts += directory.name
+            parent = directory.parentUri ?: return null
+        }
+        return parts.asReversed().joinToString("/")
+    }
+
+    private fun safeLspFile(root: File, relativePath: String): File? {
+        val canonicalRoot = root.canonicalFile
+        val candidate = File(canonicalRoot, relativePath).canonicalFile
+        return candidate.takeIf { it != canonicalRoot && it.toPath().startsWith(canonicalRoot.toPath()) }
+    }
+
+    private fun isSafeLspPath(path: String) = path.isNotBlank() && !path.startsWith('/') &&
+        path.split('/').none { it.isBlank() || it == "." || it == ".." }
+
+    private fun String.toLspDirectoryName() = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(toByteArray()).take(12).joinToString("") { "%02x".format(it) }
 
     private fun managedLspKey(projectId: String, languageId: String) = "managed:$projectId:$languageId"
 
