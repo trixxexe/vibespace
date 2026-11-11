@@ -333,6 +333,10 @@ class JGitWorkspaceManager(
         if (uri == null || uri.scheme !in setOf("https", "http") || uri.host.isNullOrBlank()) {
             return@withRepository VibeResult.Error("Enter a valid HTTPS or HTTP Git remote URL.")
         }
+        if (uri.userInfo != null) return@withRepository VibeResult.Error("Do not embed credentials in the remote URL; enter them in the credential fields.")
+        if (uri.scheme == "http" && (!username.isNullOrBlank() || !passwordOrToken.isNullOrBlank())) {
+            return@withRepository VibeResult.Error("Credentials require an HTTPS remote.")
+        }
         ctx.repo.config.setString("remote", "origin", "url", cleaned)
         ctx.repo.config.setString("remote", "origin", "fetch", "+refs/heads/*:refs/remotes/origin/*")
         ctx.repo.config.save()

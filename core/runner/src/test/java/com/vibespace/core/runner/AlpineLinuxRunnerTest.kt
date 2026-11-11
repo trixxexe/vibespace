@@ -126,7 +126,7 @@ class AlpineLinuxRunnerTest {
         assertTrue(result.isSuccess)
         val exec = result.getOrNull()!!
         assertEquals(127, exec.exitCode)
-        assertTrue(exec.outputs.any { it.line.contains("Alpine Linux Subsystem Not Installed") })
+        assertTrue(exec.outputs.any { it.line.contains("No PRoot build is available for this device architecture") })
     }
 
     @Test

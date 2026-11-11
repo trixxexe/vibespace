@@ -22,6 +22,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +60,8 @@ fun GitSourceControlPanel(
     val uiState by viewModel.uiState.collectAsState()
     var isStagedExpanded by remember { mutableStateOf(true) }
     var isUnstagedExpanded by remember { mutableStateOf(true) }
+    var isBranchMenuExpanded by remember { mutableStateOf(false) }
+    var newBranchName by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -136,6 +140,36 @@ fun GitSourceControlPanel(
                     enabled = !uiState.isSyncing && uiState.status.remoteUrl != null,
                     modifier = Modifier.weight(1f)
                 ) { Text("Push") }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("Branch", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                Spacer(modifier = Modifier.width(8.dp))
+                Box {
+                    OutlinedButton(onClick = { isBranchMenuExpanded = true }) {
+                        Text(uiState.status.currentBranch)
+                    }
+                    DropdownMenu(expanded = isBranchMenuExpanded, onDismissRequest = { isBranchMenuExpanded = false }) {
+                        uiState.status.branches.forEach { branch ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (branch.isCurrent) {
+                                            Icon(VibeIcons.Checkmark, contentDescription = "Current branch", modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                        }
+                                        Text(branch.name)
+                                    }
+                                },
+                                onClick = {
+                                    isBranchMenuExpanded = false
+                                    if (!branch.isCurrent) viewModel.checkoutBranch(branch.name)
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = { viewModel.toggleBranchDialog(true) }) { Text("New branch") }
             }
             if (uiState.isSyncing) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -337,6 +371,31 @@ fun GitSourceControlPanel(
                 TextButton(onClick = { viewModel.configureRemote() }, enabled = !uiState.isSyncing) { Text("Save remote") }
             },
             dismissButton = { TextButton(onClick = { viewModel.toggleRemoteDialog(false) }) { Text("Cancel") } }
+        )
+    }
+
+    if (uiState.showBranchDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleBranchDialog(false); newBranchName = "" },
+            title = { Text("Create branch") },
+            text = {
+                OutlinedTextField(
+                    value = newBranchName,
+                    onValueChange = { newBranchName = it },
+                    label = { Text("Branch name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.createBranch(newBranchName); newBranchName = "" },
+                    enabled = newBranchName.isNotBlank()
+                ) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.toggleBranchDialog(false); newBranchName = "" }) { Text("Cancel") }
+            }
         )
     }
 
