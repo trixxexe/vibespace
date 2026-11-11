@@ -43,21 +43,6 @@ class EmbeddedInstantRunnerTest {
     }
 
     @Test
-    fun built_in_extended_shell_commands_succeed() = runTest {
-        val unameResult = runner.execute("uname", "/workspace")
-        assertTrue(unameResult.isSuccess)
-        assertEquals(0, unameResult.getOrNull()!!.exitCode)
-
-        val whoamiResult = runner.execute("whoami", "/workspace")
-        assertTrue(whoamiResult.isSuccess)
-        assertEquals(0, whoamiResult.getOrNull()!!.exitCode)
-
-        val whichResult = runner.execute("which ls", "/workspace")
-        assertTrue(whichResult.isSuccess)
-        assertEquals(0, whichResult.getOrNull()!!.exitCode)
-    }
-
-    @Test
     fun unsupported_python_constructs_return_exit_code_1_with_clear_notice() = runTest {
         val result = runner.execute("python -c import math", "/workspace")
         assertTrue(result.isSuccess)

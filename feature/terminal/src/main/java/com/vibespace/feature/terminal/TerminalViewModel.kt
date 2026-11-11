@@ -228,9 +228,22 @@ class TerminalViewModel(
                 }
             }
 
-            terminalService.appendLine(session.sessionId, "$ $cleanCommand", StreamType.COMMAND)
+            val cmdBinary = cleanCommand.split("\\s+".toRegex()).firstOrNull()?.lowercase().orEmpty()
+            val safeBuiltins = setOf(
+                "help", "clear", "echo", "pwd", "ls", "cat", "touch", "mkdir", "rm", "cp", "mv",
+                "head", "tail", "wc", "grep", "find", "df", "free", "which", "uname", "env",
+                "date", "version", "whoami", "sh", "bash"
+            )
 
-            if (runnerManager != null) {
+            val useInternalShell = (_uiState.value.activeRunnerMode == RunnerMode.INSTANT || runnerManager == null) &&
+                    cmdBinary in safeBuiltins &&
+                    !cleanCommand.startsWith("python", ignoreCase = true) &&
+                    !cleanCommand.startsWith("node", ignoreCase = true)
+
+            if (useInternalShell) {
+                terminalService.sendInput(session.sessionId, cleanCommand)
+            } else if (runnerManager != null) {
+                terminalService.appendLine(session.sessionId, "$ $cleanCommand", StreamType.COMMAND)
                 when (val result = runnerManager.runCommand(
                     cleanCommand,
                     session.workingDirectory,
