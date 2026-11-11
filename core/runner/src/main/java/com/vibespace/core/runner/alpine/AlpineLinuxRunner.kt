@@ -226,6 +226,12 @@ class AlpineLinuxRunner(
                     bundled.use { input -> FileOutputStream(bundleFile).use { output -> input.copyTo(output) } }
                     extractTarGz(bundleFile, baseDir)
                     bundleFile.delete()
+                    val bundledRootfs = File(baseDir, "rootfs.tar.gz")
+                    if (bundledRootfs.isFile) {
+                        _installationState.value = AlpineInstallationState.Extracting
+                        extractTarGz(bundledRootfs, rootfsDir)
+                        bundledRootfs.delete()
+                    }
                     if (!File(rootfsDir, "etc/alpine-release").isFile || !hasExecutableProot()) {
                         throw IllegalStateException("The bundled Python and Node runtime archive is incomplete.")
                     }
