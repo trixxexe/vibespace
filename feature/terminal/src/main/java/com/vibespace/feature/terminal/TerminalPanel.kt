@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -222,7 +222,7 @@ fun TerminalPanel(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            items(uiState.sessions, key = { it.sessionId }) { session ->
+                            itemsIndexed(uiState.sessions, key = { index, session -> "${session.sessionId}_$index" }) { _, session ->
                                 val isSelected = session.sessionId == uiState.activeSession?.sessionId
                                 Surface(
                                     onClick = { viewModel.switchSession(session.sessionId) },
@@ -281,7 +281,7 @@ fun TerminalPanel(
                             .weight(1f)
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        items(currentLines, key = { it.id }) { line ->
+                        itemsIndexed(currentLines, key = { index, line -> "${line.id}_$index" }) { _, line ->
                             TerminalLineView(line)
                         }
                     }
@@ -542,7 +542,7 @@ fun TerminalPanel(
                             .fillMaxSize()
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        items(uiState.diagnostics, key = { it.id }) { diag ->
+                        itemsIndexed(uiState.diagnostics, key = { index, diag -> "${diag.id}_$index" }) { _, diag ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

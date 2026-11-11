@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.vibespace.core.designsystem.components.VibeIcons
 import androidx.compose.material3.Button
@@ -261,7 +261,7 @@ fun ExtensionsScreen(
                         )
                     }
                 }
-                items(filteredList, key = { it.id }) { ext ->
+                itemsIndexed(filteredList, key = { index, ext -> "${ext.id}_$index" }) { _, ext ->
                     ExtensionCard(
                         extension = ext,
                         downloadProgress = uiState.downloadingExtensions[ext.id],

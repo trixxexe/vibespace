@@ -13,12 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +39,10 @@ fun MobileAutocompleteBar(
 ) {
     if (completions.isEmpty()) return
 
+    val distinctCompletions = remember(completions) {
+        completions.distinctBy { "${it.kind}:${it.label}:${it.insertText}" }
+    }
+
     Surface(
         color = VibeTheme.colors.gutterBackground,
         border = androidx.compose.foundation.BorderStroke(1.dp, VibeTheme.colors.borderSubtle),
@@ -52,7 +57,10 @@ fun MobileAutocompleteBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            items(completions, key = { it.label }) { item ->
+            itemsIndexed(
+                items = distinctCompletions,
+                key = { index, item -> "${item.kind}_${item.label}_$index" }
+            ) { _, item ->
                 AutocompleteChip(
                     item = item,
                     onClick = { onSelectCompletion(item) }
