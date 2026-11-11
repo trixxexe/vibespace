@@ -5,8 +5,10 @@ import com.vibespace.core.runner.manager.DefaultRunnerManager
 import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.terminal.model.StreamType
 import com.vibespace.core.terminal.service.DefaultTerminalService
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -14,17 +16,29 @@ import org.junit.Test
 
 class TerminalViewModelTest {
 
+    private val viewModelStore = ViewModelStore()
+    private var nextViewModelKey = 0
+
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @After
+    fun clearViewModels() {
+        viewModelStore.clear()
+    }
+
+    private fun track(viewModel: TerminalViewModel): TerminalViewModel = viewModel.also {
+        viewModelStore.put("terminal-test-${nextViewModelKey++}", it)
+    }
 
     private val terminalService = DefaultTerminalService(dispatchers = TestDispatcherProvider())
 
     @Test
     fun initial_session_created_and_commands_can_be_sent() = runTest {
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         assertNotNull(viewModel.uiState.value.activeSession)
 
@@ -38,10 +52,10 @@ class TerminalViewModelTest {
 
     @Test
     fun selectTab_switches_active_tab() = runTest {
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         viewModel.selectTab(BottomPanelTab.OUTPUT)
         assertEquals(BottomPanelTab.OUTPUT, viewModel.uiState.value.activeTab)
@@ -50,11 +64,11 @@ class TerminalViewModelTest {
     @Test
     fun switchRunnerMode_updates_active_mode_in_manager_and_state() = runTest {
         val runnerManager = DefaultRunnerManager(dispatchers = TestDispatcherProvider())
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             runnerManager = runnerManager,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         assertEquals(RunnerMode.EMBEDDED, viewModel.uiState.value.activeRunnerMode)
 
@@ -70,11 +84,11 @@ class TerminalViewModelTest {
     @Test
     fun runActiveDocument_dispatches_command_to_runner() = runTest {
         val runnerManager = DefaultRunnerManager(dispatchers = TestDispatcherProvider())
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             runnerManager = runnerManager,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         viewModel.runActiveDocument("script.py", "python")
         val active = viewModel.uiState.value.activeSession
@@ -90,12 +104,12 @@ class TerminalViewModelTest {
         val directory = workspace.createDirectory(project.rootUri, "src").getOrNull()!!
         val file = workspace.createFile(directory.uri, "main.py", "print('real runtime')").getOrNull()!!
         val runnerManager = DefaultRunnerManager(workspaceManager = workspace, dispatchers = TestDispatcherProvider())
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = DefaultTerminalService(dispatchers = TestDispatcherProvider()),
             runnerManager = runnerManager,
             workspaceManager = workspace,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         viewModel.runActiveDocument("main.py", "python", file.uri)
 
@@ -107,10 +121,10 @@ class TerminalViewModelTest {
 
     @Test
     fun multiple_sessions_can_be_created_switched_and_closed() = runTest {
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         val initialCount = viewModel.uiState.value.sessions.size
         viewModel.createNewSession("Terminal 2")
@@ -130,10 +144,10 @@ class TerminalViewModelTest {
 
     @Test
     fun launchTerminalAgent_creates_session_with_capability_disclosure() = runTest {
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         viewModel.launchTerminalAgent("Code Agent")
         val active = viewModel.uiState.value.activeSession
@@ -144,10 +158,10 @@ class TerminalViewModelTest {
 
     @Test
     fun updateDiagnostics_updates_problems_count() {
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         val diag = com.vibespace.core.language.model.Diagnostic(
             id = "d1",
@@ -166,10 +180,10 @@ class TerminalViewModelTest {
 
     @Test
     fun command_with_leading_prompt_is_sanitized_and_not_duplicated() = runTest {
-        val viewModel = TerminalViewModel(
+        val viewModel = track(TerminalViewModel(
             terminalService = terminalService,
             dispatchers = TestDispatcherProvider()
-        )
+        ))
 
         viewModel.executeCommand("$ echo sanitized")
         val active = viewModel.uiState.value.activeSession

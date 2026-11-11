@@ -35,18 +35,18 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x ./gradlew
+
+      - name: Run Unit Tests
+        timeout-minutes: 5
+        run: ./gradlew testDebugUnitTest
+
       - name: Enable cross-architecture runtime builds
         uses: docker/setup-qemu-action@v3
 
       - name: Build bundled Python and Node runtimes
         run: bash .github/scripts/build-bundled-runtime.sh app/build/generated/bundled-runtime
-
-      - name: Make Gradle Wrapper Executable
-        run: chmod +x ./gradlew
-
-      - name: Run Unit Tests
-        timeout-minutes: 20
-        run: ./gradlew testDebugUnitTest
 
       - name: Run Android Lint
         run: ./gradlew lintDebug
