@@ -240,7 +240,7 @@ fun SettingsScreen(
                             color = VibeTheme.colors.textPrimary
                         )
                         Text(
-                            text = "The in-app evaluators support a limited subset of Python and JavaScript. Termux is a separate app integration; Alpine is unavailable in this build.",
+                            text = "Embedded evaluation is limited to supported Python and JavaScript snippets. Alpine downloads a Linux userspace; Termux runs separately and requires the Termux app.",
                             style = MaterialTheme.typography.bodySmall,
                             color = VibeTheme.colors.textSecondary
                         )
@@ -258,9 +258,9 @@ fun SettingsScreen(
 
                         RuntimeOptionRow(
                             icon = VibeIcons.RunnerAlpine,
-                            badge = "Unavailable",
+                            badge = "Optional download",
                             title = "Alpine Linux Subsystem",
-                            subtitle = "This build does not include the required PRoot runtime. Use Embedded or Termux execution."
+                            subtitle = "Downloads a checksum-verified PRoot runtime and Alpine userspace on first setup. Requires a supported device ABI and network access."
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))

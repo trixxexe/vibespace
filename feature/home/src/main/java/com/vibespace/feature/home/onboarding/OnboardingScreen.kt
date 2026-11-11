@@ -245,13 +245,13 @@ private fun StepWelcome(
             FeaturePillar(
                 icon = VibeIcons.Terminal,
                 title = "Script Runner & Termux Bridge",
-                description = "Run supported Python and JavaScript snippets with the in-app evaluator, or use Termux when it is installed and configured. Alpine execution is unavailable in this build because it does not include PRoot."
+                description = "Run supported snippets with the embedded evaluator, install the optional Alpine userspace for Linux commands, or connect Termux. Alpine setup downloads PRoot and a root filesystem; it needs network access and a supported device ABI."
             )
             Spacer(modifier = Modifier.height(16.dp))
             FeaturePillar(
                 icon = VibeIcons.SourceControl,
                 title = "Local Snapshots & Code Checks",
-                description = "Review and save workspace-local change snapshots. Built-in syntax checks are available; language-server features require a separately configured server."
+                description = "Use local Git staging, commits, branches, and diffs; add an HTTP(S) remote for push and pull. Python and TypeScript language servers can be installed separately inside Alpine."
             )
         }
 
@@ -429,15 +429,15 @@ private fun StepIdeTour(
             TourItem(
                 icon = VibeIcons.Terminal,
                 title = "Runner Output & Problems",
-                description = "View output from the selected runner and lightweight syntax diagnostics. The in-app command interpreter supports a limited set of commands; it is not a general Linux shell or build system."
+                description = "Use the embedded evaluator for supported snippets, or set up Alpine for Linux command-line tools. The Alpine terminal persists your working directory and exported variables, but it does not provide a PTY or interactive terminal applications."
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             TourItem(
                 icon = VibeIcons.SourceControl,
-                title = "Local Change Tracking",
-                description = "Review workspace changes, stage them into local snapshots, and inspect line-by-line diffs. This is not a Git repository and does not provide branches or remote sync."
+                title = "Git Source Control",
+                description = "Review changes, stage files, commit with your configured author identity, and use branches and diffs. Add an HTTP(S) remote for push and pull."
             )
         }
 

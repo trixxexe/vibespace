@@ -15,7 +15,7 @@
 
 **VibeSpace** is an open-source, native Android coding workspace for editing project files on phones, tablets, and foldables.
 
-Its current build includes a multi-tab editor, SAF-backed workspaces, local change snapshots, limited in-app script evaluators, a Termux bridge, and an optional BYOK AI assistant. It does not include a full Linux shell, Git repository support, or bundled language servers.
+The app includes multi-tab editing, SAF-backed workspaces, workspace-wide regex search, local JGit repositories with optional HTTP(S) remotes, an Alpine Linux userspace runner, and an optional BYOK AI assistant. PRoot and Alpine are downloaded on first setup for supported Android ABIs. Python and TypeScript language servers can be installed into Alpine from its package managers; they are not bundled in the APK. The terminal accepts shell commands and persists working directory and exported variables per session, but does not provide a PTY, job control, or interactive terminal applications.
 
 ---
 
@@ -27,7 +27,10 @@ Its current build includes a multi-tab editor, SAF-backed workspaces, local chan
   - **Phone (< 600dp)**: Editor with an explorer drawer, expandable runner panel, and AI chat bottom sheet.
   - **Tablet (> 840dp)**: Navigation rail, explorer or local change panel, resizable editor and runner panel, and optional AI side panel.
 - **Project Explorer**: Virtual file tree supporting folder navigation, file creation, deletion, and Storage Access Framework (SAF) URI abstraction.
-- **Runner Panel**: Collapsible panel for the limited in-app command interpreter, selected runner output, syntax diagnostics, and console messages.
+- **Runner Panel**: Collapsible panel for embedded evaluation, optional Alpine Linux command execution, or the Termux bridge, with output and diagnostics.
+- **Git Source Control**: Local Git repositories, staging, commits, branches, diffs, and HTTP(S) push/pull. Remote credentials remain in memory for the app process; configure a real commit author identity before committing.
+- **Workspace Search**: Recursive search across project files with case sensitivity and linear-time regular expressions. Backreferences are not supported.
+- **Language Servers**: Python and TypeScript servers can be installed inside Alpine. They provide LSP completions, diagnostics, hover, definitions, and formatting for filesystem-backed workspaces.
 - **AI Coding Assistant**: Chat interface with attached code context from the active file, starter prompts, and diff review models.
 - **Settings & Persistence**: Theme mode selection (Dark, Light, System), font size slider (10sp - 22sp), tab size preferences, and local persistence.
 

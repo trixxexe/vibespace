@@ -17,12 +17,12 @@ enum class RunnerMode(
         description = "Lightweight offline script evaluator for Python, JS, and Shell builtins. Zero download."
     ),
 
-    /** In-app Alpine execution is available only in builds that package a compatible PRoot runtime. */
+    /** Alpine userspace execution downloads a verified PRoot runtime during first setup. */
     ALPINE(
         id = "alpine",
-        displayName = "Alpine (Unavailable)",
-        shortBadge = "Unavailable",
-        description = "This build does not include PRoot. Use Embedded or Termux execution."
+        displayName = "Alpine Linux",
+        shortBadge = "Alpine",
+        description = "Downloads a verified PRoot runtime and Alpine userspace on first setup for supported Android devices."
     ),
 
     /**

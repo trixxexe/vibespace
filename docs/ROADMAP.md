@@ -24,18 +24,18 @@
 ---
 
 ## Phase 3: Runtime Execution & Terminal (v0.3.0)
-- [ ] Developer 4: Full Termux `RUN_COMMAND` Intent bridge implementation.
-- [ ] Developer 4: Python and Node.js code execution with interactive I/O.
-- [ ] Developer 4: PRoot / Chroot rootfs container support.
+- [x] Developer 4: Termux `RUN_COMMAND` Intent bridge implementation (requires Termux and its permission).
+- [x] Developer 4: Python and Node.js execution in the optional Alpine userspace. Interactive TTY I/O and job control remain unsupported.
+- [x] Developer 4: Downloadable, checksum-verified PRoot runtime and Alpine root filesystem for supported ABIs.
 - [ ] Developer 2: Code execution keyboard shortcuts (Ctrl+Enter / Run button).
 
 ---
 
 ## Phase 4: Language Intelligence & Git (v0.4.0)
 - [ ] Developer 5: Tree-sitter C-binding / JNI parser integration.
-- [ ] Developer 5: Language Server Protocol (LSP) client over stdin/stdout for Pyright, Rust Analyzer, and Kotlin LS.
-- [ ] Developer 5: Semantic autocomplete popup overlay on editor canvas.
-- [ ] Developer 1: Native Git integration using LibGit2 / JGit (status, diff, commit, push, pull).
+- [x] Developer 5: LSP client over stdin/stdout with installable Python and TypeScript servers in Alpine.
+- [ ] Developer 5: Semantic autocomplete backed by Tree-sitter and additional language servers.
+- [x] Developer 1: JGit integration for status, diff, stage, commit, branches, and HTTP(S) push/pull.
 
 ---
 

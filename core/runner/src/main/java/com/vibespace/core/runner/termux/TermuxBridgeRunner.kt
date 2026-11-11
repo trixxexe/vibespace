@@ -69,7 +69,7 @@ class TermuxBridgeRunner(
         if (termuxContext == null || !isAvailable()) {
             emitLine("[Termux Bridge] Termux app not detected on this device.", true)
             emitLine("To use Termux execution, install Termux from F-Droid (https://f-droid.org/packages/com.termux/).", false)
-            emitLine("The embedded mode only evaluates basic Python and JavaScript snippets. Alpine is unavailable in this build.", false)
+            emitLine("The embedded mode evaluates supported Python and JavaScript snippets. Set up Alpine Linux for the local Linux userspace runner.", false)
 
             val failed = execution.copy(
                 state = ExecutionState.FAILED,
