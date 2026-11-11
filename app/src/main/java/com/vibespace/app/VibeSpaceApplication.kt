@@ -20,6 +20,9 @@ import com.vibespace.core.workspace.repository.DataStoreRecentProjectsRepository
 import com.vibespace.core.workspace.repository.RecentProjectsRepository
 import com.vibespace.feature.settings.repository.DataStoreSettingsRepository
 import com.vibespace.feature.settings.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Application class serving as dependency container for VibeSpace.
@@ -104,19 +107,32 @@ class VibeSpaceApplication : Application() {
     }
 
     private val lspClients = java.util.concurrent.ConcurrentHashMap<String, com.vibespace.core.language.lsp.LanguageServerClient>()
+    private val lspCleanupScope by lazy { CoroutineScope(SupervisorJob() + dispatchers.io) }
 
     fun registerLspClient(languageId: String, client: com.vibespace.core.language.lsp.LanguageServerClient) {
         val normalized = languageId.trim().lowercase()
-        lspClients[normalized] = client
+        lspClients["manual:$normalized"] = client
     }
 
     @Synchronized
     fun getLspClient(languageId: String): com.vibespace.core.language.lsp.LanguageServerClient? {
         val normalized = languageId.trim().lowercase()
         if (normalized.isEmpty()) return null
-        lspClients[normalized]?.let { return it }
+        lspClients["manual:$normalized"]?.let { return it }
         if (normalized !in setOf("python", "javascript", "typescript")) return null
         val project = workspaceManager.currentProject.value ?: return null
+        val clientKey = managedLspKey(project.id, normalized)
+        lspClients[clientKey]?.let { return it }
+        // A language server is rooted in one workspace. Stop old workspace processes rather than
+        // accidentally reusing their index after the active project changes.
+        val currentProjectPrefix = "managed:${project.id}:"
+        lspClients.entries.toList()
+            .filter { it.key.startsWith("managed:") && !it.key.startsWith(currentProjectPrefix) }
+            .forEach { entry ->
+                if (lspClients.remove(entry.key, entry.value)) {
+                    lspCleanupScope.launch { runCatching { entry.value.stop() } }
+                }
+            }
         // SAF URIs are not filesystem paths; do not hand them to a process-based language server.
         val workspaceRoot = project.rootPath?.let { java.io.File(it) }?.takeIf { it.isDirectory } ?: return null
         val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
@@ -155,13 +171,15 @@ class VibeSpaceApplication : Application() {
                 uriToServer = ::toServerUri,
                 uriToClient = ::toClientUri
             )
-            lspClients[normalized] = client
+            lspClients[clientKey] = client
             client
         } catch (failure: Exception) {
             logger.w("VibeSpaceApp", "Could not start $normalized language server: ${failure.message}")
             null
         }
     }
+
+    private fun managedLspKey(projectId: String, languageId: String) = "managed:$projectId:$languageId"
 
     override fun onCreate() {
         super.onCreate()
