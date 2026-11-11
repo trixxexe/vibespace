@@ -35,7 +35,9 @@ import java.util.concurrent.atomic.AtomicLong
 class StdioLanguageServerClient(
     override val languageId: String,
     private val transport: LspTransport,
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    private val uriToServer: (String) -> String = { it },
+    private val uriToClient: (String) -> String = { it }
 ) : LanguageServerClient {
 
     private val scope = CoroutineScope(SupervisorJob() + dispatchers.default)
@@ -67,7 +69,7 @@ class StdioLanguageServerClient(
         val initParams = """
             {
                 "processId": null,
-                "rootUri": "$workspaceRootUri",
+                "rootUri": ${JSONObject.quote(uriToServer(workspaceRootUri))},
                 "capabilities": {
                     "textDocument": {
                         "hover": {"contentFormat": ["markdown", "plaintext"]},
@@ -110,7 +112,7 @@ class StdioLanguageServerClient(
         val params = """
             {
                 "textDocument": {
-                    "uri": "$documentUri",
+                    "uri": ${JSONObject.quote(uriToServer(documentUri))},
                     "languageId": "$languageId",
                     "version": 1,
                     "text": $escapedText
@@ -126,7 +128,7 @@ class StdioLanguageServerClient(
         val params = """
             {
                 "textDocument": {
-                    "uri": "$documentUri",
+                    "uri": ${JSONObject.quote(uriToServer(documentUri))},
                     "version": $version
                 },
                 "contentChanges": [
@@ -144,7 +146,7 @@ class StdioLanguageServerClient(
         val params = """
             {
                 "textDocument": {
-                    "uri": "$documentUri"
+                    "uri": ${JSONObject.quote(uriToServer(documentUri))}
                 }
             }
         """.trimIndent()
@@ -164,7 +166,7 @@ class StdioLanguageServerClient(
     ): VibeResult<HoverInfo?> = withContext(dispatchers.default) {
         val params = """
             {
-                "textDocument": {"uri": "$documentUri"},
+                "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
                 "position": {"line": ${line - 1}, "character": $column}
             }
         """.trimIndent()
@@ -186,14 +188,14 @@ class StdioLanguageServerClient(
     ): VibeResult<List<DefinitionLocation>> = withContext(dispatchers.default) {
         val params = """
             {
-                "textDocument": {"uri": "$documentUri"},
+                "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
                 "position": {"line": ${line - 1}, "character": $column}
             }
         """.trimIndent()
 
         when (val result = sendRequest("textDocument/definition", params)) {
             is VibeResult.Success -> {
-                val locs = parseDefinitionResponse(result.data)
+                val locs = parseDefinitionResponse(result.data).map { it.copy(uri = uriToClient(it.uri)) }
                 VibeResult.Success(locs)
             }
             is VibeResult.Error -> VibeResult.Error(result.message)
@@ -208,7 +210,7 @@ class StdioLanguageServerClient(
     ): VibeResult<List<CompletionItem>> = withContext(dispatchers.default) {
         val params = """
             {
-                "textDocument": {"uri": "$documentUri"},
+                "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
                 "position": {"line": ${line - 1}, "character": $column}
             }
         """.trimIndent()
@@ -226,7 +228,7 @@ class StdioLanguageServerClient(
     override suspend fun formatDocument(documentUri: String): VibeResult<String> = withContext(dispatchers.default) {
         val params = """
             {
-                "textDocument": {"uri": "$documentUri"},
+                "textDocument": {"uri": ${JSONObject.quote(uriToServer(documentUri))}},
                 "options": {"tabSize": 4, "insertSpaces": true}
             }
         """.trimIndent()
@@ -296,7 +298,7 @@ class StdioLanguageServerClient(
 
     private fun parseAndPublishDiagnostics(json: JSONObject) {
         val params = json.optJSONObject("params") ?: return
-        val uri = params.optString("uri", "")
+        val uri = uriToClient(params.optString("uri", ""))
         if (uri.isEmpty()) return
 
         val diagsArray = params.optJSONArray("diagnostics") ?: JSONArray()

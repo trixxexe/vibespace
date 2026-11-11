@@ -124,10 +124,36 @@ class VibeSpaceApplication : Application() {
         if (!alpine.isLanguageServerInstalled(normalized)) return null
         return try {
             val process = alpine.startLanguageServer(normalized, workspaceRoot)
+            fun toServerUri(uri: String): String {
+                val relativePath = runCatching {
+                    val parsed = java.net.URI(uri)
+                    if (parsed.scheme.equals("file", ignoreCase = true)) {
+                        val path = java.io.File(parsed).canonicalFile.toPath()
+                        val root = workspaceRoot.canonicalFile.toPath()
+                        if (path.startsWith(root)) root.relativize(path).toString().replace('\\', '/') else null
+                    } else {
+                        val rootUri = project.rootUri.trimEnd('/')
+                        if (uri == rootUri) "" else uri.takeIf { it.startsWith("$rootUri/") }
+                            ?.removePrefix("$rootUri/")
+                    }
+                }.getOrNull() ?: return uri
+                if (relativePath.split('/').any { it == ".." || it == "." }) return uri
+                val containerPath = if (relativePath.isEmpty()) "/workspace" else "/workspace/$relativePath"
+                return java.net.URI("file", "", containerPath, null).toASCIIString()
+            }
+            fun toClientUri(uri: String): String {
+                val path = runCatching { java.net.URI(uri).path }.getOrNull() ?: return uri
+                if (path != "/workspace" && !path.startsWith("/workspace/")) return uri
+                val relative = path.removePrefix("/workspace").trimStart('/')
+                val target = java.io.File(workspaceRoot, relative).canonicalFile
+                return if (target.toPath().startsWith(workspaceRoot.canonicalFile.toPath())) target.toURI().toString() else uri
+            }
             val client = com.vibespace.core.language.lsp.StdioLanguageServerClient(
                 languageId = normalized,
                 transport = com.vibespace.core.language.lsp.ProcessLspTransport(process, dispatchers),
-                dispatchers = dispatchers
+                dispatchers = dispatchers,
+                uriToServer = ::toServerUri,
+                uriToClient = ::toClientUri
             )
             lspClients[normalized] = client
             client

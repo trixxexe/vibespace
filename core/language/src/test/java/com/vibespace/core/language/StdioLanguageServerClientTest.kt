@@ -59,6 +59,37 @@ class StdioLanguageServerClientTest {
     }
 
     @Test
+    fun lspClient_mapsWorkspaceAndDocumentUrisForTheServer() = runTest {
+        val transport = InMemoryLspTransport()
+        val client = StdioLanguageServerClient(
+            languageId = "python",
+            transport = transport,
+            dispatchers = dispatchers,
+            uriToServer = { uri ->
+                when (uri) {
+                    "vibe://project" -> "file:///workspace"
+                    "vibe://project/main.py" -> "file:///workspace/main.py"
+                    else -> uri
+                }
+            }
+        )
+        val responder = launch {
+            val initialize = transport.clientToServer.receive()
+            assertTrue(initialize.contains("\"rootUri\":\"file:///workspace\""))
+            transport.emitFromServer("""{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}""")
+            transport.clientToServer.receive() // initialized notification
+        }
+
+        assertTrue(client.start("vibe://project").isSuccess)
+        client.didOpen("vibe://project/main.py", "print('hello')")
+        val open = transport.clientToServer.receive()
+        assertTrue(open.contains("\"uri\":\"file:///workspace/main.py\""))
+
+        client.stop()
+        responder.cancel()
+    }
+
+    @Test
     fun lspClient_publishesDiagnosticsNotification() = runTest {
         val transport = InMemoryLspTransport()
         val client = StdioLanguageServerClient("python", transport, dispatchers)
