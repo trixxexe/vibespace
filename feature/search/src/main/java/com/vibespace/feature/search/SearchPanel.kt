@@ -177,7 +177,7 @@ fun SearchPanel(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(uiState.workspaceMatches) { match ->
+                itemsIndexed(uiState.workspaceMatches, key = { index, match -> "${match.file.uri}_${match.lineNumber}_$index" }) { _, match ->
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()

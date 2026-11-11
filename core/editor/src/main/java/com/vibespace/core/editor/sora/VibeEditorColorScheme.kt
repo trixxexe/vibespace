@@ -26,17 +26,24 @@ class VibeEditorColorScheme(
     }
 
     override fun getColor(type: Int): Int {
+        val color = super.getColor(type)
+        if (type == WHOLE_BACKGROUND || type == LINE_NUMBER_BACKGROUND || type == CURRENT_LINE || type == SELECTED_TEXT_BACKGROUND || type == LINE_DIVIDER) {
+            return if (color != 0) color else parseSafe(theme.backgroundColor, "#0F1115")
+        }
+
+        val bgColor = getColor(WHOLE_BACKGROUND)
+
+        // TextMate and dynamic token indices
         if (type >= 255) {
-            val superColor = super.getColor(type)
-            if (superColor != 0) {
-                return superColor
+            if (color != 0 && isContrastValid(color, bgColor)) {
+                return color
             }
             val tmTheme = runCatching { ThemeRegistry.getInstance().currentThemeModel?.theme }.getOrNull()
             if (tmTheme != null) {
                 val colorHex = runCatching { tmTheme.getColor(type - 255) }.getOrNull()
                 if (colorHex != null && !"@default".equals(colorHex, ignoreCase = true)) {
                     val parsed = runCatching { Color.parseColor(colorHex) }.getOrNull()
-                    if (parsed != null) {
+                    if (parsed != null && parsed != 0 && isContrastValid(parsed, bgColor)) {
                         super.colors.put(type, parsed)
                         return parsed
                     }
@@ -44,16 +51,42 @@ class VibeEditorColorScheme(
             }
             return getColor(TEXT_NORMAL)
         }
-        return super.getColor(type)
+
+        // Standard token indices (type < 255)
+        if (color == 0 || !isContrastValid(color, bgColor)) {
+            return when (type) {
+                LINE_NUMBER -> parseSafe(theme.lineNumberColor, "#5A5A5A")
+                LINE_NUMBER_CURRENT -> parseSafe(theme.cursorColor, "#00E5FF")
+                KEYWORD -> parseSafe(theme.keywordColor, "#FF7B72")
+                LITERAL -> parseSafe(theme.literalColor, "#A5D6FF")
+                COMMENT -> parseSafe(theme.commentColor, "#8B949E")
+                OPERATOR -> parseSafe(theme.textColor, "#F3F4F6")
+                IDENTIFIER_NAME -> parseSafe(theme.textColor, "#9CDCFE")
+                FUNCTION_NAME -> parseSafe(theme.functionColor, "#D2A8FF")
+                else -> parseSafe(theme.textColor, "#F3F4F6")
+            }
+        }
+        return color
+    }
+
+    private fun isContrastValid(textColor: Int, bgColor: Int): Boolean {
+        if (Color.alpha(textColor) < 80) return false
+        val textLum = 0.299 * Color.red(textColor) + 0.587 * Color.green(textColor) + 0.114 * Color.blue(textColor)
+        val bgLum = 0.299 * Color.red(bgColor) + 0.587 * Color.green(bgColor) + 0.114 * Color.blue(bgColor)
+        // If background is dark and text is dark, poor contrast
+        if (bgLum < 128 && textLum < 45) return false
+        // If background is light and text is light, poor contrast
+        if (bgLum >= 128 && textLum > 210) return false
+        return true
+    }
+
+    private fun parseSafe(colorHex: String, fallback: String): Int = try {
+        Color.parseColor(colorHex)
+    } catch (_: Throwable) {
+        Color.parseColor(fallback)
     }
 
     private fun applyTheme(theme: EditorThemeDefinition) {
-        fun parseSafe(colorHex: String, fallback: String): Int = try {
-            Color.parseColor(colorHex)
-        } catch (_: Throwable) {
-            Color.parseColor(fallback)
-        }
-
         // Background & Gutter
         setColor(WHOLE_BACKGROUND, parseSafe(theme.backgroundColor, "#0F1115"))
         setColor(LINE_NUMBER_BACKGROUND, parseSafe(theme.gutterColor, "#12141A"))

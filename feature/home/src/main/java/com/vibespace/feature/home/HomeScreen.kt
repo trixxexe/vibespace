@@ -266,7 +266,7 @@ fun HomeScreen(
                 )
             }
         } else {
-            items(uiState.recentProjects) { project ->
+            itemsIndexed(uiState.recentProjects, key = { index, project -> "${project.id}_${project.rootUri}_$index" }) { _, project ->
                 RecentProjectItem(
                     project = project,
                     onClick = {

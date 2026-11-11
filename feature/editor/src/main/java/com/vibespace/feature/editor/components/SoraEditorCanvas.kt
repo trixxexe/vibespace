@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 private class EditorBinding(
     var documentId: String,
     var languageId: String,
+    var themeId: String,
     var editorLanguage: Language
 ) {
     var isUpdatingProgrammatically: Boolean = false
@@ -112,7 +113,7 @@ fun SoraEditorCanvas(
                 // Initialize document content
                 setText(content)
                 restoreCursor(this, content, cursorPosition)
-                val binding = EditorBinding(documentId, language.id, editorLanguage).apply {
+                val binding = EditorBinding(documentId, language.id, theme.id, editorLanguage).apply {
                     lastEmittedContent = content
                 }
                 tag = binding
@@ -154,17 +155,21 @@ fun SoraEditorCanvas(
                 editor.tabWidth = tabSize
             }
 
-            // Update color scheme if theme changed
-            editor.colorScheme = VibeEditorColorScheme(theme)
-
             val binding = editor.tag as? EditorBinding
+
+            // Only update color scheme if theme actually changed to avoid invalidating token render cache on every frame
+            if (binding?.themeId != theme.id) {
+                editor.colorScheme = VibeEditorColorScheme(theme)
+                binding?.themeId = theme.id
+            }
+
             val isNewDocument = binding?.documentId != documentId
             val currentEditorText = editor.text.toString()
             val isExternalChange = !isNewDocument && currentEditorText != content && content != binding?.lastEmittedContent
 
             // Keep independent tab text and caret state when switching documents or on external changes.
             if (isNewDocument || isExternalChange) {
-                val guard = binding ?: EditorBinding(documentId, language.id, editorLanguage)
+                val guard = binding ?: EditorBinding(documentId, language.id, theme.id, editorLanguage)
                 editor.tag = guard
                 guard.documentId = documentId
                 guard.lastEmittedContent = content
@@ -192,8 +197,13 @@ fun SoraEditorCanvas(
 }
 
 private fun restoreCursor(editor: CodeEditor, content: String, cursorPosition: CursorPosition) {
+    if (content.isEmpty()) {
+        runCatching { editor.setSelection(0, 0) }
+        return
+    }
     val lines = content.split('\n')
     val line = (cursorPosition.line - 1).coerceIn(0, lines.lastIndex)
-    val column = (cursorPosition.column - 1).coerceIn(0, lines[line].length)
-    editor.setSelection(line, column)
+    val maxCol = lines.getOrElse(line) { "" }.length
+    val column = (cursorPosition.column - 1).coerceIn(0, maxCol)
+    runCatching { editor.setSelection(line, column) }
 }

@@ -178,7 +178,7 @@ class DefaultTerminalService(
                 emitLine(sessionId, TerminalLine(IdGenerator.shortId(), session.workingDirectory, StreamType.STDOUT))
             }
             "ls" -> {
-                val targetDir = if (args.isNotEmpty()) resolveFile(session.workingDirectory, args[0]) else File(session.workingDirectory)
+                val targetDir = if (args.isNotEmpty()) resolveFile(session.workingDirectory, args[0]) else resolveFile(session.workingDirectory, ".")
                 if (targetDir.exists() && targetDir.isDirectory) {
                     val files: List<File> = targetDir.listFiles()?.sortedBy { it.name } ?: emptyList()
                     val output = if (files.isEmpty()) "(empty directory)" else files.joinToString("  ") {
@@ -490,9 +490,24 @@ class DefaultTerminalService(
     }
 
     private fun resolveFile(workingDir: String, path: String): File {
-        return if (path.startsWith("/")) File(path)
-        else if (path.startsWith("~")) File(System.getProperty("user.home", "/"), path.removePrefix("~").removePrefix("/"))
-        else File(workingDir, path)
+        val effectiveWorkingDir = if (workingDir.isBlank() || workingDir == "~" || !File(workingDir).exists()) {
+            val userHome = System.getProperty("user.home")
+            if (!userHome.isNullOrBlank() && File(userHome).exists()) userHome
+            else System.getProperty("user.dir", ".")
+        } else {
+            workingDir
+        }
+
+        return if (path == "." || path.isBlank()) {
+            File(effectiveWorkingDir)
+        } else if (path.startsWith("/")) {
+            File(path)
+        } else if (path.startsWith("~")) {
+            val sub = path.removePrefix("~").removePrefix("/")
+            if (sub.isEmpty()) File(effectiveWorkingDir) else File(effectiveWorkingDir, sub)
+        } else {
+            File(effectiveWorkingDir, path)
+        }
     }
 
     private companion object {

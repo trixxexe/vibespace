@@ -231,7 +231,7 @@ fun ExplorerScreen(
                     .padding(vertical = 4.dp)
             ) {
                 fun renderNode(node: ExplorerNode) {
-                    item(key = node.file.uri) {
+                    item(key = "${node.file.uri}_${node.file.name}_${node.level}") {
                         FileTreeItem(
                             file = node.file,
                             level = node.level,

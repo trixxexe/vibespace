@@ -191,19 +191,24 @@ class AlpineLinuxRunner(
         }.start()
     }
 
-    /** Start a real interactive shell through util-linux script, which gives the child a PTY. */
+    /** Start a real interactive shell through util-linux script (PTY) or direct fallback shell. */
     fun startInteractiveShell(workspaceDirectory: File?): Process {
         if (!isAvailable()) throw IllegalStateException("Install the Alpine runtime before starting its terminal.")
         val script = File(getRootfsDir(), "usr/bin/script")
-        if (!script.isFile) throw IllegalStateException("The Alpine runtime is missing util-linux script, required for an interactive terminal.")
         val binds = mutableListOf("-b", "/dev:/dev", "-b", "/proc:/proc")
         val containerDirectory = workspaceDirectory?.takeIf { it.isDirectory }?.let { workspace ->
             binds += listOf("-b", "${workspace.canonicalPath}:/workspace")
             File(getRootfsDir(), "workspace").mkdirs()
             "/workspace"
         } ?: "/root"
-        val command = listOf(prootFile().absolutePath, "-0", "-r", getRootfsDir().absolutePath) +
-            binds + listOf("-w", containerDirectory, "/usr/bin/script", "-q", "-f", "-c", "/bin/sh -i", "/dev/null")
+        val shellExecutable = if (File(getRootfsDir(), "bin/bash").isFile) "/bin/bash" else "/bin/sh"
+        val command = if (script.isFile) {
+            listOf(prootFile().absolutePath, "-0", "-r", getRootfsDir().absolutePath) +
+                binds + listOf("-w", containerDirectory, "/usr/bin/script", "-q", "-f", "-c", "$shellExecutable -i", "/dev/null")
+        } else {
+            listOf(prootFile().absolutePath, "-0", "-r", getRootfsDir().absolutePath) +
+                binds + listOf("-w", containerDirectory, shellExecutable, "-i")
+        }
         return ProcessBuilder(command).directory(getRootfsDir()).apply {
             environment()["HOME"] = "/root"
             environment()["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -296,9 +301,8 @@ class AlpineLinuxRunner(
                 val prootCommand = listOf(prootFile().absolutePath, "-0", "-r", rootfsDir.absolutePath,
                     "-b", "/dev:/dev", "-b", "/proc:/proc", "/sbin/apk", "add", "--no-cache", "util-linux-misc")
                 val executor = processExecutor ?: DefaultAlpineProcessExecutor(dispatchers)
-                val exitCode = executor.execute(prootCommand, rootfsDir, emptyMap()) { _, _ -> }
-                if (exitCode != 0 || !File(rootfsDir, "usr/bin/script").isFile) {
-                    throw IllegalStateException("Alpine could not install util-linux script, required for the interactive terminal.")
+                runCatching {
+                    executor.execute(prootCommand, rootfsDir, emptyMap()) { _, _ -> }
                 }
             }
 
@@ -314,9 +318,8 @@ class AlpineLinuxRunner(
                 val prootCommand = listOf(prootFile().absolutePath, "-0", "-r", rootfsDir.absolutePath,
                     "-b", "/dev:/dev", "-b", "/proc:/proc", "/sbin/apk", "add", "--no-cache") + missingRuntimePackages
                 val executor = processExecutor ?: DefaultAlpineProcessExecutor(dispatchers)
-                val exitCode = executor.execute(prootCommand, rootfsDir, emptyMap()) { _, _ -> }
-                if (exitCode != 0 || !File(rootfsDir, "usr/bin/python3").isFile || !File(rootfsDir, "usr/bin/node").isFile) {
-                    throw IllegalStateException("Alpine could not install the missing Python and Node.js runtimes. Check the network, then run 'apk add python3 nodejs npm' in the Alpine terminal.")
+                runCatching {
+                    executor.execute(prootCommand, rootfsDir, emptyMap()) { _, _ -> }
                 }
             }
 
@@ -605,11 +608,21 @@ class AlpineLinuxRunner(
             }
         }
         symlinkLinkTargets.forEach { (name, target) ->
-            val link = File(destDir, name).canonicalFile
-            if (!link.toPath().startsWith(destNorm)) throw SecurityException("Archive symlink path escapes the Linux root filesystem.")
+            val link = File(destDir, name)
+            val linkNorm = link.toPath().normalize().toAbsolutePath()
+            if (!linkNorm.startsWith(destNorm)) throw SecurityException("Archive symlink '$name' escapes the Linux root filesystem.")
             link.parentFile?.mkdirs()
             if (link.exists() && !link.delete()) throw IllegalStateException("Cannot replace root filesystem path with symlink: $name")
-            Files.createSymbolicLink(link.toPath(), Paths.get(target))
+            try {
+                Files.createSymbolicLink(link.toPath(), Paths.get(target))
+            } catch (e: Exception) {
+                runCatching {
+                    val resolvedTarget = if (target.startsWith('/')) File(destDir, target.trimStart('/')) else File(link.parentFile, target)
+                    if (resolvedTarget.exists() && !resolvedTarget.isDirectory) {
+                        resolvedTarget.copyTo(link, overwrite = true)
+                    }
+                }
+            }
         }
     }
 

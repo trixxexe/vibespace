@@ -83,7 +83,7 @@ fun TemplateBottomSheet(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(snippets) { item ->
+                itemsIndexed(snippets, key = { index, item -> "${item.label}_$index" }) { _, item ->
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = VibeTheme.colors.gutterBackground,

@@ -126,20 +126,34 @@ fun GitSourceControlPanel(
                 color = VibeTheme.colors.textMuted,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { viewModel.toggleRemoteDialog(true) }, modifier = Modifier.weight(1f)) {
-                    Text(if (uiState.status.remoteUrl == null) "Add remote" else "Remote settings")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { viewModel.toggleRemoteDialog(true) },
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text(
+                        text = if (uiState.status.remoteUrl == null) "Add remote" else "Remote",
+                        maxLines = 1,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
                 OutlinedButton(
                     onClick = { viewModel.pull() },
                     enabled = !uiState.isSyncing && uiState.status.remoteUrl != null,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Pull") }
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(0.9f)
+                ) {
+                    Text("Pull", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                }
                 Button(
                     onClick = { viewModel.push() },
                     enabled = !uiState.isSyncing && uiState.status.remoteUrl != null,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Push") }
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(0.9f)
+                ) {
+                    Text("Push", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("Branch", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
@@ -279,7 +293,7 @@ fun GitSourceControlPanel(
                 }
 
                 if (isStagedExpanded) {
-                    items(uiState.status.stagedFiles) { file ->
+                    itemsIndexed(uiState.status.stagedFiles, key = { index, file -> "${file.path}_staged_$index" }) { _, file ->
                         GitFileRow(
                             file = file,
                             onItemClick = { viewModel.openDiff(file.path) },
@@ -330,7 +344,7 @@ fun GitSourceControlPanel(
                         }
                     }
                 } else {
-                    items(uiState.status.unstagedFiles) { file ->
+                    itemsIndexed(uiState.status.unstagedFiles, key = { index, file -> "${file.path}_unstaged_$index" }) { _, file ->
                         GitFileRow(
                             file = file,
                             onItemClick = { viewModel.openDiff(file.path) },

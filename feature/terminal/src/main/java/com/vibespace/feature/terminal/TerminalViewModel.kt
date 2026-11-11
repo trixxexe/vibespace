@@ -38,7 +38,29 @@ class TerminalViewModel(
         observeSessions()
         observeRunnerManager()
         observeAlpineState()
+        observeWorkspaceProject()
         ensureInitialSession()
+    }
+
+    private fun getActiveWorkingDirectory(): String {
+        return workspaceManager?.currentProject?.value?.rootPath
+            ?: workspaceManager?.currentProject?.value?.rootUri?.takeIf { it.startsWith("/") }
+            ?: "~"
+    }
+
+    private fun observeWorkspaceProject() {
+        val manager = workspaceManager ?: return
+        viewModelScope.launch(dispatchers.default) {
+            manager.currentProject.collect { project ->
+                val projectPath = project?.rootPath
+                if (!projectPath.isNullOrBlank() && java.io.File(projectPath).exists()) {
+                    val active = _uiState.value.activeSession
+                    if (active != null && (active.workingDirectory == "~" || !java.io.File(active.workingDirectory).exists())) {
+                        terminalService.sendInput(active.sessionId, "cd \"$projectPath\"")
+                    }
+                }
+            }
+        }
     }
 
     private fun observeAlpineState() {
@@ -90,7 +112,7 @@ class TerminalViewModel(
     private fun ensureInitialSession() {
         viewModelScope.launch(dispatchers.default) {
             if (terminalService.sessions.value.isEmpty()) {
-                terminalService.createSession("Terminal 1", "~")
+                terminalService.createSession("Terminal 1", getActiveWorkingDirectory())
             }
         }
     }

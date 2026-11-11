@@ -106,7 +106,7 @@ fun MobileDiffViewerDialog(
                         .background(VibeTheme.colors.editorBackground, RoundedCornerShape(6.dp))
                         .padding(vertical = 4.dp)
                 ) {
-                    items(diff.lines) { line ->
+                    itemsIndexed(diff.lines, key = { index, line -> "${line.oldLineNumber}_${line.newLineNumber}_$index" }) { _, line ->
                         DiffLineRow(line)
                     }
                 }

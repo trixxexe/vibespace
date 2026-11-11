@@ -229,7 +229,7 @@ fun CommandPaletteDialog(
                             )
                         }
 
-                        items(matchingFiles) { file ->
+                        itemsIndexed(matchingFiles, key = { index, file -> "${file.uri}_$index" }) { _, file ->
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
                                 color = VibeTheme.colors.gutterBackground,
@@ -288,7 +288,7 @@ fun CommandPaletteDialog(
                             )
                         }
 
-                        items(matchingActions) { action ->
+                        itemsIndexed(matchingActions, key = { index, action -> "${action.title}_$index" }) { _, action ->
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
                                 color = VibeTheme.colors.gutterBackground,
