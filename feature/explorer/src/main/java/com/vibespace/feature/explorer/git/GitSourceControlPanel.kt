@@ -171,6 +171,18 @@ fun GitSourceControlPanel(
                 Spacer(modifier = Modifier.weight(1f))
                 TextButton(onClick = { viewModel.toggleBranchDialog(true) }) { Text("New branch") }
             }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                val author = uiState.status.authorName?.takeIf { it.isNotBlank() }
+                Text(
+                    text = author?.let { "Commit author · $it" } ?: "Commit author not configured",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VibeTheme.colors.textMuted,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { viewModel.toggleIdentityDialog(true) }) {
+                    Text(if (author == null) "Set identity" else "Edit identity")
+                }
+            }
             if (uiState.isSyncing) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -184,7 +196,7 @@ fun GitSourceControlPanel(
                 onValueChange = { viewModel.onCommitMessageChange(it) },
                 placeholder = {
                     Text(
-                        text = "Snapshot message...",
+                        text = "Commit message",
                         style = MaterialTheme.typography.bodySmall
                     )
                 },
@@ -371,6 +383,39 @@ fun GitSourceControlPanel(
                 TextButton(onClick = { viewModel.configureRemote() }, enabled = !uiState.isSyncing) { Text("Save remote") }
             },
             dismissButton = { TextButton(onClick = { viewModel.toggleRemoteDialog(false) }) { Text("Cancel") } }
+        )
+    }
+
+    if (uiState.showIdentityDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleIdentityDialog(false) },
+            title = { Text("Git author identity") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("These values are recorded in commits. They are stored in this workspace's local Git configuration.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = uiState.authorNameInput,
+                        onValueChange = viewModel::updateAuthorName,
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = uiState.authorEmailInput,
+                        onValueChange = viewModel::updateAuthorEmail,
+                        label = { Text("Email") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.configureIdentity() },
+                    enabled = !uiState.isSyncing && uiState.authorNameInput.isNotBlank() && uiState.authorEmailInput.isNotBlank()
+                ) { Text("Save identity") }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.toggleIdentityDialog(false) }) { Text("Cancel") } }
         )
     }
 

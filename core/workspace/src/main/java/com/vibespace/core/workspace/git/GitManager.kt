@@ -13,6 +13,8 @@ interface GitManager {
     suspend fun unstageAll(): VibeResult<Unit>
     suspend fun discardChanges(path: String): VibeResult<Unit>
     suspend fun commit(message: String): VibeResult<GitCommit>
+    suspend fun configureIdentity(name: String, email: String): VibeResult<Unit> =
+        VibeResult.Error("Git author configuration is not supported by this Git manager.")
     suspend fun checkoutBranch(branchName: String): VibeResult<Unit>
     suspend fun createBranch(branchName: String): VibeResult<Unit>
     suspend fun getFileDiff(path: String): VibeResult<FileDiff>

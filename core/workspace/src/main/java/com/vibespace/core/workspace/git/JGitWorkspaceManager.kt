@@ -215,6 +215,8 @@ class JGitWorkspaceManager(
             commits = commits,
             remoteUrl = remote,
             remoteBranch = ctx.repo.config.getString("branch", ctx.repo.branch, "remote"),
+            authorName = ctx.repo.config.getString("user", null, "name"),
+            authorEmail = ctx.repo.config.getString("user", null, "email"),
             isClean = status.isClean,
             errorMessage = null
         )
@@ -285,14 +287,33 @@ class JGitWorkspaceManager(
             return@withRepository VibeResult.Error("No staged changes to commit.")
         }
         val config = ctx.repo.config
-        config.setString("user", null, "name", config.getString("user", null, "name") ?: "VibeSpace User")
-        config.setString("user", null, "email", config.getString("user", null, "email") ?: "vibespace@local.invalid")
+        val authorName = config.getString("user", null, "name")?.trim().orEmpty()
+        val authorEmail = config.getString("user", null, "email")?.trim().orEmpty()
+        if (authorName.isEmpty() || authorEmail.isEmpty()) {
+            return@withRepository VibeResult.Error("Configure your Git author name and email before creating a commit.")
+        }
         config.save()
         val commit = Git.wrap(ctx.repo).commit().setMessage(trimmed)
-            .setAuthor(PersonIdent(config.getString("user", null, "name"), config.getString("user", null, "email"))).call()
+            .setAuthor(PersonIdent(authorName, authorEmail)).call()
         val model = GitCommit(commit.name, commit.name.take(7), commit.shortMessage, commit.authorIdent.name, commit.commitTime * 1000L)
         refreshStatusInContext(ctx)
         VibeResult.Success(model)
+    }
+
+    override suspend fun configureIdentity(name: String, email: String): VibeResult<Unit> = withRepository { ctx ->
+        val cleanName = name.trim()
+        val cleanEmail = email.trim()
+        if (cleanName.isEmpty() || cleanName.any { it.code < 32 || it.code == 127 }) {
+            return@withRepository VibeResult.Error("Enter a valid Git author name.")
+        }
+        if (!cleanEmail.matches(Regex("^[^\\s@]+@[^\\s@]+$"))) {
+            return@withRepository VibeResult.Error("Enter a valid Git author email address.")
+        }
+        ctx.repo.config.setString("user", null, "name", cleanName)
+        ctx.repo.config.setString("user", null, "email", cleanEmail)
+        ctx.repo.config.save()
+        refreshStatusInContext(ctx)
+        VibeResult.Success(Unit)
     }
 
     override suspend fun checkoutBranch(branchName: String): VibeResult<Unit> = withRepository { ctx ->

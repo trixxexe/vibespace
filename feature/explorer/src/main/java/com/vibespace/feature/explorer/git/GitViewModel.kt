@@ -25,6 +25,9 @@ data class GitUiState(
     val showBranchDialog: Boolean = false,
     val showCommitDialog: Boolean = false,
     val showRemoteDialog: Boolean = false,
+    val showIdentityDialog: Boolean = false,
+    val authorNameInput: String = "",
+    val authorEmailInput: String = "",
     val remoteUrlInput: String = "",
     val remoteUsernameInput: String = "",
     val remoteTokenInput: String = "",
@@ -157,6 +160,34 @@ class GitViewModel(
 
     fun toggleCommitDialog(show: Boolean) {
         _uiState.update { it.copy(showCommitDialog = show) }
+    }
+
+    fun toggleIdentityDialog(show: Boolean) {
+        _uiState.update {
+            it.copy(
+                showIdentityDialog = show,
+                authorNameInput = if (show) it.status.authorName.orEmpty() else it.authorNameInput,
+                authorEmailInput = if (show) it.status.authorEmail.orEmpty() else it.authorEmailInput,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun updateAuthorName(value: String) { _uiState.update { it.copy(authorNameInput = value) } }
+    fun updateAuthorEmail(value: String) { _uiState.update { it.copy(authorEmailInput = value) } }
+
+    fun configureIdentity() {
+        val state = _uiState.value
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isSyncing = true, errorMessage = null) }
+            when (val result = gitManager.configureIdentity(state.authorNameInput, state.authorEmailInput)) {
+                is VibeResult.Success -> _uiState.update {
+                    it.copy(isSyncing = false, showIdentityDialog = false, syncMessage = "Git author identity saved.")
+                }
+                is VibeResult.Error -> _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }
+                else -> _uiState.update { it.copy(isSyncing = false) }
+            }
+        }
     }
 
     fun toggleRemoteDialog(show: Boolean) {
