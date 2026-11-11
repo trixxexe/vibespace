@@ -25,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vibespace.core.designsystem.components.VibeDialog
@@ -41,6 +43,8 @@ fun ExplorerScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    val clipboardManager = LocalClipboardManager.current
 
     var showNewFileDialog by remember { mutableStateOf(false) }
     var newFileName by remember { mutableStateOf("") }
@@ -246,6 +250,10 @@ fun ExplorerScreen(
                             },
                             onDuplicateClick = {
                                 viewModel.duplicateFile(node.file.uri)
+                            },
+                            onCopyPathClick = {
+                                val path = node.file.path ?: node.file.name
+                                clipboardManager.setText(AnnotatedString(path))
                             }
                         )
                     }

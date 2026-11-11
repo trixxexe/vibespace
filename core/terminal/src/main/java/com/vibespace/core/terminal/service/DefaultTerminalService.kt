@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -360,8 +361,23 @@ class DefaultTerminalService(
                 }.trimEnd()
                 emitLine(sessionId, TerminalLine(IdGenerator.shortId(), envStr, StreamType.STDOUT))
             }
+            "cd" -> {
+                val targetPath = args.firstOrNull() ?: "~"
+                val newDir = resolveFile(session.workingDirectory, targetPath)
+                if (newDir.exists() && newDir.isDirectory) {
+                    val updatedSession = session.copy(workingDirectory = newDir.canonicalPath)
+                    updateSession(updatedSession)
+                } else {
+                    emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "cd: no such file or directory: $targetPath", StreamType.STDERR))
+                }
+            }
             "sh", "bash" -> {
-                emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "VibeSpace bash/sh emulator ready. Type standard Unix commands or 'help'. Switch runner mode to Alpine Linux or Termux for apt/apk package manager support.", StreamType.SYSTEM))
+                if (args.size >= 2 && args[0] == "-c") {
+                    val subCmd = args.drop(1).joinToString(" ").trim('"', '\'')
+                    executeInternalCommand(sessionId, session, subCmd)
+                } else {
+                    emitLine(sessionId, TerminalLine(IdGenerator.shortId(), "bash-5.2$ (VibeSpace Built-in Shell - type commands or 'help'; for apk/apt install use Alpine/Termux runner)", StreamType.SYSTEM))
+                }
             }
             "date" -> {
                 val formatted = SimpleDateFormat("EEE MMM dd HH:mm:ss z yyyy", Locale.US).format(Date())

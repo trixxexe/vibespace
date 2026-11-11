@@ -46,6 +46,7 @@ fun FileTreeItem(
     onDeleteClick: (() -> Unit)? = null,
     onRenameClick: (() -> Unit)? = null,
     onDuplicateClick: (() -> Unit)? = null,
+    onCopyPathClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val indentPadding = (level * 16 + 8).dp
@@ -142,12 +143,21 @@ fun FileTreeItem(
                         }
                     )
                 }
-                if (file.isFile && onDuplicateClick != null) {
+                if (onDuplicateClick != null && file.isFile) {
                     DropdownMenuItem(
                         text = { Text("Duplicate") },
                         onClick = {
                             showMenu = false
                             onDuplicateClick()
+                        }
+                    )
+                }
+                if (onCopyPathClick != null) {
+                    DropdownMenuItem(
+                        text = { Text("Copy Path") },
+                        onClick = {
+                            showMenu = false
+                            onCopyPathClick()
                         }
                     )
                 }
