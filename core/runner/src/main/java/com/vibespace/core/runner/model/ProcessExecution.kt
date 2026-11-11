@@ -4,6 +4,8 @@ enum class ExecutionState {
     IDLE,
     STARTING,
     RUNNING,
+    /** The command was handed to an external process manager and can no longer be observed here. */
+    DISPATCHED,
     SUCCEEDED,
     FAILED,
     CANCELLED

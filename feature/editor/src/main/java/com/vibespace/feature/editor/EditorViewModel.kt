@@ -33,6 +33,7 @@ class EditorViewModel(
 
     private var activeLspClient: com.vibespace.core.language.lsp.LanguageServerClient? = null
     private var autoSaveJob: Job? = null
+    private val openedLspDocuments = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -53,16 +54,12 @@ class EditorViewModel(
                 val diags = if (activeDoc != null) {
                     SyntaxDiagnosticsValidator.validate(activeDoc.content, activeDoc.language.id)
                 } else emptyList()
-                val suggestions = if (activeDoc != null) {
-                    AutocompleteEngine.getSuggestions(activeDoc.content, "", activeDoc.language.id)
-                } else emptyList()
-
                 _uiState.update {
                     it.copy(
                         activeDocument = activeDoc,
                         cursorPosition = activeDoc?.cursorPosition ?: CursorPosition(1, 1, 0),
                         diagnostics = diags,
-                        completions = suggestions
+                        completions = emptyList()
                     )
                 }
             }
@@ -90,7 +87,9 @@ class EditorViewModel(
                                 client.start(project.rootUri)
                             }
                             if (client.isRunning) {
-                                client.didOpen(mainPyUri, readResult.data)
+                                if (openedLspDocuments.add(lspDocumentKey(client, mainPyUri))) {
+                                    client.didOpen(mainPyUri, readResult.data)
+                                }
                             }
                         }
                     }
@@ -133,7 +132,7 @@ class EditorViewModel(
                     val rootUri = workspaceManager.currentProject.value?.rootUri ?: file.parentUri ?: file.uri
                     client.start(rootUri)
                 }
-                if (client.isRunning) {
+                if (client.isRunning && openedLspDocuments.add(lspDocumentKey(client, file.uri))) {
                     client.didOpen(file.uri, content)
                 }
             }
@@ -151,7 +150,7 @@ class EditorViewModel(
                     val rootUri = workspaceManager.currentProject.value?.rootUri ?: doc.uri
                     client.start(rootUri)
                 }
-                if (client?.isRunning == true) {
+                if (client?.isRunning == true && openedLspDocuments.add(lspDocumentKey(client, doc.uri))) {
                     client.didOpen(doc.uri, doc.content)
                 }
             }
@@ -165,6 +164,7 @@ class EditorViewModel(
                 val client = lspClientProvider?.invoke(doc.language.id)
                 if (client != null && client.isRunning) {
                     client.didClose(doc.uri)
+                    openedLspDocuments.remove(lspDocumentKey(client, doc.uri))
                 }
             }
             editorEngine.closeDocument(documentId)
@@ -179,7 +179,9 @@ class EditorViewModel(
                 else -> return@launch
             }
             val diags = SyntaxDiagnosticsValidator.validate(newContent, activeDoc.language.id)
-            val suggestions = AutocompleteEngine.getSuggestions(newContent, "", activeDoc.language.id)
+            val cursorOffset = _uiState.value.cursorPosition.offset.coerceIn(0, newContent.length)
+            val prefix = identifierPrefixAt(newContent, cursorOffset)
+            val suggestions = AutocompleteEngine.getSuggestions(newContent, prefix, activeDoc.language.id)
             _uiState.update { it.copy(diagnostics = diags, completions = suggestions) }
             val client = activeLspClient
             if (client != null && client.isRunning) {
@@ -197,6 +199,10 @@ class EditorViewModel(
 
     fun updateCompletions(prefix: String) {
         val activeDoc = _uiState.value.activeDocument ?: return
+        if (prefix.isBlank()) {
+            _uiState.update { it.copy(completions = emptyList()) }
+            return
+        }
         viewModelScope.launch(dispatchers.default) {
             val suggestions = AutocompleteEngine.getSuggestions(activeDoc.content, prefix, activeDoc.language.id)
             _uiState.update { it.copy(completions = suggestions) }
@@ -206,15 +212,10 @@ class EditorViewModel(
     fun insertCompletion(item: CompletionItem) {
         val activeDoc = _uiState.value.activeDocument ?: return
         val currentContent = activeDoc.content
-        val insertText = item.insertText
-        val newContent = if (currentContent.isEmpty()) {
-            insertText
-        } else if (currentContent.endsWith(" ") || currentContent.endsWith("\n")) {
-            currentContent + insertText
-        } else {
-            val lastSpace = maxOf(currentContent.lastIndexOf(' '), currentContent.lastIndexOf('\n'))
-            if (lastSpace == -1) insertText else currentContent.substring(0, lastSpace + 1) + insertText
-        }
+        val cursorOffset = activeDoc.cursorPosition.offset.coerceIn(0, currentContent.length)
+        var wordStart = cursorOffset
+        while (wordStart > 0 && isIdentifierCharacter(currentContent[wordStart - 1])) wordStart--
+        val newContent = currentContent.substring(0, wordStart) + item.insertText + currentContent.substring(cursorOffset)
         onContentChanged(newContent)
     }
 
@@ -223,43 +224,58 @@ class EditorViewModel(
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
             editorEngine.updateCursorPosition(activeDoc.documentId, cursor)
+            updateCompletions(identifierPrefixAt(activeDoc.content, cursor.offset.coerceIn(0, activeDoc.content.length)))
         }
     }
 
-    fun saveActiveDocument() {
-        val activeDoc = _uiState.value.activeDocument ?: return
+    fun saveActiveDocument(onComplete: (Boolean) -> Unit = {}) {
+        val activeDoc = _uiState.value.activeDocument ?: run {
+            onComplete(false)
+            return
+        }
         autoSaveJob?.cancel()
-        viewModelScope.launch(dispatchers.io) { saveDocument(activeDoc.documentId) }
+        viewModelScope.launch(dispatchers.io) {
+            val saved = saveDocument(activeDoc.documentId)
+            kotlinx.coroutines.withContext(dispatchers.main) { onComplete(saved) }
+        }
     }
 
-    private suspend fun saveDocument(documentId: String) {
-        val document = editorEngine.getDocument(documentId) ?: return
+    private suspend fun saveDocument(documentId: String): Boolean {
+        val document = editorEngine.getDocument(documentId) ?: return false
         _uiState.update { it.copy(isSaving = true) }
         when (val writeResult = workspaceManager.writeFile(document.uri, document.content)) {
             is VibeResult.Success -> {
                 val latestDocument = editorEngine.getDocument(documentId)
                 if (latestDocument?.content == document.content) {
-                    editorEngine.markSaved(documentId)
+                    editorEngine.markSaved(documentId, contentAtSave = document.content)
                 }
+                val savedCurrentContent = editorEngine.getDocument(documentId)?.let {
+                    it.content == document.content && !it.isDirty
+                } == true
                 gitManager?.refreshStatus()
                 _uiState.update {
                     it.copy(
                         isSaving = false,
-                        statusMessage = if (latestDocument?.content == document.content) "Saved ${document.fileName}" else "Saved ${document.fileName}; newer edits are still unsaved"
+                        statusMessage = if (savedCurrentContent) "Saved ${document.fileName}" else "Saved ${document.fileName}; newer edits are still unsaved"
                     )
                 }
-                if (latestDocument?.content != document.content && _uiState.value.autoSave) {
+                if (!savedCurrentContent && _uiState.value.autoSave) {
                     autoSaveJob?.cancel()
                     autoSaveJob = viewModelScope.launch(dispatchers.io) {
                         delay(AUTO_SAVE_DEBOUNCE_MS)
                         saveDocument(documentId)
                     }
                 }
+                return savedCurrentContent
             }
             is VibeResult.Error -> {
                 _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: ${writeResult.message}") }
+                return false
             }
-            else -> _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: no result returned") }
+            else -> {
+                _uiState.update { it.copy(isSaving = false, statusMessage = "Save failed: no result returned") }
+                return false
+            }
         }
     }
 
@@ -400,4 +416,16 @@ class EditorViewModel(
     private companion object {
         const val AUTO_SAVE_DEBOUNCE_MS = 700L
     }
+
+    private fun lspDocumentKey(client: com.vibespace.core.language.lsp.LanguageServerClient, uri: String) =
+        "${client.languageId}:$uri"
+
+    private fun identifierPrefixAt(content: String, offset: Int): String {
+        val end = offset.coerceIn(0, content.length)
+        var start = end
+        while (start > 0 && isIdentifierCharacter(content[start - 1])) start--
+        return content.substring(start, end)
+    }
+
+    private fun isIdentifierCharacter(character: Char): Boolean = character == '_' || character.isLetterOrDigit()
 }

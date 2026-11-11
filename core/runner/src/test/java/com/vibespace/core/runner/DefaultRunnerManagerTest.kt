@@ -113,6 +113,7 @@ class DefaultRunnerManagerTest {
         val workspace = com.vibespace.core.workspace.manager.DefaultWorkspaceManager(dispatchers = TestDispatcherProvider())
         val project = com.vibespace.core.workspace.model.Project("p1", "TestPy", "vibe://projects/p1")
         workspace.openProject(project)
+        workspace.createFile(project.rootUri, "main.py", "print(\"Welcome to VibeSpace Mobile!\")")
 
         val managerWithWorkspace = DefaultRunnerManager(
             workspaceManager = workspace,

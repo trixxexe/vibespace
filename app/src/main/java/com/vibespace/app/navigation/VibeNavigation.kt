@@ -227,7 +227,7 @@ fun VibeNavigation(
                     settingsViewModel.setThemeMode(themeMode)
                 },
                 onConfigureAi = { provider, key, model ->
-                    settingsViewModel.setAiConfig(provider, key, model)
+                    app.settingsRepository.setAiConfig(provider, key, model)
                 },
                 errorMessage = onboardingError,
                 onDismissError = { onboardingError = null }

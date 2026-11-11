@@ -35,6 +35,7 @@ object AutocompleteEngine {
         languageId: String
     ): List<CompletionItem> {
         val cleanPrefix = prefix.trim()
+        if (cleanPrefix.isEmpty()) return emptyList()
         val languageKeywords = when (languageId.lowercase()) {
             "python" -> pythonKeywords
             "javascript", "typescript" -> jsKeywords

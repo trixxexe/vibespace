@@ -46,6 +46,32 @@ class SoraEditorController {
         }
     }
 
+    /** Replaces the identifier immediately before the caret with a selected completion. */
+    fun replaceCurrentIdentifier(completion: String) {
+        val editor = editorRef?.get() ?: return
+        val text = editor.text
+        val source = text.toString()
+        val cursor = editor.cursor
+        val startOffset: Int
+        val endOffset: Int
+        if (cursor.isSelected) {
+            startOffset = cursor.left.coerceIn(0, source.length)
+            endOffset = cursor.right.coerceIn(startOffset, source.length)
+        } else {
+            endOffset = cursor.left.coerceIn(0, source.length)
+            var identifierStart = endOffset
+            while (identifierStart > 0 && isIdentifierCharacter(source[identifierStart - 1])) identifierStart--
+            startOffset = identifierStart
+        }
+
+        val start = positionAt(source, startOffset)
+        val end = positionAt(source, endOffset)
+        text.delete(start.first, start.second, end.first, end.second)
+        text.insert(start.first, start.second, completion)
+        val caret = positionAt(source.substring(0, startOffset) + completion, startOffset + completion.length)
+        editor.setSelection(caret.first, caret.second)
+    }
+
     /**
      * Moves the cursor one position to the left.
      */
@@ -112,5 +138,15 @@ class SoraEditorController {
             "<" -> "<$innerText>"
             else -> "$symbol$innerText"
         }
+    }
+
+    private fun isIdentifierCharacter(character: Char): Boolean = character == '_' || character.isLetterOrDigit()
+
+    private fun positionAt(content: String, offset: Int): Pair<Int, Int> {
+        val safeOffset = offset.coerceIn(0, content.length)
+        val prefix = content.substring(0, safeOffset)
+        val line = prefix.count { it == '\n' }
+        val column = prefix.length - (prefix.lastIndexOf('\n') + 1)
+        return line to column
     }
 }

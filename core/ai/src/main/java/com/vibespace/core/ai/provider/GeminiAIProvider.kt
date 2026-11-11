@@ -5,34 +5,45 @@ import com.vibespace.core.ai.model.AIRequest
 import com.vibespace.core.ai.model.AIResponse
 import com.vibespace.core.ai.model.AIResponseChunk
 import com.vibespace.core.ai.model.AIRole
+import com.vibespace.core.common.dispatchers.DefaultDispatcherProvider
+import com.vibespace.core.common.dispatchers.DispatcherProvider
 import com.vibespace.core.common.id.IdGenerator
 import com.vibespace.core.common.result.VibeResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 
 /**
- * Real Google Gemini AI Provider supporting Gemini 2.0 Flash, Gemini 1.5 Flash, and Gemini 1.5 Pro.
+ * Real Google Gemini AI Provider using the current Gemini generateContent API.
  * Users bring their own API key (BYOK) obtained from Google AI Studio (aistudio.google.com).
  * Transports API keys securely via x-goog-api-key header and preserves conversational context.
  */
 class GeminiAIProvider(
     var apiKey: String = "",
-    var activeModel: String = "gemini-2.0-flash",
-    private val httpTransport: ((url: String, method: String, headers: Map<String, String>, body: String) -> Pair<Int, String>)? = null
+    var activeModel: String = "gemini-3.8-flash",
+    private val httpTransport: ((url: String, method: String, headers: Map<String, String>, body: String) -> Pair<Int, String>)? = null,
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
 ) : AIProvider {
 
     override val providerId: String = "gemini"
     override val displayName: String = "Google Gemini"
-    override val supportedModels: List<String> = listOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro")
+    override val supportedModels: List<String> = listOf("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash")
     override val isConfigured: Boolean get() = apiKey.isNotBlank()
 
     override suspend fun generateResponse(request: AIRequest): VibeResult<AIResponse> {
         if (!isConfigured) {
             return VibeResult.Error("No Gemini API key configured. Please enter your Google Gemini API key in Settings or AI Chat.")
+        }
+
+        if (!activeModel.matches(Regex("[A-Za-z0-9._-]+"))) {
+            return VibeResult.Error("Invalid Gemini model identifier.")
         }
 
         return try {
@@ -44,10 +55,13 @@ class GeminiAIProvider(
                 "x-goog-api-key" to apiKey.trim()
             )
 
-            val (statusCode, responseText) = executeHttp(endpoint, "POST", headers, requestBody)
+            val (statusCode, responseText) = withContext(dispatchers.io) {
+                executeHttp(endpoint, "POST", headers, requestBody)
+            }
 
             if (statusCode in 200..299) {
                 val parsedText = extractCandidateText(responseText)
+                    ?: return VibeResult.Error("Gemini returned HTTP $statusCode without a usable assistant response.")
                 val responseMsg = AIMessage(
                     id = IdGenerator.shortId("msg"),
                     role = AIRole.ASSISTANT,
@@ -58,6 +72,8 @@ class GeminiAIProvider(
                 val errorMsg = extractErrorMessage(statusCode, responseText)
                 VibeResult.Error(errorMsg)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Throwable) {
             VibeResult.Error("Failed to connect to Gemini API: ${e.message}", e)
         }
@@ -69,7 +85,7 @@ class GeminiAIProvider(
                 emit(AIResponseChunk(delta = result.data.message.content, isComplete = true))
             }
             is VibeResult.Error -> {
-                emit(AIResponseChunk(delta = "Error: ${result.message}", isComplete = true))
+                throw IOException(result.message, result.throwable)
             }
             else -> Unit
         }
@@ -88,23 +104,42 @@ class GeminiAIProvider(
 
         val url = URL(urlString)
         val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = method
-        headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-        conn.connectTimeout = 15000
-        conn.readTimeout = 30000
-        conn.doOutput = true
+        try {
+            conn.instanceFollowRedirects = false
+            conn.requestMethod = method
+            headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+            conn.connectTimeout = 15000
+            conn.readTimeout = 30000
+            conn.doOutput = true
 
-        conn.outputStream.use { os ->
-            os.write(body.toByteArray(Charsets.UTF_8))
-        }
+            conn.outputStream.use { os ->
+                os.write(body.toByteArray(Charsets.UTF_8))
+            }
 
-        val code = conn.responseCode
-        val text = if (code in 200..299) {
-            conn.inputStream.bufferedReader().use { it.readText() }
-        } else {
-            conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            val code = conn.responseCode
+            val text = readLimited(if (code in 200..299) conn.inputStream else conn.errorStream)
+            if (code in 300..399) throw IOException("Gemini redirected the request. Use its final HTTPS endpoint directly.")
+            return Pair(code, text)
+        } finally {
+            conn.disconnect()
         }
-        return Pair(code, text)
+    }
+
+    private fun readLimited(input: java.io.InputStream?): String {
+        if (input == null) return ""
+        input.use { stream ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                total += count
+                if (total > MAX_RESPONSE_BYTES) throw IOException("Gemini response exceeded the 4 MB limit.")
+                output.write(buffer, 0, count)
+            }
+            return output.toString(Charsets.UTF_8.name())
+        }
     }
 
     private fun buildRequestBody(request: AIRequest): String {
@@ -166,12 +201,13 @@ class GeminiAIProvider(
             root.toString()
         } catch (t: Throwable) {
             val fallbackPrompt = request.messages.lastOrNull()?.content ?: "Hello"
-            val escapedPrompt = fallbackPrompt.replace("\"", "\\\"").replace("\n", "\\n")
-            """{"contents":[{"role":"user","parts":[{"text":"$escapedPrompt"}]}]}"""
+            JSONObject()
+                .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", fallbackPrompt)))))
+                .toString()
         }
     }
 
-    private fun extractCandidateText(jsonResponse: String): String {
+    private fun extractCandidateText(jsonResponse: String): String? {
         return try {
             val root = JSONObject(jsonResponse)
             val candidates = root.optJSONArray("candidates")
@@ -180,18 +216,16 @@ class GeminiAIProvider(
                 val content = first.optJSONObject("content")
                 val parts = content?.optJSONArray("parts")
                 if (parts != null && parts.length() > 0) {
-                    return parts.getJSONObject(0).optString("text", "No response generated.")
+                    val text = (0 until parts.length())
+                        .mapNotNull { index -> parts.optJSONObject(index)?.optString("text")?.takeIf { it.isNotBlank() } }
+                        .joinToString("")
+                    if (text.isNotBlank()) return text
                 }
             }
-            fallbackExtractText(jsonResponse)
-        } catch (t: Throwable) {
-            fallbackExtractText(jsonResponse)
+            null
+        } catch (_: Exception) {
+            null
         }
-    }
-
-    private fun fallbackExtractText(json: String): String {
-        val match = Regex(""""text"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
-        return match?.groupValues?.get(1)?.replace("\\n", "\n")?.replace("\\\"", "\"") ?: "No response from Gemini."
     }
 
     private fun extractErrorMessage(statusCode: Int, responseText: String): String {
@@ -209,5 +243,9 @@ class GeminiAIProvider(
             else if (statusCode == 403) "Gemini API key is invalid or quota exceeded."
             else "Gemini API request failed with HTTP $statusCode"
         }
+    }
+
+    private companion object {
+        const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }
 }

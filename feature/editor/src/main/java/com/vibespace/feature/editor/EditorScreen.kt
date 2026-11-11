@@ -126,6 +126,8 @@ fun EditorScreen(
             if (activeDoc != null) {
                 SoraEditorCanvas(
                     content = activeDoc.content,
+                    documentId = activeDoc.documentId,
+                    cursorPosition = activeDoc.cursorPosition,
                     language = activeDoc.language,
                     fontSizeSp = uiState.fontSizeSp,
                     tabSize = uiState.tabSize,
@@ -215,7 +217,7 @@ fun EditorScreen(
             MobileAutocompleteBar(
                 completions = uiState.completions,
                 onSelectCompletion = { item ->
-                    soraController.insertSymbol(item.insertText)
+                    soraController.replaceCurrentIdentifier(item.insertText)
                 }
             )
         }

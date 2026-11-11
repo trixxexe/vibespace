@@ -18,6 +18,10 @@ import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.widget.CodeEditor
 
+private class EditorBinding(val documentId: String, val languageId: String) {
+    var isUpdatingProgrammatically: Boolean = false
+}
+
 /**
  * Jetpack Compose wrapper for Sora CodeEditor.
  * Provides high-performance native syntax highlighting, line numbers,
@@ -26,6 +30,8 @@ import io.github.rosemoe.sora.widget.CodeEditor
 @Composable
 fun SoraEditorCanvas(
     content: String,
+    documentId: String,
+    cursorPosition: CursorPosition,
     language: LanguageDefinition,
     fontSizeSp: Float,
     onContentChange: (String) -> Unit,
@@ -64,19 +70,24 @@ fun SoraEditorCanvas(
 
                 // Initialize document content
                 setText(content)
+                restoreCursor(this, content, cursorPosition)
+                tag = EditorBinding(documentId, language.id)
 
                 // Listen for content changes
                 subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
-                    val updated = text.toString()
-                    onContentChange(updated)
+                    if ((tag as? EditorBinding)?.isUpdatingProgrammatically != true) {
+                        onContentChange(text.toString())
+                    }
                 }
 
                 // Listen for cursor position updates
                 subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
-                    val line = cursor.leftLine + 1
-                    val col = cursor.leftColumn + 1
-                    val offset = cursor.left
-                    onCursorChange(CursorPosition(line = line, column = col, offset = offset))
+                    if ((tag as? EditorBinding)?.isUpdatingProgrammatically != true) {
+                        val line = cursor.leftLine + 1
+                        val col = cursor.leftColumn + 1
+                        val offset = cursor.left
+                        onCursorChange(CursorPosition(line = line, column = col, offset = offset))
+                    }
                 }
 
                 controller.bind(this)
@@ -99,22 +110,38 @@ fun SoraEditorCanvas(
             // Update color scheme if theme changed
             editor.colorScheme = VibeEditorColorScheme(theme)
 
-            // Sync content if updated externally
-            if (editor.text.toString() != content) {
-                editor.setText(content)
+            val binding = editor.tag as? EditorBinding
+
+            // Keep independent tab text and caret state when switching documents.
+            if (binding?.documentId != documentId || editor.text.toString() != content) {
+                val guard = binding ?: EditorBinding(documentId, language.id)
+                editor.tag = guard
+                guard.isUpdatingProgrammatically = true
+                try {
+                    editor.setText(content)
+                    restoreCursor(editor, content, cursorPosition)
+                } finally {
+                    guard.isUpdatingProgrammatically = false
+                }
             }
 
             // Update language syntax if language changed
-            val targetScope = TextMateLanguageManager.getScopeNameForLanguage(language)
-            val currentLang = editor.editorLanguage
-            if (targetScope != null) {
+            if (binding?.languageId != language.id) {
                 val editorLang = TextMateLanguageManager.createLanguageForDefinition(language)
                 editor.setEditorLanguage(editorLang)
             }
+            editor.tag = EditorBinding(documentId, language.id)
         },
         onRelease = { editor ->
             controller.unbind()
             editor.release()
         }
     )
+}
+
+private fun restoreCursor(editor: CodeEditor, content: String, cursorPosition: CursorPosition) {
+    val lines = content.split('\n')
+    val line = (cursorPosition.line - 1).coerceIn(0, lines.lastIndex)
+    val column = (cursorPosition.column - 1).coerceIn(0, lines[line].length)
+    editor.setSelection(line, column)
 }

@@ -282,7 +282,12 @@ fun SettingsScreen(
                     var inputKey by remember(settings.aiApiKey) { mutableStateOf(settings.aiApiKey) }
                     var selectedProvider by remember(settings.aiProviderId) { mutableStateOf(settings.aiProviderId) }
                     var selectedModel by remember(settings.aiModel) { mutableStateOf(settings.aiModel) }
+                    var inputEndpoint by remember(settings.aiCustomEndpoint) { mutableStateOf(settings.aiCustomEndpoint) }
                     var isKeyVisible by remember { mutableStateOf(false) }
+                    val aiConfigChanged = inputKey != settings.aiApiKey ||
+                            selectedProvider != settings.aiProviderId ||
+                            selectedModel != settings.aiModel ||
+                            inputEndpoint != settings.aiCustomEndpoint
 
                     Column {
                         Row(
@@ -349,13 +354,13 @@ fun SettingsScreen(
                                     .weight(1f)
                                     .clickable {
                                         selectedProvider = "gemini"
-                                        selectedModel = "gemini-2.0-flash"
-                                        viewModel.setAiConfig(selectedProvider, inputKey, selectedModel)
+                                        selectedModel = "gemini-3.8-flash"
+                                        inputEndpoint = ""
                                     }
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text("Google Gemini", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
-                                    Text("Free via AI Studio", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                    Text("Provider pricing or free tier applies", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
                                 }
                             }
 
@@ -368,12 +373,11 @@ fun SettingsScreen(
                                     .clickable {
                                         selectedProvider = "openai"
                                         selectedModel = "gpt-4o-mini"
-                                        viewModel.setAiConfig(selectedProvider, inputKey, selectedModel)
                                     }
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
-                                    Text("OpenAI / Custom", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
-                                    Text("GPT-4o, Claude, etc.", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
+                                    Text("OpenAI-compatible API", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
+                                    Text("OpenAI or a compatible provider", style = MaterialTheme.typography.labelSmall, color = VibeTheme.colors.textMuted)
                                 }
                             }
                         }
@@ -392,7 +396,6 @@ fun SettingsScreen(
                             value = inputKey,
                             onValueChange = {
                                 inputKey = it
-                                viewModel.setAiConfig(selectedProvider, it, selectedModel)
                             },
                             placeholder = { Text("Paste your API key here (e.g. AIzaSy...)") },
                             visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -412,7 +415,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = if (selectedProvider == "gemini") "Get your free Gemini API key at aistudio.google.com" else "Enter your standard OpenAI or compatible endpoint API key",
+                            text = if (selectedProvider == "gemini") "Create a Gemini API key in Google AI Studio. Provider usage limits and charges may apply." else "Enter an API key for OpenAI or your compatible provider.",
                             style = MaterialTheme.typography.labelSmall,
                             color = VibeTheme.colors.accentPrimary
                         )
@@ -427,37 +430,47 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        val models = if (selectedProvider == "gemini") {
-                            listOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro")
-                        } else {
-                            listOf("gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet")
+                        OutlinedTextField(
+                            value = selectedModel,
+                            onValueChange = { selectedModel = it.trim() },
+                            placeholder = { Text(if (selectedProvider == "gemini") "gemini-3.8-flash" else "gpt-4o-mini") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (selectedProvider == "openai") {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "COMPATIBLE ENDPOINT (OPTIONAL)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = VibeTheme.colors.textMuted
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = inputEndpoint,
+                            onValueChange = { inputEndpoint = it },
+                                placeholder = { Text("https://api.openai.com/v1/chat/completions") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        if (uiState.aiConfigError != null) {
+                            Text(
+                                text = uiState.aiConfigError.orEmpty(),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = { viewModel.setAiConfig(selectedProvider, inputKey, selectedModel, inputEndpoint) },
+                            enabled = aiConfigChanged && !uiState.isSavingAiConfig && selectedModel.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
                         ) {
-                            models.forEach { modelName ->
-                                val isSelected = selectedModel == modelName
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = if (isSelected) VibeTheme.colors.accentPrimary else VibeTheme.colors.gutterBackground,
-                                    modifier = Modifier.clickable {
-                                        selectedModel = modelName
-                                        viewModel.setAiConfig(selectedProvider, inputKey, modelName)
-                                    }
-                                ) {
-                                    Text(
-                                        text = modelName,
-                                        style = VibeCodeTypography.copy(
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) androidx.compose.ui.graphics.Color.Black else VibeTheme.colors.textPrimary
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
+                            Text(if (uiState.isSavingAiConfig) "Saving…" else "Save AI configuration")
                         }
                     }
                 }

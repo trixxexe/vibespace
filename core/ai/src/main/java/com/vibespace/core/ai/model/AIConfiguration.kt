@@ -6,7 +6,7 @@ package com.vibespace.core.ai.model
 data class AIConfiguration(
     val providerId: String = "gemini",
     val apiKey: String = "",
-    val model: String = "gemini-2.0-flash",
+    val model: String = "gemini-3.8-flash",
     val customEndpoint: String = ""
 ) {
     val isConfigured: Boolean get() = apiKey.isNotBlank()

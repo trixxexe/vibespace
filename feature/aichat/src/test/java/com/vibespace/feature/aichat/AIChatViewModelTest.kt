@@ -25,7 +25,7 @@ class AIChatViewModelTest {
         viewModel.sendPrompt()
         assertEquals("", viewModel.uiState.value.inputPrompt)
         assertFalse(viewModel.uiState.value.isGenerating)
-        assertTrue(viewModel.uiState.value.messages.isNotEmpty())
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("No AI provider configured"))
     }
 
     @Test
@@ -51,5 +51,16 @@ class AIChatViewModelTest {
         viewModel.configureApiKey("AIzaSyTest123")
         assertTrue(viewModel.uiState.value.isConfigured)
         assertEquals("gemini", viewModel.uiState.value.activeProvider)
+    }
+
+    @Test
+    fun unconfigured_prompt_shows_setup_error_without_assistant_placeholder() = runTest {
+        val service = AIService(dispatchers = TestDispatcherProvider())
+        val viewModel = AIChatViewModel(aiService = service, dispatchers = TestDispatcherProvider())
+
+        viewModel.sendPrompt("Explain this file")
+
+        assertTrue(viewModel.uiState.value.messages.isEmpty())
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("No AI provider configured"))
     }
 }

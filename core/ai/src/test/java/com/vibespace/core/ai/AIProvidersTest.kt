@@ -33,7 +33,7 @@ class AIProvidersTest {
                         "content": {
                             "parts": [
                                 {
-                                    "text": "Hello from Gemini 2.0 Flash!"
+                                    "text": "Hello from Gemini 3.8 Flash!"
                                 }
                             ]
                         }
@@ -44,9 +44,9 @@ class AIProvidersTest {
 
         val provider = GeminiAIProvider(
             apiKey = "test-gemini-key",
-            activeModel = "gemini-2.0-flash",
+            activeModel = "gemini-3.8-flash",
             httpTransport = { url, method, headers, body ->
-                assertTrue(url.contains("gemini-2.0-flash"))
+                assertTrue(url.contains("gemini-3.8-flash"))
                 // API key is securely transported via header rather than query string
                 assertFalse(url.contains("key="))
                 assertEquals("test-gemini-key", headers["x-goog-api-key"])
@@ -70,7 +70,7 @@ class AIProvidersTest {
 
         val result = provider.generateResponse(request)
         assertTrue(result.isSuccess)
-        assertEquals("Hello from Gemini 2.0 Flash!", result.getOrNull()!!.message.content)
+        assertEquals("Hello from Gemini 3.8 Flash!", result.getOrNull()!!.message.content)
     }
 
     @Test

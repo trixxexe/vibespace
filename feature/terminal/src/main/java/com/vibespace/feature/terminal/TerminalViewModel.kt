@@ -114,7 +114,8 @@ class TerminalViewModel(
 
     fun executeCommand(command: String) {
         val session = _uiState.value.activeSession ?: return
-        val cleanCommand = command.trim().removePrefix("$").trim()
+        val enteredCommand = command.trim()
+        val cleanCommand = if (enteredCommand.startsWith("$ ")) enteredCommand.removePrefix("$ ").trim() else enteredCommand
         if (cleanCommand.isEmpty()) return
 
         viewModelScope.launch(dispatchers.default) {
@@ -147,12 +148,28 @@ class TerminalViewModel(
     }
 
     fun runActiveDocument(fileName: String, languageId: String) {
+        if (_uiState.value.activeRunnerMode == RunnerMode.TERMUX) {
+            val session = _uiState.value.activeSession ?: return
+            viewModelScope.launch(dispatchers.default) {
+                terminalService.appendLine(session.sessionId, "Run is unavailable through Termux because this project is not shared with Termux.", StreamType.STDERR)
+                terminalService.appendLine(session.sessionId, "Open the project from Termux or switch to the embedded evaluator for supported Python/JavaScript snippets.", StreamType.SYSTEM)
+            }
+            return
+        }
+
+        val normalizedLanguage = languageId.lowercase()
         val escapedFile = "\"" + fileName.replace("\"", "\\\"").replace("$", "\\$") + "\""
         val command = when {
-            fileName.endsWith(".py") || languageId == "python" -> "python $escapedFile"
-            fileName.endsWith(".js") || fileName.endsWith(".ts") || languageId == "javascript" || languageId == "typescript" -> "node $escapedFile"
-            fileName.endsWith(".sh") || languageId == "shell" -> "sh $escapedFile"
-            else -> "echo Running $escapedFile"
+            fileName.endsWith(".py", ignoreCase = true) || normalizedLanguage == "python" -> "python $escapedFile"
+            fileName.endsWith(".js", ignoreCase = true) || normalizedLanguage == "javascript" -> "node $escapedFile"
+            else -> {
+                val session = _uiState.value.activeSession ?: return
+                viewModelScope.launch(dispatchers.default) {
+                    terminalService.appendLine(session.sessionId, "The embedded evaluator cannot run '${fileName.substringAfterLast('.')}' files.", StreamType.STDERR)
+                    terminalService.appendLine(session.sessionId, "Supported Run targets are basic Python and JavaScript files. No command was executed.", StreamType.SYSTEM)
+                }
+                return
+            }
         }
         executeCommand(command)
     }
