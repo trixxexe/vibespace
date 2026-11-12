@@ -107,7 +107,10 @@ class VibeSpaceApplication : Application() {
     }
 
     val terminalService: TerminalService by lazy {
-        DefaultTerminalService(dispatchers = dispatchers)
+        DefaultTerminalService(
+            dispatchers = dispatchers,
+            defaultHomeDirectory = File(filesDir, "workspace").apply { mkdirs() }
+        )
     }
 
     val aiService: AIService by lazy {
@@ -292,6 +295,10 @@ class VibeSpaceApplication : Application() {
             }
         }
         logger.i(TAG, "VibeSpace Application Initialized v0.1.0")
+
+        CoroutineScope(SupervisorJob() + dispatchers.io).launch {
+            com.vibespace.core.editor.sora.TextMateLanguageManager.initialize(this@VibeSpaceApplication)
+        }
 
         val alpine = runnerManager.getRunnerForMode(com.vibespace.core.runner.model.RunnerMode.ALPINE)
             as? com.vibespace.core.runner.alpine.AlpineLinuxRunner

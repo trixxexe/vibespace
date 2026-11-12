@@ -63,7 +63,7 @@ fun ExplorerScreen(
             confirmButtonText = "Create",
             isConfirmEnabled = newFileName.isNotBlank(),
             onConfirm = {
-                viewModel.createNewFile(newFileName)
+                viewModel.createNewFile(newFileName, onFileCreated = onOpenFile)
                 showNewFileDialog = false
                 newFileName = ""
             }
@@ -167,8 +167,7 @@ fun ExplorerScreen(
 
             IconButton(
                 onClick = { showNewFileDialog = true },
-                modifier = Modifier.size(28.dp),
-                enabled = uiState.currentProject != null
+                modifier = Modifier.size(28.dp)
             ) {
                 Icon(
                     imageVector = VibeIcons.Add,
@@ -180,8 +179,7 @@ fun ExplorerScreen(
 
             IconButton(
                 onClick = { showNewFolderDialog = true },
-                modifier = Modifier.size(28.dp),
-                enabled = uiState.currentProject != null
+                modifier = Modifier.size(28.dp)
             ) {
                 Icon(
                     imageVector = VibeIcons.NewFolder,
@@ -214,7 +212,9 @@ fun ExplorerScreen(
             VibeEmptyState(
                 icon = VibeIcons.Explorer,
                 title = "No Project Open",
-                subtitle = "Open a workspace from the dashboard to browse files."
+                subtitle = "Open a workspace from the dashboard or create a new file to get started.",
+                actionButtonText = "New File",
+                onActionClick = { showNewFileDialog = true }
             )
         } else if (uiState.rootNodes.isEmpty()) {
             VibeEmptyState(

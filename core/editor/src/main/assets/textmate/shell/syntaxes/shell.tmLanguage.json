@@ -1,0 +1,42 @@
+{
+  "name": "Shell Script",
+  "scopeName": "source.shell",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.shell",
+      "match": "#.*$"
+    },
+    {
+      "name": "string.quoted.double.shell",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.shell",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.shell",
+      "begin": "'",
+      "end": "'"
+    },
+    {
+      "name": "keyword.control.shell",
+      "match": "\\b(if|then|else|elif|fi|for|in|do|done|while|until|case|esac|function|return|exit|break|continue)\\b"
+    },
+    {
+      "name": "support.function.builtin.shell",
+      "match": "\\b(echo|cd|pwd|ls|cat|mkdir|rm|cp|mv|touch|grep|find|chmod|chown|export|source|set|unset|read|printf|test)\\b"
+    },
+    {
+      "name": "variable.other.shell",
+      "match": "\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{[^}]+\\}"
+    },
+    {
+      "name": "constant.numeric.shell",
+      "match": "\\b[0-9]+\\b"
+    }
+  ]
+}

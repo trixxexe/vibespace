@@ -236,7 +236,7 @@ fun EditorScreen(
             column = uiState.cursorPosition.column,
             language = activeDoc?.language?.displayName ?: "Plain Text",
             encoding = "UTF-8",
-            indentation = "Spaces: 4",
+            indentation = "Spaces: ${uiState.tabSize}",
             statusMessage = uiState.statusMessage
         )
     }

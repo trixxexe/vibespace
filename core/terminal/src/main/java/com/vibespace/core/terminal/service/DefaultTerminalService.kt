@@ -21,7 +21,8 @@ import java.util.Date
 import java.util.Locale
 
 class DefaultTerminalService(
-    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
+    private val defaultHomeDirectory: File? = null
 ) : TerminalService {
 
     private val _sessions = MutableStateFlow<List<TerminalSession>>(emptyList())
@@ -491,9 +492,13 @@ class DefaultTerminalService(
 
     private fun resolveFile(workingDir: String, path: String): File {
         val effectiveWorkingDir = if (workingDir.isBlank() || workingDir == "~" || !File(workingDir).exists()) {
+            val appHome = defaultHomeDirectory?.takeIf { it.exists() || it.mkdirs() }?.absolutePath
             val userHome = System.getProperty("user.home")
-            if (!userHome.isNullOrBlank() && File(userHome).exists()) userHome
-            else System.getProperty("user.dir", ".")
+            when {
+                !appHome.isNullOrBlank() -> appHome
+                !userHome.isNullOrBlank() && userHome != "/" && File(userHome).exists() -> userHome
+                else -> System.getProperty("user.dir", ".")
+            }
         } else {
             workingDir
         }

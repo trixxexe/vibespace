@@ -120,11 +120,41 @@ class ExplorerViewModel(
         }
     }
 
-    fun createNewFile(fileName: String, parentUri: String? = null) {
-        val targetParent = parentUri ?: _uiState.value.currentProject?.rootUri ?: return
+    fun createNewFile(
+        fileName: String,
+        parentUri: String? = null,
+        onFileCreated: ((VirtualFile) -> Unit)? = null
+    ) {
+        val trimmedName = fileName.trim()
+        if (trimmedName.isEmpty()) return
         viewModelScope.launch(dispatchers.io) {
-            when (val result = workspaceManager.createFile(targetParent, fileName)) {
+            val targetParent = parentUri ?: ensureCurrentProjectRootUri()
+            when (val result = workspaceManager.createFile(targetParent, trimmedName)) {
                 is com.vibespace.core.common.result.VibeResult.Success -> {
+                    val createdFile = result.data
+                    _uiState.update { it.copy(selectedFileUri = createdFile.uri, errorMessage = null) }
+                    refreshFiles()
+                    gitManager?.refreshStatus()
+                    if (onFileCreated != null) {
+                        kotlinx.coroutines.withContext(dispatchers.main) {
+                            onFileCreated(createdFile)
+                        }
+                    }
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> Unit
+            }
+        }
+    }
+
+    fun createNewFolder(folderName: String, parentUri: String? = null) {
+        val trimmedName = folderName.trim()
+        if (trimmedName.isEmpty()) return
+        viewModelScope.launch(dispatchers.io) {
+            val targetParent = parentUri ?: ensureCurrentProjectRootUri()
+            when (val result = workspaceManager.createDirectory(targetParent, trimmedName)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    _uiState.update { it.copy(errorMessage = null) }
                     refreshFiles()
                     gitManager?.refreshStatus()
                 }
@@ -134,18 +164,17 @@ class ExplorerViewModel(
         }
     }
 
-    fun createNewFolder(folderName: String, parentUri: String? = null) {
-        val targetParent = parentUri ?: _uiState.value.currentProject?.rootUri ?: return
-        viewModelScope.launch(dispatchers.io) {
-            when (val result = workspaceManager.createDirectory(targetParent, folderName)) {
-                is com.vibespace.core.common.result.VibeResult.Success -> {
-                    refreshFiles()
-                    gitManager?.refreshStatus()
-                }
-                is com.vibespace.core.common.result.VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
-                else -> Unit
-            }
-        }
+    private suspend fun ensureCurrentProjectRootUri(): String {
+        _uiState.value.currentProject?.rootUri?.let { return it }
+        workspaceManager.currentProject.value?.rootUri?.let { return it }
+        val defaultProject = com.vibespace.core.workspace.model.Project(
+            id = "default-workspace",
+            name = "Workspace",
+            rootUri = "vibe://projects/default-workspace"
+        )
+        workspaceManager.openProject(defaultProject)
+        _uiState.update { it.copy(currentProject = defaultProject) }
+        return defaultProject.rootUri
     }
 
     fun deleteFile(fileUri: String) {

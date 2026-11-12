@@ -1,0 +1,51 @@
+{
+  "name": "Java",
+  "scopeName": "source.java",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash.java",
+      "match": "//.*$"
+    },
+    {
+      "name": "comment.block.java",
+      "begin": "/\\*",
+      "end": "\\*/"
+    },
+    {
+      "name": "string.quoted.double.java",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.java",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.java",
+      "begin": "'",
+      "end": "'"
+    },
+    {
+      "name": "keyword.control.java",
+      "match": "\\b(if|else|switch|case|default|for|while|do|return|break|continue|throw|throws|try|catch|finally|assert)\\b"
+    },
+    {
+      "name": "keyword.other.java",
+      "match": "\\b(package|import|class|interface|enum|record|extends|implements|new|public|protected|private|static|final|abstract|synchronized|volatile|transient|native|strictfp|void|var)\\b"
+    },
+    {
+      "name": "constant.language.java",
+      "match": "\\b(true|false|null|this|super)\\b"
+    },
+    {
+      "name": "support.type.primitive.java",
+      "match": "\\b(boolean|byte|short|int|long|char|float|double|String|Object|Integer|Long|Double|Float|Boolean|List|Map|Set)\\b"
+    },
+    {
+      "name": "constant.numeric.java",
+      "match": "\\b[0-9]+(\\.[0-9]+)?[fFdDlL]?\\b"
+    }
+  ]
+}

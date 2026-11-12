@@ -9,6 +9,7 @@ import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry
+import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import org.eclipse.tm4e.core.registry.IThemeSource
 
@@ -23,7 +24,7 @@ object TextMateLanguageManager {
     fun isReady(): Boolean = isInitialized
 
     /**
-     * Initializes the asset file resolver and loads grammar registry from assets/textmate/languages.json.
+     * Initializes the asset file resolver, default theme, and grammar registry from assets/textmate/languages.json.
      */
     @Synchronized
     fun initialize(context: Context) {
@@ -35,9 +36,11 @@ object TextMateLanguageManager {
                 AssetsFileResolver(context.applicationContext.assets)
             )
 
+            // Load default theme first so any grammar/language creation always has a valid non-null ThemeModel
+            loadThemeForDefinition(EditorThemeDefinition.VIBE_DARK)
+
             // Load master language mapping
             GrammarRegistry.getInstance().loadGrammars("textmate/languages.json")
-            loadThemeForDefinition(EditorThemeDefinition.VIBE_DARK)
             isInitialized = true
         } catch (_: Throwable) {
             // Gracefully handle missing assets in test or headless environments
@@ -47,14 +50,18 @@ object TextMateLanguageManager {
 
     /**
      * Loads or switches the active TextMate theme in ThemeRegistry.
+     * Uses explicit ThemeModel(IThemeSource, theme.id) so ThemeModel.name is never null
+     * (preventing NullPointerException in ThemeRegistry.findThemeByThemeName on subsequent calls).
      */
+    @Synchronized
     fun loadThemeForDefinition(theme: EditorThemeDefinition) {
         try {
             val json = createThemeJson(theme)
-            ThemeRegistry.getInstance().loadTheme(
-                IThemeSource.fromString(IThemeSource.ContentType.JSON, json),
-                true
-            )
+            val themeSource = IThemeSource.fromString(IThemeSource.ContentType.JSON, json)
+            val themeModel = ThemeModel(themeSource, theme.id).apply {
+                isDark = true
+            }
+            ThemeRegistry.getInstance().loadTheme(themeModel, true)
         } catch (_: Throwable) {
             // Non-critical; fallback to VibeEditorColorScheme defaults
         }
@@ -121,11 +128,15 @@ object TextMateLanguageManager {
      * Returns a syntax highlighting Language instance for the specified language definition.
      * Falls back to EmptyLanguage if TextMate grammar is unavailable.
      */
+    @Synchronized
     fun createLanguageForDefinition(definition: LanguageDefinition): Language {
         if (!isInitialized) return EmptyLanguage()
         val scopeName = getScopeNameForLanguage(definition) ?: return EmptyLanguage()
 
         return try {
+            if (ThemeRegistry.getInstance().currentThemeModel?.theme == null) {
+                loadThemeForDefinition(EditorThemeDefinition.VIBE_DARK)
+            }
             TextMateLanguage.create(scopeName, true)
         } catch (_: Throwable) {
             EmptyLanguage()

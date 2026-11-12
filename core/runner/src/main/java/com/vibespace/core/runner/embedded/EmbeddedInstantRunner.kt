@@ -202,12 +202,17 @@ class EmbeddedInstantRunner(
     private suspend fun resolveFileContent(fileName: String, workingDirectory: String): String? {
         val manager = workspaceManager ?: return null
         val project = manager.currentProject.value
+        val cleanName = fileName.removePrefix("/workspace/").removePrefix("/")
         val candidates = listOf(
             fileName,
+            cleanName,
             "$workingDirectory/$fileName",
+            "$workingDirectory/$cleanName",
             project?.let { "${it.rootUri}/$fileName" },
-            project?.let { "${it.rootUri}/src/$fileName" }
-        ).filterNotNull()
+            project?.let { "${it.rootUri}/$cleanName" },
+            project?.let { "${it.rootUri}/src/$fileName" },
+            project?.let { "${it.rootUri}/src/$cleanName" }
+        ).filterNotNull().distinct()
 
         for (candidate in candidates) {
             val read = manager.readFile(candidate)

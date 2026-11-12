@@ -26,6 +26,11 @@
       "grammar": "textmate/kotlin/syntaxes/kotlin.tmLanguage.json"
     },
     {
+      "name": "java",
+      "scopeName": "source.java",
+      "grammar": "textmate/java/syntaxes/java.tmLanguage.json"
+    },
+    {
       "name": "html",
       "scopeName": "text.html.basic",
       "grammar": "textmate/html/syntaxes/html.tmLanguage.json"
@@ -39,6 +44,11 @@
       "name": "markdown",
       "scopeName": "text.html.markdown",
       "grammar": "textmate/markdown/syntaxes/markdown.tmLanguage.json"
+    },
+    {
+      "name": "shell",
+      "scopeName": "source.shell",
+      "grammar": "textmate/shell/syntaxes/shell.tmLanguage.json"
     }
   ]
 }

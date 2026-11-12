@@ -1,17 +1,18 @@
 package com.vibespace.feature.editor.components
 
 import android.graphics.Typeface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.editor.model.CursorPosition
@@ -19,10 +20,10 @@ import com.vibespace.core.editor.sora.TextMateLanguageManager
 import com.vibespace.core.editor.sora.VibeEditorColorScheme
 import com.vibespace.core.editor.theme.EditorThemeDefinition
 import com.vibespace.core.language.model.LanguageDefinition
-import io.github.rosemoe.sora.lang.EmptyLanguage
-import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
+import io.github.rosemoe.sora.lang.EmptyLanguage
+import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.widget.CodeEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -59,11 +60,24 @@ fun SoraEditorCanvas(
     modifier: Modifier = Modifier
 ) {
     val appContext = LocalContext.current.applicationContext
+    val currentOnContentChange by rememberUpdatedState(onContentChange)
+    val currentOnCursorChange by rememberUpdatedState(onCursorChange)
+
     var grammarReady by remember { mutableStateOf(TextMateLanguageManager.isReady()) }
     LaunchedEffect(appContext) {
-        grammarReady = withContext(Dispatchers.IO) {
-            TextMateLanguageManager.initialize(appContext)
-            TextMateLanguageManager.isReady()
+        if (!grammarReady) {
+            grammarReady = withContext(Dispatchers.IO) {
+                TextMateLanguageManager.initialize(appContext)
+                TextMateLanguageManager.isReady()
+            }
+        }
+    }
+
+    LaunchedEffect(theme.id, grammarReady) {
+        if (grammarReady) {
+            withContext(Dispatchers.Default) {
+                TextMateLanguageManager.loadThemeForDefinition(theme)
+            }
         }
     }
 
@@ -80,14 +94,6 @@ fun SoraEditorCanvas(
         }
     }
 
-    LaunchedEffect(theme.id, grammarReady) {
-        if (grammarReady) {
-            withContext(Dispatchers.Default) {
-                TextMateLanguageManager.loadThemeForDefinition(theme)
-            }
-        }
-    }
-
     DisposableEffect(controller) {
         onDispose {
             controller.unbind()
@@ -101,6 +107,9 @@ fun SoraEditorCanvas(
         factory = { context ->
             CodeEditor(context).apply {
                 typefaceText = Typeface.MONOSPACE
+                if (TextMateLanguageManager.isReady()) {
+                    TextMateLanguageManager.loadThemeForDefinition(theme)
+                }
                 colorScheme = VibeEditorColorScheme(theme)
                 isLineNumberEnabled = showLineNumbers
                 isWordwrap = wordWrap
@@ -111,12 +120,17 @@ fun SoraEditorCanvas(
                 setEditorLanguage(editorLanguage)
 
                 // Initialize document content
-                setText(content)
-                restoreCursor(this, content, cursorPosition)
                 val binding = EditorBinding(documentId, language.id, theme.id, editorLanguage).apply {
                     lastEmittedContent = content
+                    isUpdatingProgrammatically = true
                 }
                 tag = binding
+                try {
+                    setText(content)
+                    restoreCursor(this, cursorPosition)
+                } finally {
+                    binding.isUpdatingProgrammatically = false
+                }
 
                 // Listen for content changes
                 subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
@@ -124,7 +138,7 @@ fun SoraEditorCanvas(
                     if (b?.isUpdatingProgrammatically != true) {
                         val currentText = text.toString()
                         b?.lastEmittedContent = currentText
-                        onContentChange(currentText)
+                        currentOnContentChange(currentText)
                     }
                 }
 
@@ -134,7 +148,7 @@ fun SoraEditorCanvas(
                         val line = cursor.leftLine + 1
                         val col = cursor.leftColumn + 1
                         val offset = cursor.left
-                        onCursorChange(CursorPosition(line = line, column = col, offset = offset))
+                        currentOnCursorChange(CursorPosition(line = line, column = col, offset = offset))
                     }
                 }
 
@@ -159,6 +173,9 @@ fun SoraEditorCanvas(
 
             // Only update color scheme if theme actually changed to avoid invalidating token render cache on every frame
             if (binding?.themeId != theme.id) {
+                if (TextMateLanguageManager.isReady()) {
+                    TextMateLanguageManager.loadThemeForDefinition(theme)
+                }
                 editor.colorScheme = VibeEditorColorScheme(theme)
                 binding?.themeId = theme.id
             }
@@ -176,7 +193,7 @@ fun SoraEditorCanvas(
                 guard.isUpdatingProgrammatically = true
                 try {
                     editor.setText(content)
-                    restoreCursor(editor, content, cursorPosition)
+                    restoreCursor(editor, cursorPosition)
                 } finally {
                     guard.isUpdatingProgrammatically = false
                 }
@@ -196,14 +213,17 @@ fun SoraEditorCanvas(
     )
 }
 
-private fun restoreCursor(editor: CodeEditor, content: String, cursorPosition: CursorPosition) {
-    if (content.isEmpty()) {
-        runCatching { editor.setSelection(0, 0) }
-        return
+private fun restoreCursor(editor: CodeEditor, cursorPosition: CursorPosition) {
+    runCatching {
+        val textObj = editor.text
+        val lineCount = textObj.lineCount
+        if (lineCount <= 0) {
+            editor.setSelection(0, 0)
+            return
+        }
+        val line = (cursorPosition.line - 1).coerceIn(0, lineCount - 1)
+        val maxCol = textObj.getColumnCount(line).coerceAtLeast(0)
+        val column = (cursorPosition.column - 1).coerceIn(0, maxCol)
+        editor.setSelection(line, column)
     }
-    val lines = content.split('\n')
-    val line = (cursorPosition.line - 1).coerceIn(0, lines.lastIndex)
-    val maxCol = lines.getOrElse(line) { "" }.length
-    val column = (cursorPosition.column - 1).coerceIn(0, maxCol)
-    runCatching { editor.setSelection(line, column) }
 }

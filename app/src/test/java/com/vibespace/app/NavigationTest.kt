@@ -34,3 +34,4 @@ class NavigationTest {
         assertEquals(VibeDestination.Home.route, resolveStartDestination(hasCompletedOnboarding = true))
     }
 }
+
