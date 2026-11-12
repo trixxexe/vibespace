@@ -1,6 +1,8 @@
 package com.vibespace.feature.editor.components
 
+import android.content.Context
 import android.graphics.Typeface
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -20,6 +22,7 @@ import com.vibespace.core.editor.sora.TextMateLanguageManager
 import com.vibespace.core.editor.sora.VibeEditorColorScheme
 import com.vibespace.core.editor.theme.EditorThemeDefinition
 import com.vibespace.core.language.model.LanguageDefinition
+import io.github.rosemoe.sora.event.ClickEvent
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.EmptyLanguage
@@ -63,7 +66,12 @@ fun SoraEditorCanvas(
     val currentOnContentChange by rememberUpdatedState(onContentChange)
     val currentOnCursorChange by rememberUpdatedState(onCursorChange)
 
-    var grammarReady by remember { mutableStateOf(TextMateLanguageManager.isReady()) }
+    var grammarReady by remember {
+        if (!TextMateLanguageManager.isReady()) {
+            runCatching { TextMateLanguageManager.initialize(appContext) }
+        }
+        mutableStateOf(TextMateLanguageManager.isReady())
+    }
     LaunchedEffect(appContext) {
         if (!grammarReady) {
             grammarReady = withContext(Dispatchers.IO) {
@@ -82,15 +90,23 @@ fun SoraEditorCanvas(
     }
 
     var editorLanguage by remember(language.id, grammarReady) {
-        mutableStateOf<Language>(EmptyLanguage())
+        mutableStateOf<Language>(
+            if (grammarReady) {
+                runCatching {
+                    TextMateLanguageManager.loadThemeForDefinition(theme)
+                    TextMateLanguageManager.createLanguageForDefinition(language)
+                }.getOrElse { EmptyLanguage() }
+            } else {
+                EmptyLanguage()
+            }
+        )
     }
     LaunchedEffect(language.id, grammarReady) {
-        editorLanguage = if (grammarReady) {
-            withContext(Dispatchers.Default) {
+        if (grammarReady && editorLanguage is EmptyLanguage) {
+            editorLanguage = withContext(Dispatchers.Default) {
+                TextMateLanguageManager.loadThemeForDefinition(theme)
                 TextMateLanguageManager.createLanguageForDefinition(language)
             }
-        } else {
-            EmptyLanguage()
         }
     }
 
@@ -106,7 +122,14 @@ fun SoraEditorCanvas(
             .background(VibeTheme.colors.editorBackground),
         factory = { context ->
             CodeEditor(context).apply {
+                isFocusable = true
+                isFocusableInTouchMode = true
+                isEnabled = true
+                isEditable = true
                 typefaceText = Typeface.MONOSPACE
+                if (!TextMateLanguageManager.isReady()) {
+                    runCatching { TextMateLanguageManager.initialize(context.applicationContext) }
+                }
                 if (TextMateLanguageManager.isReady()) {
                     TextMateLanguageManager.loadThemeForDefinition(theme)
                 }
@@ -132,6 +155,19 @@ fun SoraEditorCanvas(
                     binding.isUpdatingProgrammatically = false
                 }
 
+                // Ensure tapping anywhere in the editor focuses the view and opens the soft keyboard
+                subscribeEvent(ClickEvent::class.java) { _, _ ->
+                    if (!hasFocus()) {
+                        requestFocusFromTouch()
+                        requestFocus()
+                    }
+                    showSoftInput()
+                    post {
+                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                        imm?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }
+
                 // Listen for content changes
                 subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
                     val b = tag as? EditorBinding
@@ -153,9 +189,14 @@ fun SoraEditorCanvas(
                 }
 
                 controller.bind(this)
+                post {
+                    requestFocus()
+                }
             }
         },
         update = { editor ->
+            editor.isEnabled = true
+            editor.isEditable = true
             // Update font size if changed externally
             editor.setTextSize(fontSizeSp)
 
@@ -197,10 +238,19 @@ fun SoraEditorCanvas(
                 } finally {
                     guard.isUpdatingProgrammatically = false
                 }
+                if (isNewDocument) {
+                    editor.post {
+                        editor.requestFocus()
+                    }
+                }
             }
 
             // Update language syntax if language changed
             if (binding?.languageId != language.id || binding?.editorLanguage !== editorLanguage) {
+                if (TextMateLanguageManager.isReady()) {
+                    TextMateLanguageManager.loadThemeForDefinition(theme)
+                }
+                editor.colorScheme = VibeEditorColorScheme(theme)
                 editor.setEditorLanguage(editorLanguage)
                 binding?.languageId = language.id
                 binding?.editorLanguage = editorLanguage

@@ -225,8 +225,7 @@ fun EditorScreen(
                 onMoveCursorLeft = { soraController.moveCursorLeft() },
                 onMoveCursorRight = { soraController.moveCursorRight() },
                 onUndo = { viewModel.undo() },
-                onRedo = { viewModel.redo() },
-                modifier = Modifier.imePadding()
+                onRedo = { viewModel.redo() }
             )
         }
 

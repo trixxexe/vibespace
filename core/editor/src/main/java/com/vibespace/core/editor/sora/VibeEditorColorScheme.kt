@@ -65,60 +65,47 @@ class VibeEditorColorScheme(
             return if (color != 0) color else if (cachedSelectionColor != 0) cachedSelectionColor else parseSafe(currentTheme.selectionColor, "#264F78")
         }
 
-        // TextMate and dynamic token indices
+        // TextMate dynamic token indices (255 + TextMate color table index)
         if (type >= 255) {
-            if (color != 0 && isContrastValid(color, bgColor)) {
-                return color
-            }
             val tmTheme = runCatching { ThemeRegistry.getInstance().currentThemeModel?.theme }.getOrNull()
             if (tmTheme != null) {
                 val colorHex = runCatching { tmTheme.getColor(type - 255) }.getOrNull()
                 if (colorHex != null && !"@default".equals(colorHex, ignoreCase = true)) {
                     val parsed = parseColorOrNull(colorHex)
-                    if (parsed != null && parsed != 0 && isContrastValid(parsed, bgColor)) {
+                    if (parsed != null && parsed != 0) {
+                        // When a token's background color in TextMate equals the editor background,
+                        // return 0 (transparent) so Sora Editor does not draw an opaque box over the line.
+                        if (parsed == bgColor) {
+                            return 0
+                        }
                         super.colors.put(type, parsed)
                         return parsed
                     }
                 }
             }
+            if (color != 0) {
+                return if (color == bgColor) 0 else color
+            }
             return if (cachedTextColor != 0) cachedTextColor else parseSafe(currentTheme.textColor, "#F3F4F6")
         }
 
-        // Standard token indices (type < 255)
-        if (color == 0 || !isContrastValid(color, bgColor)) {
-            return when (type) {
-                LINE_NUMBER -> if (cachedLineNumberColor != 0) cachedLineNumberColor else parseSafe(currentTheme.lineNumberColor, "#5A5A5A")
-                LINE_NUMBER_CURRENT, SELECTION_INSERT, SELECTION_HANDLE ->
-                    if (cachedCursorColor != 0) cachedCursorColor else parseSafe(currentTheme.cursorColor, "#00E5FF")
-                KEYWORD -> if (cachedKeywordColor != 0) cachedKeywordColor else parseSafe(currentTheme.keywordColor, "#FF7B72")
-                LITERAL -> if (cachedLiteralColor != 0) cachedLiteralColor else parseSafe(currentTheme.literalColor, "#A5D6FF")
-                COMMENT -> if (cachedCommentColor != 0) cachedCommentColor else parseSafe(currentTheme.commentColor, "#8B949E")
-                OPERATOR -> if (cachedTextColor != 0) cachedTextColor else parseSafe(currentTheme.textColor, "#F3F4F6")
-                IDENTIFIER_NAME -> if (cachedTextColor != 0) cachedTextColor else parseSafe(currentTheme.textColor, "#9CDCFE")
-                FUNCTION_NAME -> if (cachedFunctionColor != 0) cachedFunctionColor else parseSafe(currentTheme.functionColor, "#D2A8FF")
-                else -> if (cachedTextColor != 0) cachedTextColor else parseSafe(currentTheme.textColor, "#F3F4F6")
-            }
+        // Standard Sora Editor color slots (type < 255)
+        if (color != 0) {
+            return color
         }
-        return color
-    }
-
-    private fun isContrastValid(textColor: Int, bgColor: Int): Boolean {
-        val alpha = (textColor ushr 24) and 0xFF
-        if (alpha < 80) return false
-        val textR = (textColor ushr 16) and 0xFF
-        val textG = (textColor ushr 8) and 0xFF
-        val textB = textColor and 0xFF
-        val bgR = (bgColor ushr 16) and 0xFF
-        val bgG = (bgColor ushr 8) and 0xFF
-        val bgB = bgColor and 0xFF
-
-        val textLum = 0.299 * textR + 0.587 * textG + 0.114 * textB
-        val bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB
-        // If background is dark and text is dark, poor contrast
-        if (bgLum < 128 && textLum < 45) return false
-        // If background is light and text is light, poor contrast
-        if (bgLum >= 128 && textLum > 210) return false
-        return true
+        return when (type) {
+            LINE_NUMBER -> if (cachedLineNumberColor != 0) cachedLineNumberColor else parseSafe(currentTheme.lineNumberColor, "#5A5A5A")
+            LINE_NUMBER_CURRENT, SELECTION_INSERT, SELECTION_HANDLE ->
+                if (cachedCursorColor != 0) cachedCursorColor else parseSafe(currentTheme.cursorColor, "#00E5FF")
+            TEXT_NORMAL, OPERATOR, IDENTIFIER_NAME ->
+                if (cachedTextColor != 0) cachedTextColor else parseSafe(currentTheme.textColor, "#F3F4F6")
+            KEYWORD -> if (cachedKeywordColor != 0) cachedKeywordColor else parseSafe(currentTheme.keywordColor, "#FF7B72")
+            LITERAL -> if (cachedLiteralColor != 0) cachedLiteralColor else parseSafe(currentTheme.literalColor, "#A5D6FF")
+            COMMENT -> if (cachedCommentColor != 0) cachedCommentColor else parseSafe(currentTheme.commentColor, "#8B949E")
+            FUNCTION_NAME -> if (cachedFunctionColor != 0) cachedFunctionColor else parseSafe(currentTheme.functionColor, "#D2A8FF")
+            // Leave intentionally transparent slots (such as UNDERLINE = 0) as 0
+            else -> 0
+        }
     }
 
     private fun parseSafe(colorHex: String?, fallback: String): Int {

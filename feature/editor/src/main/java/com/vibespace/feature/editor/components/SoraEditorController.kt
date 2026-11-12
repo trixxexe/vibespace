@@ -28,7 +28,9 @@ class SoraEditorController {
         val cursor = editor.cursor
         val text = editor.text
 
+        val sourceBefore = text.toString()
         if (cursor.isSelected) {
+            val startOffset = cursor.left.coerceIn(0, sourceBefore.length)
             val startLine = cursor.leftLine
             val startCol = cursor.leftColumn
             val endLine = cursor.rightLine
@@ -37,13 +39,17 @@ class SoraEditorController {
             text.delete(startLine, startCol, endLine, endCol)
             val wrapped = if (isPairSymbol(symbol)) wrapTextWithPair(symbol, selected) else symbol
             text.insert(startLine, startCol, wrapped)
-            editor.setSelection(startLine, startCol + wrapped.length)
+            val caret = positionAt(sourceBefore.substring(0, startOffset) + wrapped, startOffset + wrapped.length)
+            editor.setSelection(caret.first, caret.second)
         } else {
+            val startOffset = cursor.left.coerceIn(0, sourceBefore.length)
             val line = cursor.leftLine
             val col = cursor.leftColumn
             text.insert(line, col, symbol)
-            editor.setSelection(line, col + symbol.length)
+            val caret = positionAt(sourceBefore.substring(0, startOffset) + symbol, startOffset + symbol.length)
+            editor.setSelection(caret.first, caret.second)
         }
+        editor.requestFocus()
     }
 
     /** Replaces the identifier immediately before the caret with a selected completion. */

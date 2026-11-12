@@ -68,10 +68,18 @@ class TerminalViewModel(
         val alpineRunner = manager.getRunnerForMode(RunnerMode.ALPINE) as? AlpineLinuxRunner ?: return
         viewModelScope.launch(dispatchers.default) {
             alpineRunner.installationState.collect { state ->
+                val lspReady = state is AlpineInstallationState.Installed &&
+                    alpineRunner.isLanguageServerInstalled("python") &&
+                    alpineRunner.isLanguageServerInstalled("typescript")
                 _uiState.update {
                     it.copy(
                         isAlpineInstalled = state is AlpineInstallationState.Installed,
-                        alpineInstallationState = state
+                        alpineInstallationState = state,
+                        languageServerMessage = if (lspReady && it.languageServerMessage == null) {
+                            "Python and TypeScript LSP servers are ready."
+                        } else {
+                            it.languageServerMessage
+                        }
                     )
                 }
                 if (state is AlpineInstallationState.Installed && _uiState.value.activeRunnerMode == RunnerMode.ALPINE) {
@@ -195,6 +203,17 @@ class TerminalViewModel(
     fun installLanguageServers() {
         val manager = runnerManager ?: return
         val session = _uiState.value.activeSession ?: return
+        val alpineRunner = manager.getRunnerForMode(RunnerMode.ALPINE) as? AlpineLinuxRunner
+        if (alpineRunner != null &&
+            alpineRunner.isLanguageServerInstalled("python") &&
+            alpineRunner.isLanguageServerInstalled("typescript")
+        ) {
+            viewModelScope.launch(dispatchers.default) {
+                terminalService.appendLine(session.sessionId, "Python (pylsp) and TypeScript language servers are installed and ready in Alpine.", StreamType.SYSTEM)
+                _uiState.update { it.copy(isInstallingLanguageServers = false, languageServerMessage = "Python and TypeScript LSP servers are ready.") }
+            }
+            return
+        }
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isInstallingLanguageServers = true, languageServerMessage = null) }
             val command = "apk add --no-cache py3-lsp-server nodejs npm && npm install --global typescript-language-server typescript"

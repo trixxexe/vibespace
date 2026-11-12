@@ -11,7 +11,9 @@ android {
     defaultConfig {
         applicationId = "com.vibespace.app"
         minSdk = 26
-        targetSdk = 35
+        // targetSdk 28 is required on Android 10+ so SELinux assigns untrusted_app_27,
+        // permitting PRoot and its loader to execute and mmap ELF binaries in app storage.
+        targetSdk = 28
         versionCode = 1
         versionName = "0.1.0"
 
@@ -39,6 +41,16 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    androidResources {
+        noCompress += listOf("gz", "tar", "tgz")
     }
 
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/bundled-runtime"))

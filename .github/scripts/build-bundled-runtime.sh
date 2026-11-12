@@ -40,9 +40,9 @@ for arch in "${!arches[@]}"; do
   mkdir -p "$work/bin"
   unzip -q "$work/proot.zip" -d "$work/bin"
   test -f "$work/bin/proot"
-  chmod 0755 "$work/bin/proot"
+  chmod 0755 "$work/bin/"*
 
-  tar -C "$work" -czf "$output_dir/runtime/$arch.tar.gz" bin/proot rootfs.tar.gz
+  tar -C "$work" -czf "$output_dir/runtime/$arch.tar.gz" bin rootfs.tar.gz
   cp "$work/packages.txt" "$output_dir/runtime/$arch.packages.txt"
   rm -rf "$work"
   trap - EXIT

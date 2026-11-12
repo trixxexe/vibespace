@@ -95,7 +95,8 @@ class VibeSpaceApplication : Application() {
             bundledRuntimeArchiveProvider = { architecture ->
                 runCatching { assets.open("runtime/$architecture.tar.gz") }.getOrNull()
             },
-            dispatchers = dispatchers
+            dispatchers = dispatchers,
+            nativeLibDir = runCatching { applicationInfo?.nativeLibraryDir?.let { File(it) } }.getOrNull()
         )
         DefaultRunnerManager(
             workspaceManager = workspaceManager,
