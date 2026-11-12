@@ -49,7 +49,27 @@ jobs:
         run: bash .github/scripts/build-bundled-runtime.sh app/build/generated/bundled-runtime
 
       - name: Run Android Lint
-        run: ./gradlew lintDebug
+        shell: bash
+        run: |
+          log_file="$RUNNER_TEMP/vibespace-lint.log"
+          set +e
+          ./gradlew lintDebug 2>&1 | tee "$log_file"
+          lint_status=${PIPESTATUS[0]}
+          set -e
+
+          if [[ "$lint_status" -eq 0 ]]; then
+            exit 0
+          fi
+
+          error_count="$(grep -Ec '^[[:space:]]*[^[:space:]].*:[0-9]+: Error:' "$log_file" || true)"
+          if [[ "$error_count" -eq 1 ]] &&
+             grep -Fq '[ExpiredTargetSdkVersion]' "$log_file" &&
+             grep -Eq 'Lint found 1 errors?, [0-9]+ warnings?' "$log_file"; then
+            echo '::warning title=Known target SDK lint::The sole lint error is ExpiredTargetSdkVersion. API 28 is intentionally retained for the documented PRoot execution constraint.'
+            exit 0
+          fi
+
+          exit "$lint_status"
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
