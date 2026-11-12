@@ -61,7 +61,7 @@ jobs:
             exit 0
           fi
 
-          error_count="$(grep -E '^[[:space:]]*[^[:space:]].*:[0-9]+: Error:' "$log_file" | sort -u | wc -l | tr -d ' ')"
+          error_count="$(grep -Eo '[^[:space:]]+:[0-9]+: Error:.*' "$log_file" | sort -u | wc -l | tr -d ' ')"
           if [[ "$error_count" -eq 1 ]] &&
              grep -Fq '[ExpiredTargetSdkVersion]' "$log_file" &&
              grep -Eq 'Lint found 1 errors?, [0-9]+ warnings?' "$log_file"; then
