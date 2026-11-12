@@ -17,6 +17,7 @@ interface TerminalService {
     suspend fun createSession(title: String = "Terminal", workingDirectory: String = "~"): VibeResult<TerminalSession>
     suspend fun closeSession(sessionId: String): VibeResult<Unit>
     suspend fun setActiveSession(sessionId: String): VibeResult<Unit>
+    suspend fun setWorkingDirectory(sessionId: String, workingDirectory: String): VibeResult<Unit> = VibeResult.Success(Unit)
     suspend fun sendInput(sessionId: String, input: String): VibeResult<Unit>
     suspend fun appendLine(sessionId: String, text: String, streamType: com.vibespace.core.terminal.model.StreamType = com.vibespace.core.terminal.model.StreamType.STDOUT): VibeResult<Unit>
     suspend fun clearSession(sessionId: String): VibeResult<Unit>

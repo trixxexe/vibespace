@@ -3,6 +3,8 @@ package com.vibespace.feature.terminal
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,38 +24,45 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import com.vibespace.core.runner.alpine.AlpineInstallationState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
+import com.vibespace.core.runner.alpine.AlpineInstallationState
+import com.vibespace.core.runner.model.RunnerMode
 import com.vibespace.core.terminal.ansi.AnsiParser
 import com.vibespace.core.terminal.model.StreamType
 import com.vibespace.core.terminal.model.TerminalLine
@@ -62,21 +71,47 @@ import com.vibespace.core.terminal.model.TerminalLine
 fun TerminalPanel(
     viewModel: TerminalViewModel,
     onClosePanel: () -> Unit,
+    onJumpToDiagnosticLine: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val listState = rememberLazyListState()
+    val terminalListState = rememberLazyListState()
+    val outputListState = rememberLazyListState()
+    val consoleListState = rememberLazyListState()
+    val density = LocalDensity.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val inputFocusRequester = remember { FocusRequester() }
 
     val currentLines = uiState.activeSession?.lines ?: emptyList()
 
     LaunchedEffect(currentLines.size) {
         if (currentLines.isNotEmpty()) {
-            listState.animateScrollToItem(currentLines.size - 1)
+            terminalListState.animateScrollToItem(currentLines.size - 1)
         }
     }
 
-    val panelModifier = if (modifier == Modifier) {
-        Modifier.fillMaxWidth().height(260.dp)
+    LaunchedEffect(uiState.outputLines.size) {
+        if (uiState.outputLines.isNotEmpty()) {
+            outputListState.animateScrollToItem(uiState.outputLines.size - 1)
+        }
+    }
+
+    LaunchedEffect(uiState.consoleLines.size) {
+        if (uiState.consoleLines.isNotEmpty()) {
+            consoleListState.animateScrollToItem(uiState.consoleLines.size - 1)
+        }
+    }
+
+    val isStandaloneMobilePanel = modifier == Modifier
+    var panelHeightDp by remember { mutableFloatStateOf(280f) }
+    var isMaximized by remember { mutableStateOf(false) }
+    var isDraggingSash by remember { mutableStateOf(false) }
+
+    val effectiveHeightDp = if (isMaximized) 560.dp else panelHeightDp.dp
+    val panelModifier = if (isStandaloneMobilePanel) {
+        Modifier
+            .fillMaxWidth()
+            .height(effectiveHeightDp)
     } else {
         modifier
     }
@@ -85,13 +120,68 @@ fun TerminalPanel(
         modifier = panelModifier
             .background(VibeTheme.colors.panelBackground)
     ) {
-        // Tab Header Strip
+        // VS Code-style Draggable Top Resize Sash (on mobile stacked layout)
+        if (isStandaloneMobilePanel) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .background(
+                        if (isDraggingSash) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                        else VibeTheme.colors.gutterBackground
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                isMaximized = !isMaximized
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragStart = { isDraggingSash = true },
+                            onDragEnd = { isDraggingSash = false },
+                            onDragCancel = { isDraggingSash = false },
+                            onVerticalDrag = { change, dragAmountPx ->
+                                change.consume()
+                                val deltaDp = with(density) { dragAmountPx.toDp().value }
+                                isMaximized = false
+                                panelHeightDp = (panelHeightDp - deltaDp).coerceIn(140f, 640f)
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                // Top border accent line + subtle pill grip
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            if (isDraggingSash) MaterialTheme.colorScheme.primary
+                            else VibeTheme.colors.borderSubtle
+                        )
+                )
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(3.dp)
+                        .background(
+                            color = if (isDraggingSash) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(2.dp)
+                        )
+                )
+            }
+        }
+
+        // VS Code Tab Header Strip
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(36.dp)
                 .background(VibeTheme.colors.gutterBackground)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PanelTabButton(
@@ -124,7 +214,7 @@ fun TerminalPanel(
                     onClick = { isRunnerMenuExpanded = true },
                     shape = RoundedCornerShape(4.dp),
                     color = VibeTheme.colors.activeLineBackground,
-                    modifier = Modifier.padding(end = 6.dp)
+                    modifier = Modifier.padding(end = 4.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
@@ -179,16 +269,32 @@ fun TerminalPanel(
                 }
             }
 
+            // Clear button (uses Trash/Delete icon so it is distinct from Close X)
             IconButton(
                 onClick = { viewModel.clearActiveSession() },
                 modifier = Modifier.size(26.dp)
             ) {
                 Icon(
-                    imageVector = VibeIcons.Close,
-                    contentDescription = "Clear terminal",
+                    imageVector = VibeIcons.Delete,
+                    contentDescription = "Clear panel output",
                     tint = VibeTheme.colors.textMuted,
                     modifier = Modifier.size(14.dp)
                 )
+            }
+
+            // VS Code Maximize / Restore Panel Height button on mobile
+            if (isStandaloneMobilePanel) {
+                IconButton(
+                    onClick = { isMaximized = !isMaximized },
+                    modifier = Modifier.size(26.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isMaximized) VibeIcons.ArrowDown else VibeIcons.ArrowUp,
+                        contentDescription = if (isMaximized) "Restore panel size" else "Maximize panel size",
+                        tint = VibeTheme.colors.textMuted,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
             }
 
             IconButton(
@@ -208,11 +314,11 @@ fun TerminalPanel(
         when (uiState.activeTab) {
             BottomPanelTab.TERMINAL -> {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Multiple Terminal Sessions Bar
+                    // Multiple Terminal Sessions Bar + Active Working Directory indicator
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(34.dp)
+                            .height(32.dp)
                             .background(VibeTheme.colors.gutterBackground)
                             .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -229,7 +335,7 @@ fun TerminalPanel(
                                     shape = RoundedCornerShape(4.dp),
                                     color = if (isSelected) VibeTheme.colors.panelBackground else Color.Transparent,
                                     border = BorderStroke(1.dp, if (isSelected) VibeTheme.colors.borderSubtle else Color.Transparent),
-                                    modifier = Modifier.height(26.dp)
+                                    modifier = Modifier.height(24.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -250,7 +356,7 @@ fun TerminalPanel(
                                                 contentDescription = "Close session",
                                                 tint = VibeTheme.colors.textMuted,
                                                 modifier = Modifier
-                                                    .size(14.dp)
+                                                    .size(13.dp)
                                                     .clickable { viewModel.closeSession(session.sessionId) }
                                             )
                                         }
@@ -259,7 +365,6 @@ fun TerminalPanel(
                             }
                         }
 
-                        // Add Session Button
                         IconButton(
                             onClick = { viewModel.createNewSession() },
                             modifier = Modifier.size(26.dp)
@@ -268,17 +373,21 @@ fun TerminalPanel(
                                 imageVector = VibeIcons.Add,
                                 contentDescription = "New Terminal",
                                 tint = VibeTheme.colors.textSecondary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
-
                     }
 
-                    // Lines list
+                    // Terminal Lines list
                     LazyColumn(
-                        state = listState,
+                        state = terminalListState,
                         modifier = Modifier
                             .weight(1f)
+                            .fillMaxWidth()
+                            .clickable {
+                                runCatching { inputFocusRequester.requestFocus() }
+                                keyboardController?.show()
+                            }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         itemsIndexed(currentLines, key = { index, line -> "${line.id}_$index" }) { _, line ->
@@ -286,7 +395,7 @@ fun TerminalPanel(
                         }
                     }
 
-                    if (uiState.activeRunnerMode == com.vibespace.core.runner.model.RunnerMode.ALPINE && !uiState.isAlpineInstalled) {
+                    if (uiState.activeRunnerMode == RunnerMode.ALPINE && !uiState.isAlpineInstalled) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
                             color = VibeTheme.colors.activeLineBackground,
@@ -331,7 +440,7 @@ fun TerminalPanel(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "Unpacking rootfs into app storage...",
+                                                text = "Unpacking bundled Alpine rootfs into app storage...",
                                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = VibeTheme.colors.accentPrimary
                                             )
@@ -407,7 +516,7 @@ fun TerminalPanel(
                         }
                     }
 
-                    if (uiState.activeRunnerMode == com.vibespace.core.runner.model.RunnerMode.ALPINE && uiState.isAlpineInstalled) {
+                    if (uiState.activeRunnerMode == RunnerMode.ALPINE && uiState.isAlpineInstalled && !uiState.isLanguageServersReady) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
                             color = VibeTheme.colors.activeLineBackground,
@@ -442,7 +551,36 @@ fun TerminalPanel(
                         }
                     }
 
-                    // Input bar
+                    // Mobile Terminal Quick-Keys Strip (VS Code Mobile style)
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(28.dp)
+                            .background(VibeTheme.colors.gutterBackground)
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val quickTokens = listOf("ls -la", "pwd", "cd ..", "python3 ", "node ", "clear", "/", "-", "|", ">", "&&")
+                        item {
+                            QuickKeyChip(label = "↑") { viewModel.navigateHistoryUp() }
+                        }
+                        item {
+                            QuickKeyChip(label = "↓") { viewModel.navigateHistoryDown() }
+                        }
+                        itemsIndexed(quickTokens) { _, token ->
+                            QuickKeyChip(label = token.trim()) {
+                                if (token == "ls -la" || token == "pwd" || token == "cd .." || token == "clear") {
+                                    viewModel.executeCommand(token)
+                                } else {
+                                    viewModel.onCommandInputChange(uiState.commandInput + token)
+                                    runCatching { inputFocusRequester.requestFocus() }
+                                }
+                            }
+                        }
+                    }
+
+                    // Command Input bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -453,26 +591,42 @@ fun TerminalPanel(
                     ) {
                         Text(
                             text = "$",
-                            style = VibeCodeTypography,
+                            style = VibeCodeTypography.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        BasicTextField(
-                            value = uiState.commandInput,
-                            onValueChange = { viewModel.onCommandInputChange(it) },
-                            textStyle = VibeCodeTypography.copy(
-                                color = VibeTheme.colors.textPrimary,
-                                fontSize = 12.sp
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { viewModel.submitCommand() }),
-                            modifier = Modifier.weight(1f)
-                        )
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (uiState.commandInput.isEmpty()) {
+                                Text(
+                                    text = "Enter Linux command (ls, cd, mkdir, cat, grep, python3, node...)",
+                                    style = VibeCodeTypography.copy(
+                                        color = VibeTheme.colors.textMuted.copy(alpha = 0.6f),
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                            BasicTextField(
+                                value = uiState.commandInput,
+                                onValueChange = { viewModel.onCommandInputChange(it) },
+                                textStyle = VibeCodeTypography.copy(
+                                    color = VibeTheme.colors.textPrimary,
+                                    fontSize = 12.sp
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { viewModel.submitCommand() }),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(inputFocusRequester)
+                            )
+                        }
 
-                        if (uiState.activeRunnerMode == com.vibespace.core.runner.model.RunnerMode.ALPINE) {
+                        if (uiState.activeRunnerMode == RunnerMode.ALPINE) {
                             IconButton(
                                 onClick = { viewModel.interruptTerminalCommand() },
                                 modifier = Modifier.size(28.dp)
@@ -501,16 +655,30 @@ fun TerminalPanel(
                 }
             }
             BottomPanelTab.OUTPUT -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "Build output and task executions will be streamed here.\nNo tasks currently running.",
-                        style = VibeCodeTypography,
-                        color = VibeTheme.colors.textSecondary
-                    )
+                if (uiState.outputLines.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = "No code or command output yet. Run a file or execute a terminal command to see its output here.",
+                            style = VibeCodeTypography.copy(fontSize = 12.sp),
+                            color = VibeTheme.colors.textMuted
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        state = outputListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        itemsIndexed(uiState.outputLines, key = { index, line -> "${line.id}_$index" }) { _, line ->
+                            TerminalLineView(line)
+                        }
+                    }
                 }
             }
             BottomPanelTab.PROBLEMS -> {
@@ -530,7 +698,7 @@ fun TerminalPanel(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "No problems detected in workspace",
+                                text = "No problems have been detected in the workspace.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = VibeTheme.colors.statusSuccess
                             )
@@ -543,28 +711,31 @@ fun TerminalPanel(
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         itemsIndexed(uiState.diagnostics, key = { index, diag -> "${diag.id}_$index" }) { _, diag ->
+                            val isErr = diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(44.dp)
-                                    .padding(vertical = 4.dp),
+                                    .clickable {
+                                        onJumpToDiagnosticLine?.invoke(diag.range.start.line)
+                                    }
+                                    .padding(vertical = 6.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) VibeIcons.Error else VibeIcons.Warning,
-                                    contentDescription = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) "Error" else "Warning",
-                                    tint = if (diag.severity == com.vibespace.core.language.model.DiagnosticSeverity.ERROR) VibeTheme.colors.statusError else VibeTheme.colors.statusWarning,
+                                    imageVector = if (isErr) VibeIcons.Error else VibeIcons.Warning,
+                                    contentDescription = if (isErr) "Error" else "Warning",
+                                    tint = if (isErr) VibeTheme.colors.statusError else VibeTheme.colors.statusWarning,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = diag.message,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = VibeCodeTypography.copy(fontSize = 12.sp),
                                         color = VibeTheme.colors.textPrimary
                                     )
                                     Text(
-                                        text = "Line ${diag.range.start.line}, Col ${diag.range.start.column} [${diag.source ?: "lint"}]",
+                                        text = "Ln ${diag.range.start.line}, Col ${diag.range.start.column}  •  ${diag.source ?: "syntax"}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = VibeTheme.colors.textMuted
                                     )
@@ -575,22 +746,123 @@ fun TerminalPanel(
                 }
             }
             BottomPanelTab.CONSOLE -> {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Runtime status", style = MaterialTheme.typography.titleSmall, color = VibeTheme.colors.textPrimary)
-                    Text("Selected runner: ${uiState.activeRunnerMode.displayName}", style = VibeCodeTypography, color = VibeTheme.colors.textSecondary)
-                    Text(
-                        "Alpine Linux: ${if (uiState.isAlpineInstalled) "installed" else "not installed"}",
-                        style = VibeCodeTypography,
-                        color = VibeTheme.colors.textSecondary
-                    )
-                    uiState.languageServerMessage?.let {
-                        Text(it, style = VibeCodeTypography, color = VibeTheme.colors.textSecondary)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Compact Runtime Status Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(VibeTheme.colors.gutterBackground)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Runner: ${uiState.activeRunnerMode.shortBadge}",
+                            style = VibeCodeTypography.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                            color = VibeTheme.colors.accentPrimary
+                        )
+                        Text(
+                            text = "Alpine Rootfs: ${if (uiState.isAlpineInstalled) "Ready" else "Extracting"}",
+                            style = VibeCodeTypography.copy(fontSize = 11.sp),
+                            color = if (uiState.isAlpineInstalled) VibeTheme.colors.statusSuccess else VibeTheme.colors.textSecondary
+                        )
+                        Text(
+                            text = "LSP: ${if (uiState.isLanguageServersReady) "Active" else "Standby"}",
+                            style = VibeCodeTypography.copy(fontSize = 11.sp),
+                            color = if (uiState.isLanguageServersReady) VibeTheme.colors.statusSuccess else VibeTheme.colors.textMuted
+                        )
+                    }
+
+                    // Interactive Debug Console Output
+                    LazyColumn(
+                        state = consoleListState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        if (uiState.consoleLines.isEmpty()) {
+                            item {
+                                Text(
+                                    text = "Interactive Debug Console — evaluate Python/shell expressions below (e.g., 2 + 2, [x**2 for x in range(5)]).",
+                                    style = VibeCodeTypography.copy(fontSize = 11.sp),
+                                    color = VibeTheme.colors.textMuted
+                                )
+                            }
+                        } else {
+                            itemsIndexed(uiState.consoleLines, key = { index, line -> "${line.id}_$index" }) { _, line ->
+                                TerminalLineView(line)
+                            }
+                        }
+                    }
+
+                    // Console Expression Input Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .background(VibeTheme.colors.gutterBackground)
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = ">",
+                            style = VibeCodeTypography.copy(fontWeight = FontWeight.Bold),
+                            color = VibeTheme.colors.accentSecondary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        BasicTextField(
+                            value = uiState.consoleInput,
+                            onValueChange = { viewModel.onConsoleInputChange(it) },
+                            textStyle = VibeCodeTypography.copy(
+                                color = VibeTheme.colors.textPrimary,
+                                fontSize = 12.sp
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { viewModel.submitConsoleInput() }),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.submitConsoleInput() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = VibeIcons.Send,
+                                contentDescription = "Evaluate expression",
+                                tint = VibeTheme.colors.accentSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuickKeyChip(
+    label: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(4.dp),
+        color = VibeTheme.colors.panelBackground,
+        border = BorderStroke(1.dp, VibeTheme.colors.borderSubtle),
+        modifier = Modifier.height(22.dp)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 7.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = VibeCodeTypography.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                color = VibeTheme.colors.textSecondary
+            )
         }
     }
 }
@@ -607,7 +879,7 @@ private fun PanelTabButton(
     Box(
         modifier = Modifier
             .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 7.dp, vertical = 6.dp)
     ) {
         Text(
             text = title,

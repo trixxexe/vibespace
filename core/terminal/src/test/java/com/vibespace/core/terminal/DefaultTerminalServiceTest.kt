@@ -55,4 +55,26 @@ class DefaultTerminalServiceTest {
         assertTrue(updated.lines.any { it.text.contains("/bin/grep") })
         assertTrue(updated.lines.any { it.text.contains("/bin/sh") })
     }
+
+    @Test
+    fun sendInput_supports_quoted_cd_redirection_and_linux_commands() = runTest {
+        val tempRoot = java.nio.file.Files.createTempDirectory("term-linux-test").toFile()
+        try {
+            val session = service.createSession("Console", tempRoot.absolutePath).getOrNull()!!
+            service.sendInput(session.sessionId, "mkdir hi")
+            service.sendInput(session.sessionId, "cd \"${java.io.File(tempRoot, "hi").absolutePath}\"")
+            service.sendInput(session.sessionId, "echo 'hello world' > msg.txt && cat msg.txt")
+            service.sendInput(session.sessionId, "seq 1 3")
+            service.sendInput(session.sessionId, "expr 6 + 7")
+
+            val updated = service.sessions.value.first { it.sessionId == session.sessionId }
+            assertEquals(java.io.File(tempRoot, "hi").canonicalPath, updated.workingDirectory)
+            assertTrue(updated.lines.none { it.streamType == StreamType.STDERR })
+            assertTrue(updated.lines.any { it.text == "hello world" && it.streamType == StreamType.STDOUT })
+            assertTrue(updated.lines.any { it.text == "1\n2\n3" && it.streamType == StreamType.STDOUT })
+            assertTrue(updated.lines.any { it.text == "13" && it.streamType == StreamType.STDOUT })
+        } finally {
+            tempRoot.deleteRecursively()
+        }
+    }
 }

@@ -56,8 +56,6 @@ class EmbeddedInstantRunner(
             flow.tryEmit(out)
         }
 
-        emitLine("[VibeSpace Instant Runner] Executing: $command")
-
         val trimmed = command.trim()
         val exitCode: Int
 
@@ -86,7 +84,9 @@ class EmbeddedInstantRunner(
         )
         activeRuns[executionId] = completed
 
-        emitLine("[Process exited with code $exitCode]")
+        if (exitCode != 0) {
+            emitLine("[Process exited with code $exitCode]", isError = true)
+        }
         return VibeResult.Success(completed)
     }
 
@@ -104,9 +104,6 @@ class EmbeddedInstantRunner(
     }
 
     private suspend fun runPython(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
-        emit("VibeSpace Instant Evaluator (Basic Print & Arithmetic)", false)
-        emit("Lightweight evaluator only; loops, imports, and packages are not supported.", false)
-
         val codeOrFile = extractCodeFromCommand(command, "python3", "python")
         if (codeOrFile.isBlank()) {
             emit("Python interactive shell ready. Use 'Run' toolbar button to execute scripts.", false)
@@ -135,7 +132,6 @@ class EmbeddedInstantRunner(
             }
             val fileContent = resolveFileContent(fileArgument, workingDirectory)
             if (fileContent != null) {
-                emit("[Running file with the basic evaluator: $fileArgument]", false)
                 codeToExecute = fileContent
             } else {
                 emit("FileNotFoundError: [Errno 2] No such file or directory: '$fileArgument'", true)
@@ -157,9 +153,6 @@ class EmbeddedInstantRunner(
     }
 
     private suspend fun runJavaScript(command: String, workingDirectory: String, emit: (String, Boolean) -> Unit): Int {
-        emit("VibeSpace Instant Evaluator (Basic Print & Arithmetic)", false)
-        emit("Lightweight evaluator only; modules, classes, and packages are not supported.", false)
-
         val codeOrFile = extractCodeFromCommand(command, "node", "js")
         if (codeOrFile.isBlank()) {
             emit("JavaScript runtime ready. Use 'Run' toolbar button to execute scripts.", false)
@@ -180,7 +173,6 @@ class EmbeddedInstantRunner(
             }
             val fileContent = resolveFileContent(fileArgument, workingDirectory)
             if (fileContent != null) {
-                emit("[Running file with the basic evaluator: $fileArgument]", false)
                 codeToExecute = fileContent
             } else {
                 emit("Error: Cannot find module '$fileArgument'", true)
@@ -246,14 +238,13 @@ class EmbeddedInstantRunner(
             }
             "help" -> {
                 emit("VibeSpace Safe Command Built-ins:", false)
-                emit("  echo <text>   - Print text to console", false)
-                emit("  pwd           - Print active working directory", false)
-                emit("  date          - Print current date and time", false)
+                emit("  ls, cd, pwd, mkdir, rmdir, rm, cp, mv, touch, cat, head, tail, wc", false)
+                emit("  grep, find, sort, uniq, cut, tr, sed, awk, diff, tree, du, df, free", false)
+                emit("  chmod, stat, file, realpath, basename, dirname, ln, tar, gzip, zip, unzip", false)
+                emit("  echo, printf, env, export, alias, history, uname, whoami, id, ps, top, kill", false)
                 emit("  python <code> - Run Python 3 snippet or script", false)
                 emit("  node <code>   - Run JavaScript / TypeScript snippet or script", false)
                 emit("  clear         - Clear terminal screen", false)
-                emit("", false)
-                emit("Active Mode: Instant Embedded. This evaluator does not install packages or run external tools.", false)
                 0
             }
             "clear" -> {

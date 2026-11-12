@@ -63,6 +63,7 @@ class DefaultAlpineProcessExecutor(
     ): Int = withContext(dispatchers.io) {
         val pb = ProcessBuilder(command)
         pb.directory(workingDir)
+        sanitizeAndroidEnvironment(pb.environment())
         pb.environment().putAll(environment)
         val process = pb.start()
 
@@ -89,6 +90,27 @@ class DefaultAlpineProcessExecutor(
             process.destroyForcibly()
         }
     }
+}
+
+private fun sanitizeAndroidEnvironment(env: MutableMap<String, String>) {
+    val androidKeysToRemove = listOf(
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "CLASSPATH",
+        "BOOTCLASSPATH",
+        "DEX2OATBOOTCLASSPATH",
+        "SYSTEMSERVERCLASSPATH",
+        "STANDALONE_SYSTEMSERVER_JARS",
+        "ANDROID_ROOT",
+        "ANDROID_DATA",
+        "ANDROID_STORAGE",
+        "ANDROID_ART_ROOT",
+        "ANDROID_I18N_ROOT",
+        "ANDROID_TZDATA_ROOT",
+        "ANDROID_SOCKET_zygote",
+        "ANDROID_SOCKET_usap_pool_primary"
+    )
+    androidKeysToRemove.forEach(env::remove)
 }
 
 /**
@@ -138,15 +160,34 @@ class AlpineLinuxRunner(
     init {
         val rootfsDir = getRootfsDir()
         _installationState.value = when {
-            rootfsDir.exists() && File(rootfsDir, "etc/alpine-release").exists() && hasExecutableProot() -> {
-                val installedPackages = buildList {
-                    if (File(rootfsDir, "usr/bin/python3").exists()) add("python3")
-                    if (File(rootfsDir, "usr/bin/node").exists()) add("nodejs")
-                }
-                AlpineInstallationState.Installed(installedPackages)
+            rootfsDir.exists() && isRootfsComplete(rootfsDir) && hasExecutableProot() -> {
+                AlpineInstallationState.Installed(detectInstalledPackages(rootfsDir))
             }
             else -> AlpineInstallationState.NotInstalled
         }
+    }
+
+    private fun detectInstalledPackages(rootfsDir: File): List<String> = buildList {
+        if (File(rootfsDir, "usr/bin/python3").exists()) add("python3")
+        if (File(rootfsDir, "usr/bin/node").exists()) add("nodejs")
+        if (File(rootfsDir, "usr/bin/pylsp").exists()) add("pylsp")
+        if (File(rootfsDir, "usr/bin/typescript-language-server").exists()) add("typescript-language-server")
+        if (File(rootfsDir, "usr/bin/git").exists()) add("git")
+        if (File(rootfsDir, "bin/bash").exists()) add("bash")
+        if (File(rootfsDir, "usr/bin/curl").exists()) add("curl")
+    }
+
+    private fun isRootfsComplete(rootfsDir: File): Boolean {
+        if (!File(rootfsDir, "etc/alpine-release").isFile) return false
+        if (hasBundledRuntime()) {
+            return File(rootfsDir, BUNDLED_RUNTIME_MARKER).isFile &&
+                File(rootfsDir, "bin/sh").exists() &&
+                File(rootfsDir, "usr/bin/python3").exists() &&
+                File(rootfsDir, "usr/bin/node").exists() &&
+                File(rootfsDir, "usr/bin/pylsp").exists() &&
+                File(rootfsDir, "usr/bin/typescript-language-server").exists()
+        }
+        return true
     }
 
     private fun getBaseDir(): File {
@@ -206,6 +247,7 @@ class AlpineLinuxRunner(
             put("TERM", "xterm-256color")
             put("LANG", "C.UTF-8")
             put("TMPDIR", "/tmp")
+            put("PYTHONUNBUFFERED", "1")
             put("PROOT_TMP_DIR", hostTmpDir.absolutePath)
             put("PROOT_NO_SECCOMP", "1")
             put("PROOT_L2S_DIR", l2sDir.absolutePath)
@@ -252,7 +294,7 @@ class AlpineLinuxRunner(
     } ?: false
 
     override fun isAvailable(): Boolean {
-        return File(getRootfsDir(), "etc/alpine-release").exists() && hasExecutableProot()
+        return isRootfsComplete(getRootfsDir()) && hasExecutableProot()
     }
 
     fun isLanguageServerInstalled(languageId: String): Boolean {
@@ -278,6 +320,7 @@ class AlpineLinuxRunner(
         val command = listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", getRootfsDir().absolutePath) +
             listOf("-b", "/dev:/dev", "-b", "/proc:/proc", "-b", "${hostTmpDir.absolutePath}:/tmp", "-b", "${workspaceDirectory.canonicalPath}:/workspace", "-w", "/workspace") + executable
         return ProcessBuilder(command).directory(getRootfsDir()).apply {
+            sanitizeAndroidEnvironment(environment())
             environment().putAll(buildProotEnvironment())
         }.start()
     }
@@ -302,11 +345,11 @@ class AlpineLinuxRunner(
                     "if /usr/bin/script -q -f -c 'true' /dev/null >/dev/null 2>&1; then exec /usr/bin/script -q -f -c \"$shellCmd\" /dev/null; else exec $shellCmd; fi"
                 )
         } else {
-            val shellArgs = shellCmd.split(" ")
             listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", getRootfsDir().absolutePath) +
-                binds + listOf("-w", containerDirectory) + shellArgs
+                binds + listOf("-w", containerDirectory, "/bin/sh", "-c", "exec $shellCmd")
         }
         return ProcessBuilder(command).directory(getRootfsDir()).redirectErrorStream(true).apply {
+            sanitizeAndroidEnvironment(environment())
             environment().putAll(
                 buildProotEnvironment(
                     mapOf("PS1" to "__VIBESPACE_PROMPT__\n")
@@ -326,25 +369,34 @@ class AlpineLinuxRunner(
                 val archiveFile = File(baseDir, "alpine-minirootfs.tar.gz")
                 val rootfsDir = getRootfsDir()
 
-                if (!File(rootfsDir, "etc/alpine-release").exists()) {
+                if (!isRootfsComplete(rootfsDir)) {
                     val architecture = alpineArchitecture ?: throw IllegalStateException(prootUnavailableMessage())
                     val bundled = bundledRuntimeArchiveProvider?.invoke(architecture)
                     if (bundled != null) {
                         _installationState.value = AlpineInstallationState.Extracting
-                        val bundleFile = File(baseDir, "bundled-runtime.tar.gz")
-                        bundled.use { input -> FileOutputStream(bundleFile).use { output -> input.copyTo(output) } }
-                        extractTarGz(bundleFile, baseDir)
-                        bundleFile.delete()
+                        if (rootfsDir.exists()) {
+                            rootfsDir.deleteRecursively()
+                        }
+                        rootfsDir.mkdirs()
+                        bundled.use { input ->
+                            extractTarGz(input, baseDir)
+                        }
                         val bundledRootfs = File(baseDir, "rootfs.tar.gz")
                         if (bundledRootfs.isFile) {
                             _installationState.value = AlpineInstallationState.Extracting
                             extractTarGz(bundledRootfs, rootfsDir)
                             bundledRootfs.delete()
                         }
+                        repairCriticalRootfsLinks(rootfsDir)
                         ensureBinariesExecutable()
-                        if (!File(rootfsDir, "etc/alpine-release").isFile || !hasExecutableProot()) {
+                        if (!File(rootfsDir, "etc/alpine-release").isFile ||
+                            !File(rootfsDir, "usr/bin/python3").exists() ||
+                            !File(rootfsDir, "usr/bin/node").exists() ||
+                            !hasExecutableProot()
+                        ) {
                             throw IllegalStateException("The bundled Python and Node runtime archive is incomplete.")
                         }
+                        File(rootfsDir, BUNDLED_RUNTIME_MARKER).writeText("3\n")
                     } else {
                         val mirrors = listOf(
                             "dl-cdn.alpinelinux.org",
@@ -391,6 +443,7 @@ class AlpineLinuxRunner(
                         rootfsDir.mkdirs()
                         extractTarGz(archiveFile, rootfsDir)
                         archiveFile.delete()
+                        repairCriticalRootfsLinks(rootfsDir)
                         if (!hasExecutableProot()) installProot(baseDir)
                     }
                 }
@@ -434,16 +487,53 @@ class AlpineLinuxRunner(
                     }
                 }
 
-                val bundledPackages = buildList {
-                    if (File(rootfsDir, "usr/bin/python3").exists()) add("python3")
-                    if (File(rootfsDir, "usr/bin/node").exists()) add("nodejs")
-                }
+                val bundledPackages = detectInstalledPackages(rootfsDir)
                 _installationState.value = AlpineInstallationState.Installed(bundledPackages)
                 VibeResult.Success(Unit)
             } catch (e: Throwable) {
                 val errMsg = e.message ?: "Failed to set up Alpine Linux rootfs"
                 _installationState.value = AlpineInstallationState.Error(errMsg)
                 VibeResult.Error("Alpine setup failed: $errMsg", e)
+            }
+        }
+    }
+
+    private fun repairCriticalRootfsLinks(rootfsDir: File) {
+        val python312 = File(rootfsDir, "usr/bin/python3.12")
+        val python3 = File(rootfsDir, "usr/bin/python3")
+        val python = File(rootfsDir, "usr/bin/python")
+        if (python312.isFile) {
+            python312.setReadable(true, false)
+            python312.setExecutable(true, false)
+            if (!python3.exists() || !python3.isFile) {
+                runCatching {
+                    Files.deleteIfExists(python3.toPath())
+                    python312.copyTo(python3, overwrite = true)
+                    python3.setReadable(true, false)
+                    python3.setExecutable(true, false)
+                }
+            }
+            if (!python.exists() || !python.isFile) {
+                runCatching {
+                    Files.deleteIfExists(python.toPath())
+                    python312.copyTo(python, overwrite = true)
+                    python.setReadable(true, false)
+                    python.setExecutable(true, false)
+                }
+            }
+        }
+        val busybox = File(rootfsDir, "bin/busybox")
+        val sh = File(rootfsDir, "bin/sh")
+        if (busybox.isFile) {
+            busybox.setReadable(true, false)
+            busybox.setExecutable(true, false)
+            if (!sh.exists() || !sh.isFile) {
+                runCatching {
+                    Files.deleteIfExists(sh.toPath())
+                    busybox.copyTo(sh, overwrite = true)
+                    sh.setReadable(true, false)
+                    sh.setExecutable(true, false)
+                }
             }
         }
     }
@@ -605,6 +695,12 @@ class AlpineLinuxRunner(
     }
 
     private fun extractTarGz(tarGzFile: File, destDir: File) {
+        FileInputStream(tarGzFile).use { fis ->
+            extractTarGz(fis, destDir)
+        }
+    }
+
+    private fun extractTarGz(rawInputStream: InputStream, destDir: File) {
         destDir.mkdirs()
         val destNorm = destDir.toPath().normalize().toAbsolutePath()
         val maxTotalBytes = 800L * 1024 * 1024L // 800 MB total limit
@@ -619,8 +715,9 @@ class AlpineLinuxRunner(
         var localPax = emptyMap<String, String>()
         var longName: String? = null
         var longLink: String? = null
+        val copyBuffer = ByteArray(64 * 1024)
 
-        GZIPInputStream(FileInputStream(tarGzFile)).use { gzis ->
+        GZIPInputStream(java.io.BufferedInputStream(rawInputStream, 64 * 1024), 64 * 1024).use { gzis ->
             val header = ByteArray(512)
             while (true) {
                 val bytesRead = readFully(gzis, header)
@@ -720,14 +817,13 @@ class AlpineLinuxRunner(
                     if (Files.isSymbolicLink(entryFile.toPath())) {
                         Files.deleteIfExists(entryFile.toPath())
                     }
-                    FileOutputStream(entryFile).use { fos ->
+                    java.io.BufferedOutputStream(FileOutputStream(entryFile), 64 * 1024).use { fos ->
                         var remaining = fileSize
-                        val buffer = ByteArray(8192)
                         while (remaining > 0) {
-                            val toRead = minOf(remaining, buffer.size.toLong()).toInt()
-                            val r = gzis.read(buffer, 0, toRead)
+                            val toRead = minOf(remaining, copyBuffer.size.toLong()).toInt()
+                            val r = gzis.read(copyBuffer, 0, toRead)
                             if (r <= 0) break
-                            fos.write(buffer, 0, r)
+                            fos.write(copyBuffer, 0, r)
                             remaining -= r
                             totalBytesRead += r
                             if (totalBytesRead > maxTotalBytes) {
@@ -774,12 +870,16 @@ class AlpineLinuxRunner(
             if (!linkNorm.startsWith(destNorm)) throw SecurityException("Archive symlink '$name' escapes the Linux root filesystem.")
             link.parentFile?.mkdirs()
             runCatching { Files.deleteIfExists(link.toPath()) }
-            if (link.exists() && !link.delete()) throw IllegalStateException("Cannot replace root filesystem path with symlink: $name")
+            if (link.exists()) {
+                val deleted = if (link.isDirectory) link.deleteRecursively() else link.delete()
+                if (!deleted && link.exists()) throw IllegalStateException("Cannot replace root filesystem path with symlink: $name")
+            }
             try {
                 Files.createSymbolicLink(link.toPath(), Paths.get(target))
             } catch (e: Exception) {
                 runCatching {
-                    val resolvedTarget = if (target.startsWith('/')) File(destDir, target.trimStart('/')) else File(link.parentFile, target)
+                    val resolvedRel = resolveTarEntryName(name, symlinks)
+                    val resolvedTarget = File(destDir, resolvedRel)
                     if (resolvedTarget.exists() && !resolvedTarget.isDirectory) {
                         resolvedTarget.copyTo(link, overwrite = true)
                         if (resolvedTarget.canExecute()) link.setExecutable(true, false)
@@ -883,7 +983,7 @@ class AlpineLinuxRunner(
             flow.tryEmit(out)
         }
 
-        if (_installationState.value !is AlpineInstallationState.Installed &&
+        if ((_installationState.value !is AlpineInstallationState.Installed || !isRootfsComplete(getRootfsDir())) &&
             (hasBundledRuntime() || _installationState.value is AlpineInstallationState.Extracting)
         ) {
             installSubsystem()
@@ -906,7 +1006,6 @@ class AlpineLinuxRunner(
             return VibeResult.Success(failed)
         }
 
-        emitLine("[Alpine Linux PRoot Container] $ $command", false)
         val rootfsDir = getRootfsDir()
         val prootFile = prootFile()
         val hostWorkingDirectory = File(workingDirectory)
@@ -924,7 +1023,7 @@ class AlpineLinuxRunner(
         val exitCode: Int
         val shellCommand = environmentVariables["VIBESPACE_TERMINAL_SESSION_ID"]
             ?.takeIf { it.isNotBlank() }
-            ?.let { persistentShellCommand(it, command) }
+            ?.let { persistentShellCommand(it, command, containerWorkingDirectory) }
             ?: command
         val mergedEnv = buildProotEnvironment(environmentVariables)
         if (processExecutor != null) {
@@ -967,28 +1066,35 @@ class AlpineLinuxRunner(
             outputs = outputs
         )
         activeRuns[executionId] = completed
-        emitLine("[Process finished with exit code $exitCode]", exitCode != 0)
+        if (exitCode != 0) {
+            emitLine("[Process exited with code $exitCode]", true)
+        }
         return VibeResult.Success(completed)
     }
 
     /** Preserve shell variables and `cd` between terminal submissions, per terminal session. */
-    private fun persistentShellCommand(sessionId: String, command: String): String {
+    private fun persistentShellCommand(
+        sessionId: String,
+        command: String,
+        defaultCwd: String = "/workspace"
+    ): String {
         val sessionHash = java.security.MessageDigest.getInstance("SHA-256")
             .digest(sessionId.toByteArray(Charsets.UTF_8))
             .take(16)
             .joinToString("") { "%02x".format(it) }
-        val stateFile = "/root/.vibespace_sessions/$sessionHash.sh"
+        val stateFile = "/root/.vibespace_sessions_v3/$sessionHash.sh"
         return listOf(
             "umask 077",
-            "mkdir -p /root/.vibespace_sessions || exit 125",
+            "mkdir -p /root/.vibespace_sessions_v3 || exit 125",
             "__vibespace_state=${shellQuote(stateFile)}",
-            "if [ -f \"\$__vibespace_state\" ]; then . \"\$__vibespace_state\"; fi",
-            "case \"\${VIBESPACE_SESSION_CWD:-}\" in /*) cd \"\$VIBESPACE_SESSION_CWD\" 2>/dev/null || cd /root ;; esac",
+            "if [ -f \"\$__vibespace_state\" ]; then . \"\$__vibespace_state\" 2>/dev/null || true; fi",
+            "export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"",
+            "case \"\${VIBESPACE_SESSION_CWD:-}\" in /*) cd \"\$VIBESPACE_SESSION_CWD\" 2>/dev/null || cd ${shellQuote(defaultCwd)} 2>/dev/null || cd /root ;; *) cd ${shellQuote(defaultCwd)} 2>/dev/null || cd /root ;; esac",
             "eval ${shellQuote(command)}",
             "__vibespace_status=\$?",
             "VIBESPACE_SESSION_CWD=\"\$(pwd)\"; export VIBESPACE_SESSION_CWD",
-            "export -p > \"\$__vibespace_state.tmp\"",
-            "mv \"\$__vibespace_state.tmp\" \"\$__vibespace_state\"",
+            "export -p > \"\$__vibespace_state.tmp\" 2>/dev/null || true",
+            "mv \"\$__vibespace_state.tmp\" \"\$__vibespace_state\" 2>/dev/null || true",
             "exit \"\$__vibespace_status\""
         ).joinToString("\n")
     }
@@ -1006,5 +1112,9 @@ class AlpineLinuxRunner(
 
     override fun observeOutput(executionId: String): Flow<ProcessOutput> {
         return outputFlows.getOrPut(executionId) { MutableSharedFlow(replay = 50) }.asSharedFlow()
+    }
+
+    private companion object {
+        const val BUNDLED_RUNTIME_MARKER = ".vibespace-bundled-v3"
     }
 }

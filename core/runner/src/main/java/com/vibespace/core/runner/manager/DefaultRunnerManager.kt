@@ -335,7 +335,7 @@ class DefaultRunnerManager(
                                 else -> Unit
                             }
                         }
-                        val visible = line.replace(INTERACTIVE_PROMPT_MARKER, "$ ").trimEnd()
+                        val visible = line.replace(INTERACTIVE_PROMPT_MARKER, "").trimEnd()
                         if (visible.isNotEmpty()) output.emit(ProcessOutput(visible))
                     } else if (line.isNotEmpty()) {
                         output.emit(ProcessOutput(line))
@@ -346,7 +346,9 @@ class DefaultRunnerManager(
             } finally {
                 if (interactiveTerminals.remove(sessionId, terminal)) {
                     val exitCode = runCatching { if (process.isAlive) null else process.exitValue() }.getOrNull()
-                    output.emit(ProcessOutput("[Terminal process exited${exitCode?.let { " with code $it" } ?: ""}]", exitCode?.let { it != 0 } ?: false))
+                    if (exitCode != null && exitCode != 0) {
+                        output.emit(ProcessOutput("[Terminal process exited with code $exitCode]", true))
+                    }
                 }
             }
             }

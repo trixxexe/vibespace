@@ -353,6 +353,16 @@ fun VibeMainScreen(
                             TerminalPanel(
                                 viewModel = terminalViewModel,
                                 onClosePanel = { isTerminalVisible = false },
+                                onJumpToDiagnosticLine = { targetLine ->
+                                    val doc = editorViewModel.uiState.value.activeDocument
+                                    if (doc != null) {
+                                        val safeLine = targetLine.coerceIn(1, doc.content.count { it == '\n' } + 1)
+                                        val offset = doc.content.lineSequence().take(safeLine - 1).sumOf { it.length + 1 }.coerceAtMost(doc.content.length)
+                                        editorViewModel.onCursorPositionChanged(
+                                            com.vibespace.core.editor.model.CursorPosition(safeLine, 1, offset)
+                                        )
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -590,7 +600,17 @@ fun VibeMainScreen(
                 ) {
                     TerminalPanel(
                         viewModel = terminalViewModel,
-                        onClosePanel = { isTerminalVisible = false }
+                        onClosePanel = { isTerminalVisible = false },
+                        onJumpToDiagnosticLine = { targetLine ->
+                            val doc = editorViewModel.uiState.value.activeDocument
+                            if (doc != null) {
+                                val safeLine = targetLine.coerceIn(1, doc.content.count { it == '\n' } + 1)
+                                val offset = doc.content.lineSequence().take(safeLine - 1).sumOf { it.length + 1 }.coerceAtMost(doc.content.length)
+                                editorViewModel.onCursorPositionChanged(
+                                    com.vibespace.core.editor.model.CursorPosition(safeLine, 1, offset)
+                                )
+                            }
+                        }
                     )
                 }
             }

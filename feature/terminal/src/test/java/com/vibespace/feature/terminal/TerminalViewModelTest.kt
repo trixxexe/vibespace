@@ -202,4 +202,34 @@ class TerminalViewModelTest {
         assertTrue(active!!.lines.any { it.streamType == StreamType.COMMAND && it.text == "$ echo sanitized" })
         assertTrue(active.lines.any { it.streamType == StreamType.STDOUT && it.text == "sanitized" })
     }
+
+    @Test(timeout = 30000)
+    fun executeCommand_cd_and_output_tab_mirroring_have_no_watermarks() = runTest {
+        val tempRoot = java.nio.file.Files.createTempDirectory("vm-cd-test").toFile()
+        try {
+            val runnerManager = DefaultRunnerManager(dispatchers = testDispatchers)
+            val customTerminalService = DefaultTerminalService(dispatchers = testDispatchers, defaultHomeDirectory = tempRoot)
+            val viewModel = track(TerminalViewModel(
+                terminalService = customTerminalService,
+                runnerManager = runnerManager,
+                dispatchers = testDispatchers
+            ))
+
+            viewModel.executeCommand("mkdir hi")
+            viewModel.executeCommand("cd hi")
+            viewModel.executeCommand("pwd")
+
+            val active = viewModel.uiState.value.activeSession!!
+            assertTrue(active.lines.none { it.text.contains("command not found") })
+            assertTrue(active.lines.none { it.text.contains("[VibeSpace") })
+            assertTrue(active.lines.any { it.text.endsWith("/hi") })
+
+            val outputTexts = viewModel.uiState.value.outputLines.map { it.text }
+            assertTrue(outputTexts.contains("Executing: pwd"))
+            assertTrue(outputTexts.any { it.endsWith("/hi") })
+            assertTrue(outputTexts.none { it.contains("VibeSpace") })
+        } finally {
+            tempRoot.deleteRecursively()
+        }
+    }
 }
