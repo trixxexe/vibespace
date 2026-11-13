@@ -1,6 +1,7 @@
 package com.vibespace.core.common.notification
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -49,13 +50,21 @@ object VibeNotificationHelper {
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun notify(
         context: Context,
         title: String,
         message: String
     ): Boolean {
         return runCatching {
-            if (!hasNotificationPermission(context)) return false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return false
+            }
             ensureChannel(context)
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
