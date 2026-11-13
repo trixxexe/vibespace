@@ -319,6 +319,9 @@ class JGitWorkspaceManager(
     }
 
     override suspend fun checkoutBranch(branchName: String): VibeResult<Unit> = withRepository { ctx ->
+        if (ctx.repo.resolve(Constants.HEAD) == null) {
+            return@withRepository VibeResult.Error("Create an initial commit before switching branches.")
+        }
         if (!Git.wrap(ctx.repo).status().call().isClean) return@withRepository VibeResult.Error("Commit, stage, or discard workspace changes before switching branches.")
         val before = snapshot(ctx)
         Git.wrap(ctx.repo).checkout().setName(branchName).call()
@@ -331,6 +334,9 @@ class JGitWorkspaceManager(
     override suspend fun createBranch(branchName: String): VibeResult<Unit> = withRepository { ctx ->
         val name = branchName.trim()
         if (name.isEmpty() || name.startsWith("-") || name.contains("..")) return@withRepository VibeResult.Error("Enter a valid branch name.")
+        if (ctx.repo.resolve(Constants.HEAD) == null) {
+            return@withRepository VibeResult.Error("Create an initial commit before creating a new branch.")
+        }
         Git.wrap(ctx.repo).branchCreate().setName(name).call()
         refreshStatusInContext(ctx)
         VibeResult.Success(Unit)
@@ -341,8 +347,22 @@ class JGitWorkspaceManager(
         val out = ByteArrayOutputStream()
         val formatter = DiffFormatter(out)
         formatter.setRepository(ctx.repo)
-        val entries = Git.wrap(ctx.repo).diff().setPathFilter(org.eclipse.jgit.treewalk.filter.PathFilter.create(rel)).call()
-        if (entries.isEmpty()) return@withRepository VibeResult.Error("No Git diff is available for '$rel'.")
+        val entries = runCatching {
+            Git.wrap(ctx.repo).diff().setPathFilter(org.eclipse.jgit.treewalk.filter.PathFilter.create(rel)).call()
+        }.getOrDefault(emptyList())
+        if (entries.isEmpty()) {
+            val untrackedFile = safeFile(ctx.workTree, rel)
+            if (untrackedFile != null && untrackedFile.isFile) {
+                val fileLines = untrackedFile.readText(Charsets.UTF_8).lines()
+                val diffLines = fileLines.mapIndexed { index, text ->
+                    DiffLine(DiffLineType.INSERT, null, index + 1, text)
+                }
+                return@withRepository VibeResult.Success(
+                    FileDiff(path, diffLines, diffLines.size, 0)
+                )
+            }
+            return@withRepository VibeResult.Error("No Git diff is available for '$rel'.")
+        }
         val entry = entries.first()
         formatter.format(entry)
         formatter.flush()
@@ -351,7 +371,12 @@ class JGitWorkspaceManager(
     }
 
     override suspend fun configureRemote(url: String, username: String?, passwordOrToken: String?): VibeResult<Unit> = withRepository { ctx ->
-        val cleaned = url.trim()
+        val rawUrl = url.trim()
+        val cleaned = if (rawUrl.startsWith("github.com/", ignoreCase = true) || rawUrl.startsWith("gitlab.com/", ignoreCase = true) || rawUrl.startsWith("bitbucket.org/", ignoreCase = true)) {
+            "https://$rawUrl"
+        } else {
+            rawUrl
+        }
         val uri = runCatching { java.net.URI(cleaned) }.getOrNull()
         if (uri == null || uri.scheme !in setOf("https", "http") || uri.host.isNullOrBlank()) {
             return@withRepository VibeResult.Error("Enter a valid HTTPS or HTTP Git remote URL.")
@@ -368,6 +393,89 @@ class JGitWorkspaceManager(
         } else null
         refreshStatusInContext(ctx)
         VibeResult.Success(Unit)
+    }
+
+    override suspend fun cloneRepository(url: String, username: String?, passwordOrToken: String?): VibeResult<String> = withContext(dispatchers.io) {
+        val project = workspaceManager.currentProject.value
+            ?: return@withContext VibeResult.Error("Open or create a workspace project before cloning a repository.")
+
+        val rawUrl = url.trim()
+        val cleaned = when {
+            rawUrl.startsWith("github.com/", ignoreCase = true) ||
+                rawUrl.startsWith("gitlab.com/", ignoreCase = true) ||
+                rawUrl.startsWith("bitbucket.org/", ignoreCase = true) -> "https://$rawUrl"
+            else -> rawUrl
+        }
+        val uri = runCatching { java.net.URI(cleaned) }.getOrNull()
+        if (uri == null || uri.scheme !in setOf("https", "http", "file") || (uri.scheme != "file" && uri.host.isNullOrBlank())) {
+            return@withContext VibeResult.Error("Enter a valid HTTPS/HTTP Git repository URL (e.g. https://github.com/user/repo.git).")
+        }
+        if (uri.userInfo != null) {
+            return@withContext VibeResult.Error("Do not embed credentials in the URL; use the optional username and token fields.")
+        }
+
+        val creds = if (!username.isNullOrBlank() && !passwordOrToken.isNullOrBlank()) {
+            UsernamePasswordCredentialsProvider(username.trim(), passwordOrToken.trim())
+        } else if (!passwordOrToken.isNullOrBlank()) {
+            UsernamePasswordCredentialsProvider("git", passwordOrToken.trim())
+        } else {
+            null
+        }
+        if (creds != null) {
+            credentials = creds
+        }
+
+        storageDirectory.mkdirs()
+        val targetDir = File(storageDirectory, project.id.toSha256())
+        val tempCloneDir = File(storageDirectory, "${project.id.toSha256()}_clone_${System.currentTimeMillis()}")
+
+        try {
+            if (tempCloneDir.exists()) tempCloneDir.deleteRecursively()
+            val clonedGit = Git.cloneRepository()
+                .setURI(cleaned)
+                .setDirectory(tempCloneDir)
+                .setCloneAllBranches(false)
+                .setCredentialsProvider(creds)
+                .call()
+            clonedGit.close()
+
+            active.getAndSet(null)?.repo?.close()
+            if (targetDir.exists()) {
+                targetDir.deleteRecursively()
+            }
+            if (!tempCloneDir.renameTo(targetDir)) {
+                tempCloneDir.copyRecursively(targetDir, overwrite = true)
+                tempCloneDir.deleteRecursively()
+            }
+
+            val gitDir = File(targetDir, ".git")
+            val repo = FileRepositoryBuilder().setGitDir(gitDir).setWorkTree(targetDir).findGitDir().build()
+            val ctx = RepositoryContext(project, targetDir, repo, mutableMapOf(), mutableMapOf())
+
+            val existingFiles = (workspaceManager.getAllProjectFiles(project.rootUri) as? VibeResult.Success)?.data.orEmpty()
+            for (file in existingFiles.filter { it.isFile }) {
+                val rel = relativePath(file, existingFiles, project.rootUri) ?: continue
+                if (isSafeGitPath(rel)) {
+                    ctx.uriToRelative[file.uri] = rel
+                    ctx.relativeToUri[rel] = file.uri
+                }
+            }
+
+            val applied = applyChangedFiles(ctx, emptyMap())
+            if (applied is VibeResult.Error) {
+                repo.close()
+                return@withContext applied
+            }
+
+            active.set(ctx)
+            refreshStatusInContext(ctx)
+            val repoName = cleaned.substringAfterLast('/').removeSuffix(".git").ifBlank { "repository" }
+            val branch = repo.branch ?: "HEAD"
+            VibeResult.Success("Cloned $repoName ($branch) into ${project.name}.")
+        } catch (failure: Throwable) {
+            runCatching { tempCloneDir.deleteRecursively() }
+            VibeResult.Error("Git clone failed: ${failure.message ?: "Unable to reach remote repository"}", failure)
+        }
     }
 
     override suspend fun push(): VibeResult<String> = withRepository { ctx ->

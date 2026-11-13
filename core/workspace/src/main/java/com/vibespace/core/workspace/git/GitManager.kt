@@ -20,6 +20,8 @@ interface GitManager {
     suspend fun getFileDiff(path: String): VibeResult<FileDiff>
     suspend fun configureRemote(url: String, username: String? = null, passwordOrToken: String? = null): VibeResult<Unit> =
         VibeResult.Error("Remote configuration is not supported by this Git manager.")
+    suspend fun cloneRepository(url: String, username: String? = null, passwordOrToken: String? = null): VibeResult<String> =
+        VibeResult.Error("Repository cloning is not supported by this Git manager.")
     suspend fun push(): VibeResult<String>
     suspend fun pull(): VibeResult<String>
 }

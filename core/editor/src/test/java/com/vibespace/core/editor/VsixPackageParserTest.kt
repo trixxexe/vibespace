@@ -88,7 +88,8 @@ class VsixPackageParserTest {
     @Test
     fun builtinThemes_contain_classic_popular_presets() {
         val themes = EditorThemeDefinition.BUILTIN_THEMES
-        assertEquals(5, themes.size)
+        assertEquals(11, themes.size)
+        assertTrue(themes.any { it.name.contains("VS Code Blue") })
         assertTrue(themes.any { it.name.contains("Dracula") })
         assertTrue(themes.any { it.name.contains("One Dark Pro") })
         assertTrue(themes.any { it.name.contains("Monokai Pro") })

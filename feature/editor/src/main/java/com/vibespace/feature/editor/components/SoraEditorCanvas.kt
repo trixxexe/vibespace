@@ -31,20 +31,40 @@ import io.github.rosemoe.sora.widget.CodeEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private class EditorBinding(
+internal class EditorBinding(
     var documentId: String,
     var languageId: String,
     var themeId: String,
-    var editorLanguage: Language
+    var editorLanguage: Language,
+    var externalContentVersion: Long = 0L
 ) {
     var isUpdatingProgrammatically: Boolean = false
     var lastEmittedContent: String? = null
+    private val recentEmissions = ArrayDeque<String>()
+
+    fun recordEmission(text: String) {
+        lastEmittedContent = text
+        if (recentEmissions.lastOrNull() != text) {
+            recentEmissions.addLast(text)
+            if (recentEmissions.size > 64) {
+                recentEmissions.removeFirst()
+            }
+        }
+    }
+
+    fun isRecentEmission(text: String): Boolean {
+        return text == lastEmittedContent || recentEmissions.contains(text)
+    }
+
+    fun clearEmissions() {
+        recentEmissions.clear()
+    }
 }
 
 /**
  * Jetpack Compose wrapper for Sora CodeEditor.
  * Provides high-performance native syntax highlighting, line numbers,
- * smooth touch gestures, and integration with VibeSpace's design system.
+ * snappy touch handling, and integration with VibeSpace's design system.
  */
 @Composable
 fun SoraEditorCanvas(
@@ -59,6 +79,7 @@ fun SoraEditorCanvas(
     showLineNumbers: Boolean = true,
     wordWrap: Boolean = false,
     theme: EditorThemeDefinition = EditorThemeDefinition.VIBE_DARK,
+    externalContentVersion: Long = 0L,
     controller: SoraEditorController = remember { SoraEditorController() },
     modifier: Modifier = Modifier
 ) {
@@ -127,6 +148,7 @@ fun SoraEditorCanvas(
                 isEnabled = true
                 isEditable = true
                 typefaceText = Typeface.MONOSPACE
+                isCursorAnimationEnabled = false
                 if (!TextMateLanguageManager.isReady()) {
                     runCatching { TextMateLanguageManager.initialize(context.applicationContext) }
                 }
@@ -143,8 +165,14 @@ fun SoraEditorCanvas(
                 setEditorLanguage(editorLanguage)
 
                 // Initialize document content
-                val binding = EditorBinding(documentId, language.id, theme.id, editorLanguage).apply {
-                    lastEmittedContent = content
+                val binding = EditorBinding(
+                    documentId = documentId,
+                    languageId = language.id,
+                    themeId = theme.id,
+                    editorLanguage = editorLanguage,
+                    externalContentVersion = externalContentVersion
+                ).apply {
+                    recordEmission(content)
                     isUpdatingProgrammatically = true
                 }
                 tag = binding
@@ -173,7 +201,7 @@ fun SoraEditorCanvas(
                     val b = tag as? EditorBinding
                     if (b?.isUpdatingProgrammatically != true) {
                         val currentText = text.toString()
-                        b?.lastEmittedContent = currentText
+                        b?.recordEmission(currentText)
                         currentOnContentChange(currentText)
                     }
                 }
@@ -197,6 +225,7 @@ fun SoraEditorCanvas(
         update = { editor ->
             editor.isEnabled = true
             editor.isEditable = true
+            editor.isCursorAnimationEnabled = false
             // Update font size if changed externally
             editor.setTextSize(fontSizeSp)
 
@@ -223,17 +252,32 @@ fun SoraEditorCanvas(
 
             val isNewDocument = binding?.documentId != documentId
             val currentEditorText = editor.text.toString()
-            val isExternalChange = !isNewDocument && currentEditorText != content && content != binding?.lastEmittedContent
+            val isExplicitExternalVersionChange = binding?.externalContentVersion != externalContentVersion
+            val isUnfocusedExternalChange = !isNewDocument &&
+                currentEditorText != content &&
+                binding?.isRecentEmission(content) != true &&
+                !editor.hasFocus()
 
-            // Keep independent tab text and caret state when switching documents or on external changes.
-            if (isNewDocument || isExternalChange) {
-                val guard = binding ?: EditorBinding(documentId, language.id, theme.id, editorLanguage)
+            // Only replace editor buffer on document switch or explicit external edits (Undo/Redo/Format/Replace),
+            // never from asynchronous echoes of the user's own typing!
+            if (isNewDocument || isExplicitExternalVersionChange || isUnfocusedExternalChange) {
+                val guard = binding ?: EditorBinding(
+                    documentId = documentId,
+                    languageId = language.id,
+                    themeId = theme.id,
+                    editorLanguage = editorLanguage,
+                    externalContentVersion = externalContentVersion
+                )
                 editor.tag = guard
                 guard.documentId = documentId
-                guard.lastEmittedContent = content
+                guard.externalContentVersion = externalContentVersion
+                guard.clearEmissions()
+                guard.recordEmission(content)
                 guard.isUpdatingProgrammatically = true
                 try {
-                    editor.setText(content)
+                    if (currentEditorText != content || isNewDocument) {
+                        editor.setText(content)
+                    }
                     restoreCursor(editor, cursorPosition)
                 } finally {
                     guard.isUpdatingProgrammatically = false

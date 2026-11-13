@@ -134,7 +134,7 @@ class OpenAIAIProvider(
             instanceFollowRedirects = false
             requestMethod = "POST"
             connectTimeout = 15_000
-            readTimeout = 1_000
+            readTimeout = 15_000
             doOutput = true
             headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }

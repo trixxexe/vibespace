@@ -14,14 +14,16 @@ import com.vibespace.core.language.diagnostics.SyntaxDiagnosticsValidator
 import com.vibespace.core.language.model.CompletionItem
 import com.vibespace.core.workspace.manager.WorkspaceManager
 import com.vibespace.core.workspace.model.VirtualFile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class EditorViewModel(
     private val editorEngine: EditorEngine,
@@ -35,6 +37,7 @@ class EditorViewModel(
     private var activeLspClient: com.vibespace.core.language.lsp.LanguageServerClient? = null
     private var autoSaveJob: Job? = null
     private var completionJob: Job? = null
+    private val editMutex = Mutex()
     private val openedLspDocuments = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private val _uiState = MutableStateFlow(EditorUiState())
@@ -59,7 +62,10 @@ class EditorViewModel(
             }
         }
         viewModelScope.launch(dispatchers.default) {
+            var lastDocumentId: String? = null
             editorEngine.activeDocument.collect { activeDoc ->
+                val isDocSwitch = activeDoc?.documentId != lastDocumentId
+                lastDocumentId = activeDoc?.documentId
                 val diags = if (activeDoc != null) {
                     SyntaxDiagnosticsValidator.validate(activeDoc.content, activeDoc.language.id)
                 } else emptyList()
@@ -68,7 +74,7 @@ class EditorViewModel(
                         activeDocument = activeDoc,
                         cursorPosition = activeDoc?.cursorPosition ?: CursorPosition(1, 1, 0),
                         diagnostics = diags,
-                        completions = emptyList()
+                        completions = if (isDocSwitch) emptyList() else it.completions
                     )
                 }
             }
@@ -175,6 +181,7 @@ class EditorViewModel(
                     val safeLine = lineNumber.coerceIn(1, content.count { it == '\n' } + 1)
                     val offset = content.lineSequence().take(safeLine - 1).sumOf { it.length + 1 }.coerceAtMost(content.length)
                     editorEngine.updateCursorPosition(opened.documentId, CursorPosition(safeLine, 1, offset))
+                    _uiState.update { it.copy(externalContentVersion = it.externalContentVersion + 1) }
                 }
             }
             val client = lspClientProvider?.invoke(language.id)
@@ -223,18 +230,26 @@ class EditorViewModel(
         }
     }
 
-    fun onContentChanged(newContent: String) {
+    fun onContentChanged(newContent: String, isExternalChange: Boolean = false) {
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
-            val updatedDocument = when (val result = editorEngine.updateDocument(activeDoc.documentId, newContent)) {
-                is VibeResult.Success -> result.data
-                else -> return@launch
+            val updatedDocument = editMutex.withLock {
+                when (val result = editorEngine.updateDocument(activeDoc.documentId, newContent)) {
+                    is VibeResult.Success -> result.data
+                    else -> return@launch
+                }
             }
             val diags = SyntaxDiagnosticsValidator.validate(newContent, activeDoc.language.id)
             val cursorOffset = _uiState.value.cursorPosition.offset.coerceIn(0, newContent.length)
             val prefix = identifierPrefixAt(newContent, cursorOffset)
             val suggestions = AutocompleteEngine.getSuggestions(newContent, prefix, activeDoc.language.id)
-            _uiState.update { it.copy(diagnostics = diags, completions = suggestions) }
+            _uiState.update {
+                it.copy(
+                    diagnostics = diags,
+                    completions = suggestions,
+                    externalContentVersion = if (isExternalChange) it.externalContentVersion + 1 else it.externalContentVersion
+                )
+            }
             val client = activeLspClient
             if (client != null && client.isRunning) {
                 client.didChange(updatedDocument.uri, updatedDocument.content, updatedDocument.version)
@@ -257,9 +272,10 @@ class EditorViewModel(
             return
         }
         viewModelScope.launch(dispatchers.default) {
-            val suggestions = AutocompleteEngine.getSuggestions(activeDoc.content, prefix, activeDoc.language.id)
+            val latestDoc = editorEngine.getDocument(activeDoc.documentId) ?: activeDoc
+            val suggestions = AutocompleteEngine.getSuggestions(latestDoc.content, prefix, latestDoc.language.id)
             _uiState.update { it.copy(completions = suggestions) }
-            requestLspCompletions(activeDoc, prefix, suggestions)
+            requestLspCompletions(latestDoc, prefix, suggestions)
         }
     }
 
@@ -298,15 +314,18 @@ class EditorViewModel(
         var wordStart = cursorOffset
         while (wordStart > 0 && isIdentifierCharacter(currentContent[wordStart - 1])) wordStart--
         val newContent = currentContent.substring(0, wordStart) + item.insertText + currentContent.substring(cursorOffset)
-        onContentChanged(newContent)
+        onContentChanged(newContent, isExternalChange = true)
     }
 
     fun onCursorPositionChanged(cursor: CursorPosition) {
         _uiState.update { it.copy(cursorPosition = cursor) }
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
-            editorEngine.updateCursorPosition(activeDoc.documentId, cursor)
-            updateCompletions(identifierPrefixAt(activeDoc.content, cursor.offset.coerceIn(0, activeDoc.content.length)))
+            editMutex.withLock {
+                editorEngine.updateCursorPosition(activeDoc.documentId, cursor)
+            }
+            val latestDoc = editorEngine.getDocument(activeDoc.documentId) ?: activeDoc
+            updateCompletions(identifierPrefixAt(latestDoc.content, cursor.offset.coerceIn(0, latestDoc.content.length)))
         }
     }
 
@@ -364,14 +383,20 @@ class EditorViewModel(
     fun undo() {
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
-            editorEngine.undo(activeDoc.documentId)
+            editMutex.withLock {
+                editorEngine.undo(activeDoc.documentId)
+            }
+            _uiState.update { it.copy(externalContentVersion = it.externalContentVersion + 1) }
         }
     }
 
     fun redo() {
         val activeDoc = _uiState.value.activeDocument ?: return
         viewModelScope.launch(dispatchers.default) {
-            editorEngine.redo(activeDoc.documentId)
+            editMutex.withLock {
+                editorEngine.redo(activeDoc.documentId)
+            }
+            _uiState.update { it.copy(externalContentVersion = it.externalContentVersion + 1) }
         }
     }
 
@@ -483,7 +508,7 @@ class EditorViewModel(
             when (val result = client.formatDocument(activeDoc.uri)) {
                 is com.vibespace.core.common.result.VibeResult.Success -> {
                     if (result.data.isNotEmpty()) {
-                        onContentChanged(result.data)
+                        onContentChanged(result.data, isExternalChange = true)
                         _uiState.update { it.copy(statusMessage = "Document formatted") }
                     }
                 }

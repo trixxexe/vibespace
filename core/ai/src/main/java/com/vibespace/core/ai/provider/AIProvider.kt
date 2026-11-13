@@ -31,13 +31,7 @@ class AIProviderRegistry(
         if (registerDefaults) {
             register(GeminiAIProvider())
             register(OpenAIAIProvider())
-            register(OpenAIAIProvider(
-                providerId = "anthropic",
-                displayName = "Anthropic (Claude)",
-                activeModel = "claude-3-7-sonnet",
-                customEndpoint = "https://api.anthropic.com/v1/messages",
-                supportedModels = listOf("claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku")
-            ))
+            register(AnthropicAIProvider())
             register(OpenAIAIProvider(
                 providerId = "deepseek",
                 displayName = "DeepSeek",
@@ -51,6 +45,18 @@ class AIProviderRegistry(
                 activeModel = "llama-3.3-70b-versatile",
                 customEndpoint = "https://api.groq.com/openai/v1/chat/completions",
                 supportedModels = listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768")
+            ))
+            register(OpenAIAIProvider(
+                providerId = "openrouter",
+                displayName = "OpenRouter",
+                activeModel = "anthropic/claude-3.7-sonnet",
+                customEndpoint = "https://openrouter.ai/api/v1/chat/completions",
+                supportedModels = listOf(
+                    "anthropic/claude-3.7-sonnet",
+                    "openai/gpt-4o-mini",
+                    "google/gemini-2.5-flash",
+                    "deepseek/deepseek-chat"
+                )
             ))
             activeProviderId = "gemini"
         }
@@ -80,12 +86,27 @@ class AIProviderRegistry(
         when (provider) {
             is GeminiAIProvider -> {
                 provider.apiKey = config.apiKey
-                provider.activeModel = config.model
+                if (config.model.isNotBlank()) provider.activeModel = config.model
+            }
+            is AnthropicAIProvider -> {
+                provider.apiKey = config.apiKey
+                if (config.model.isNotBlank()) provider.activeModel = config.model
+                if (config.customEndpoint.isNotBlank()) {
+                    provider.customEndpoint = config.customEndpoint
+                } else {
+                    provider.customEndpoint = "https://api.anthropic.com/v1/messages"
+                }
             }
             is OpenAIAIProvider -> {
                 provider.apiKey = config.apiKey
-                provider.activeModel = config.model
-                provider.customEndpoint = config.customEndpoint
+                if (config.model.isNotBlank()) provider.activeModel = config.model
+                val defaultEndpoint = when (config.providerId) {
+                    "deepseek" -> "https://api.deepseek.com/chat/completions"
+                    "groq" -> "https://api.groq.com/openai/v1/chat/completions"
+                    "openrouter" -> "https://openrouter.ai/api/v1/chat/completions"
+                    else -> ""
+                }
+                provider.customEndpoint = config.customEndpoint.ifBlank { defaultEndpoint }
             }
         }
     }

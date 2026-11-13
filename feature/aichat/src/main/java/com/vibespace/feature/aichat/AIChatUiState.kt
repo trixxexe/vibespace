@@ -11,5 +11,5 @@ data class AIChatUiState(
     val errorMessage: String? = null,
     val isConfigured: Boolean = false,
     val activeProvider: String = "gemini",
-    val activeModel: String = "gemini-3.8-flash"
+    val activeModel: String = "gemini-2.5-flash"
 )

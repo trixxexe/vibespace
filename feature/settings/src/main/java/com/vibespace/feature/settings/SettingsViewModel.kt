@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val settings: UserSettings = UserSettings(),
     val isInitialized: Boolean = false,
-    val appVersion: String = "0.1.0-alpha",
-    val buildNumber: String = "1",
+    val appVersion: String = "2.4.0",
+    val buildNumber: String = "24",
     val kotlinVersion: String = "2.0.21",
     val isSavingAiConfig: Boolean = false,
     val aiConfigError: String? = null
@@ -46,6 +46,23 @@ class SettingsViewModel(
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch(dispatchers.default) {
             repository.setThemeMode(mode)
+            val currentEditorTheme = _uiState.value.settings.editorThemeId
+            when (mode) {
+                ThemeMode.LIGHT -> {
+                    if (currentEditorTheme in setOf("vibe_dark", "vscode_blue")) {
+                        repository.setEditorTheme("vibe_light")
+                    }
+                }
+                ThemeMode.DARK -> {
+                    if (currentEditorTheme in setOf("vibe_light", "vscode_blue")) {
+                        repository.setEditorTheme("vibe_dark")
+                    }
+                }
+                ThemeMode.BLUE_VSC -> {
+                    repository.setEditorTheme("vscode_blue")
+                }
+                ThemeMode.SYSTEM -> Unit
+            }
         }
     }
 

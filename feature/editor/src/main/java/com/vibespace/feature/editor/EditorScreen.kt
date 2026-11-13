@@ -1,28 +1,17 @@
 package com.vibespace.feature.editor
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import com.vibespace.core.designsystem.components.VibeEmptyState
-import com.vibespace.core.designsystem.components.VibeIcons
-import com.vibespace.core.designsystem.components.VibeStatusBar
-import com.vibespace.core.designsystem.components.VibeTabBar
-import com.vibespace.core.designsystem.components.VibeTabItem
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,12 +19,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.components.VibeEmptyState
+import com.vibespace.core.designsystem.components.VibeIcons
+import com.vibespace.core.designsystem.components.VibeStatusBar
+import com.vibespace.core.designsystem.components.VibeTabBar
+import com.vibespace.core.designsystem.components.VibeTabItem
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.language.snippets.SnippetRepository
@@ -45,7 +48,6 @@ import com.vibespace.feature.editor.components.SnippetCompletionBar
 import com.vibespace.feature.editor.components.SoraEditorCanvas
 import com.vibespace.feature.editor.components.SoraEditorController
 import com.vibespace.feature.editor.components.TemplateBottomSheet
-import com.vibespace.feature.editor.ui.MobileAutocompleteBar
 
 @Composable
 fun EditorScreen(
@@ -55,12 +57,28 @@ fun EditorScreen(
     onAiAssistantClick: () -> Unit,
     onToggleTerminalClick: () -> Unit,
     onOpenExplorerClick: () -> Unit,
+    onFileExported: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val activeDoc = uiState.activeDocument
     val soraController = remember { SoraEditorController() }
     var showTemplateSheet by remember { mutableStateOf(false) }
+
+    val exportFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri: Uri? ->
+        val doc = uiState.activeDocument
+        if (uri != null && doc != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(doc.content.toByteArray(Charsets.UTF_8))
+                }
+                onFileExported?.invoke(doc.fileName)
+            }
+        }
+    }
 
     val currentLanguageId = activeDoc?.language?.id ?: "text"
     val languageDisplayName = activeDoc?.language?.displayName ?: "Plain Text"
@@ -101,8 +119,6 @@ fun EditorScreen(
         // Toolbar
         EditorToolbar(
             onSaveClick = { viewModel.saveActiveDocument() },
-            // EditorEngine is the single source of undo history. Sora edits flow into it;
-            // applying both histories here would undo two separate changes per tap.
             onUndoClick = { viewModel.undo() },
             onRedoClick = { viewModel.redo() },
             onSearchClick = onSearchClick,
@@ -110,7 +126,10 @@ fun EditorScreen(
             onAiAssistantClick = onAiAssistantClick,
             onToggleTerminalClick = onToggleTerminalClick,
             isDocumentDirty = activeDoc?.isDirty ?: false,
-            onFormatClick = { viewModel.formatDocument() }
+            onFormatClick = { viewModel.formatDocument() },
+            onExportClick = if (activeDoc != null) {
+                { exportFileLauncher.launch(activeDoc.fileName) }
+            } else null
         )
 
         // Main Editor Surface or Empty State
@@ -130,6 +149,7 @@ fun EditorScreen(
                     showLineNumbers = uiState.showLineNumbers,
                     wordWrap = uiState.wordWrap,
                     theme = com.vibespace.core.editor.theme.EditorThemeDefinition.fromId(uiState.themeId),
+                    externalContentVersion = uiState.externalContentVersion,
                     onContentChange = { viewModel.onContentChanged(it) },
                     onCursorChange = { viewModel.onCursorPositionChanged(it) },
                     controller = soraController
@@ -199,20 +219,14 @@ fun EditorScreen(
             }
         }
 
-        // Mobile Predictive Snippet Bar
-        if (activeDoc != null && suggestions.isNotEmpty()) {
+        // Unified Non-Jumping Autocomplete & Snippet Bar
+        if (activeDoc != null && (suggestions.isNotEmpty() || uiState.completions.isNotEmpty())) {
             SnippetCompletionBar(
                 suggestions = suggestions,
                 onSelectSnippet = { soraController.insertSymbol(it) },
-                onOpenTemplates = { showTemplateSheet = true }
-            )
-        }
-
-        // Touchscreen Autocomplete Suggestion Bar
-        if (activeDoc != null && uiState.completions.isNotEmpty()) {
-            MobileAutocompleteBar(
-                completions = uiState.completions,
-                onSelectCompletion = { item ->
+                onOpenTemplates = { showTemplateSheet = true },
+                liveCompletions = uiState.completions,
+                onSelectLiveCompletion = { item ->
                     soraController.replaceCurrentIdentifier(item.insertText)
                 }
             )

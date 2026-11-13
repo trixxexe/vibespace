@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class ThemeMode {
     DARK,
     LIGHT,
+    BLUE_VSC,
     SYSTEM
 }
 
@@ -25,7 +26,7 @@ data class UserSettings(
     val formatOnSave: Boolean = false,
     val aiProviderId: String = "gemini",
     val aiApiKey: String = "",
-    val aiModel: String = "gemini-3.8-flash",
+    val aiModel: String = "gemini-2.5-flash",
     val aiCustomEndpoint: String = "",
     val hasCompletedOnboarding: Boolean = false,
     val onboardingStep: Int = 0

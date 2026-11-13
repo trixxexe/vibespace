@@ -4,6 +4,7 @@ set -euo pipefail
 output_dir="${1:?usage: build-bundled-runtime.sh OUTPUT_DIR}"
 mkdir -p "$output_dir/runtime"
 
+committed_runtime_dir="app/src/main/assets/runtime"
 proot_release="v26.10.08-a179d3e"
 declare -A arches=(
   [aarch64]=linux/arm64/v8
@@ -13,13 +14,24 @@ declare -A arches=(
 )
 
 for arch in "${!arches[@]}"; do
+  if [[ -f "$committed_runtime_dir/$arch.tar.gz" ]] && [[ $(stat -c%s "$committed_runtime_dir/$arch.tar.gz") -gt 1048576 ]]; then
+    echo "Using pre-bundled runtime asset for $arch from $committed_runtime_dir/$arch.tar.gz"
+    if [[ "$(realpath -m "$output_dir/runtime")" != "$(realpath -m "$committed_runtime_dir")" ]]; then
+      cp -f "$committed_runtime_dir/$arch.tar.gz" "$output_dir/runtime/$arch.tar.gz"
+      if [[ -f "$committed_runtime_dir/$arch.packages.txt" ]]; then
+        cp -f "$committed_runtime_dir/$arch.packages.txt" "$output_dir/runtime/$arch.packages.txt"
+      fi
+    fi
+    continue
+  fi
+
   platform="${arches[$arch]}"
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
 
   echo "Building Alpine Python/Node runtime for $arch ($platform)"
-  docker run --rm --platform "$platform" -v "$work:/out" alpine:3.24.0 sh -ec '
-    apk add --no-cache python3 py3-pip nodejs npm util-linux-misc ca-certificates
+  docker run --rm --platform "$platform" -v "$work:/out" alpine:3.21 sh -ec '
+    apk add --no-cache python3 py3-pip nodejs npm util-linux-misc ca-certificates git bash curl
     tar -C / -czf /out/rootfs.tar.gz --exclude=./dev --exclude=./proc --exclude=./sys --exclude=./tmp --exclude=./out .
     apk info -v | sort > /out/packages.txt
   '

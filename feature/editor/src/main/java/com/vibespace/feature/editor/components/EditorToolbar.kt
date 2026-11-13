@@ -28,6 +28,7 @@ fun EditorToolbar(
     onToggleTerminalClick: () -> Unit,
     isDocumentDirty: Boolean,
     onFormatClick: (() -> Unit)? = null,
+    onExportClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -48,6 +49,20 @@ fun EditorToolbar(
                 tint = if (isDocumentDirty) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted,
                 modifier = Modifier.size(20.dp)
             )
+        }
+
+        if (onExportClick != null) {
+            IconButton(
+                onClick = onExportClick,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    imageVector = VibeIcons.Download,
+                    contentDescription = "Export file to device storage",
+                    tint = VibeTheme.colors.textSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
 
         IconButton(

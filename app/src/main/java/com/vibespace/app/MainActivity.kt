@@ -38,9 +38,10 @@ class MainActivity : ComponentActivity() {
             )
 
             val isSystemDark = isSystemInDarkTheme()
-            val useDarkTheme = settingsState.themeMode == ThemeMode.DARK || (settingsState.themeMode == ThemeMode.SYSTEM && isSystemDark)
+            val useBlueTheme = settingsState.themeMode == ThemeMode.BLUE_VSC || settingsState.editorThemeId == "vscode_blue"
+            val useDarkTheme = useBlueTheme || settingsState.themeMode == ThemeMode.DARK || (settingsState.themeMode == ThemeMode.SYSTEM && isSystemDark)
 
-            VibeSpaceTheme(darkTheme = useDarkTheme) {
+            VibeSpaceTheme(darkTheme = useDarkTheme, blueTheme = useBlueTheme) {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()

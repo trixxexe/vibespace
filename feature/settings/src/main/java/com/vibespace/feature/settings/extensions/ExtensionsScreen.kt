@@ -1,6 +1,7 @@
 package com.vibespace.feature.settings.extensions
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -53,6 +54,9 @@ fun ExtensionsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    BackHandler(enabled = true) {
+        onNavigateBack()
+    }
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 

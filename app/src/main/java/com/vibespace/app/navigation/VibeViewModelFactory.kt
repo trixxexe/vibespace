@@ -30,7 +30,8 @@ class VibeViewModelFactory(
                     workspaceManager = app.workspaceManager,
                     recentProjectsRepository = app.recentProjectsRepository,
                     dispatchers = app.dispatchers,
-                    editorEngine = app.editorEngine
+                    editorEngine = app.editorEngine,
+                    gitManager = app.gitManager
                 ) as T
             }
             modelClass.isAssignableFrom(EditorViewModel::class.java) -> {

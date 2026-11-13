@@ -59,7 +59,7 @@ object TextMateLanguageManager {
             val json = createThemeJson(theme)
             val themeSource = IThemeSource.fromString(IThemeSource.ContentType.JSON, json)
             val themeModel = ThemeModel(themeSource, theme.id).apply {
-                isDark = true
+                isDark = theme.isDark
             }
             ThemeRegistry.getInstance().loadTheme(themeModel, true)
         } catch (_: Throwable) {
@@ -68,10 +68,11 @@ object TextMateLanguageManager {
     }
 
     private fun createThemeJson(theme: EditorThemeDefinition): String {
+        val themeType = if (theme.isDark) "dark" else "light"
         return """
         {
           "name": "${theme.id}",
-          "type": "dark",
+          "type": "$themeType",
           "colors": {
             "editor.background": "${theme.backgroundColor}",
             "editor.foreground": "${theme.textColor}",

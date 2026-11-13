@@ -93,6 +93,48 @@ private val LightExtendedColors = VibeExtendedColors(
     syntaxComment = Color(0xFF6E7781)
 )
 
+private val BlueVscColorScheme = darkColorScheme(
+    primary = Color(0xFF3794FF),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF00346E),
+    onPrimaryContainer = Color(0xFFBBDAFF),
+    secondary = Color(0xFF007ACC),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF002B5C),
+    onSecondaryContainer = Color.White,
+    background = Color(0xFF001C40),
+    onBackground = Color(0xFFFFFFFF),
+    surface = Color(0xFF002451),
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF00346E),
+    onSurfaceVariant = Color(0xFFBBDAFF),
+    outline = Color(0xFF003F88),
+    outlineVariant = Color(0xFF3794FF),
+    error = VibeRed,
+    onError = Color.White
+)
+
+private val BlueVscExtendedColors = VibeExtendedColors(
+    editorBackground = Color(0xFF002451),
+    gutterBackground = Color(0xFF001C40),
+    activeLineBackground = Color(0xFF00346E),
+    panelBackground = Color(0xFF001733),
+    borderSubtle = Color(0xFF003A7A),
+    borderFocused = Color(0xFF3794FF),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFFBBDAFF),
+    textMuted = Color(0xFF7285B7),
+    accentPrimary = Color(0xFF3794FF),
+    accentSecondary = Color(0xFFEBBBFF),
+    statusSuccess = Color(0xFFD1F1A9),
+    statusWarning = Color(0xFFFFEEAD),
+    statusError = Color(0xFFFF9DA4),
+    syntaxKeyword = Color(0xFFEBBBFF),
+    syntaxFunction = Color(0xFFBBDAFF),
+    syntaxString = Color(0xFFD1F1A9),
+    syntaxComment = Color(0xFF7285B7)
+)
+
 val LocalVibeColors = staticCompositionLocalOf { DarkExtendedColors }
 val LocalVibeSpacing = staticCompositionLocalOf { VibeSpacing() }
 
@@ -110,11 +152,20 @@ object VibeTheme {
 
 @Composable
 fun VibeSpaceTheme(
-    darkTheme: Boolean = true, // Dark by default as required
+    darkTheme: Boolean = true,
+    blueTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val extendedColors = if (darkTheme) DarkExtendedColors else LightExtendedColors
+    val colorScheme = when {
+        blueTheme -> BlueVscColorScheme
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+    val extendedColors = when {
+        blueTheme -> BlueVscExtendedColors
+        darkTheme -> DarkExtendedColors
+        else -> LightExtendedColors
+    }
     val spacing = VibeSpacing()
 
     CompositionLocalProvider(

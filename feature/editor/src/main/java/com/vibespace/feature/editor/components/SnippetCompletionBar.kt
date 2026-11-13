@@ -20,40 +20,47 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import com.vibespace.core.designsystem.components.VibeIcons
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vibespace.core.designsystem.components.VibeIcons
 import com.vibespace.core.designsystem.theme.VibeCodeTypography
 import com.vibespace.core.designsystem.theme.VibeTheme
 import com.vibespace.core.language.model.CompletionItem
 import com.vibespace.core.language.model.CompletionItemKind
 
 /**
- * Mobile-first horizontal autocomplete bar displayed directly above the virtual symbol row.
- * Offers generous touch targets (min 44dp) for swift single-tap code and snippet insertion.
+ * Unified, non-jumping mobile autocomplete & snippet bar displayed directly above the virtual symbol row.
+ * Keeps a constant height so typing never causes layout shifts or viewport jumps.
  */
 @Composable
 fun SnippetCompletionBar(
     suggestions: List<CompletionItem>,
     onSelectSnippet: (String) -> Unit,
     onOpenTemplates: () -> Unit,
+    liveCompletions: List<CompletionItem> = emptyList(),
+    onSelectLiveCompletion: ((CompletionItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    if (suggestions.isEmpty()) return
+    if (suggestions.isEmpty() && liveCompletions.isEmpty()) return
 
     val haptic = LocalHapticFeedback.current
     val scrollState = rememberScrollState()
+    val distinctLive = remember(liveCompletions) {
+        liveCompletions.distinctBy { "${it.kind}:${it.label}:${it.insertText}" }
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(38.dp)
+            .height(40.dp)
             .background(VibeTheme.colors.gutterBackground)
             .border(width = 0.5.dp, color = VibeTheme.colors.borderSubtle)
             .horizontalScroll(scrollState)
@@ -92,7 +99,20 @@ fun SnippetCompletionBar(
             }
         }
 
-        // Completion items
+        // Live Context-Aware Autocomplete Suggestions First
+        if (distinctLive.isNotEmpty() && onSelectLiveCompletion != null) {
+            distinctLive.forEach { item ->
+                LiveAutocompletePill(
+                    item = item,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelectLiveCompletion(item)
+                    }
+                )
+            }
+        }
+
+        // Language Snippet items
         suggestions.forEach { item ->
             CompletionPill(
                 item = item,
@@ -100,6 +120,58 @@ fun SnippetCompletionBar(
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onSelectSnippet(item.insertText)
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveAutocompletePill(
+    item: CompletionItem,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(6.dp)
+    val (badgeText, badgeColor) = when (item.kind) {
+        CompletionItemKind.KEYWORD -> "K" to Color(0xFFBA68C8)
+        CompletionItemKind.FUNCTION, CompletionItemKind.METHOD -> "F" to Color(0xFFFFB74D)
+        CompletionItemKind.VARIABLE, CompletionItemKind.FIELD -> "V" to Color(0xFF81C784)
+        CompletionItemKind.CLASS, CompletionItemKind.INTERFACE -> "C" to Color(0xFF4FC3F7)
+        CompletionItemKind.SNIPPET -> "S" to Color(0xFFFF8A65)
+        else -> "•" to VibeTheme.colors.accentPrimary
+    }
+
+    Box(
+        modifier = Modifier
+            .height(32.dp)
+            .clip(shape)
+            .background(VibeTheme.colors.activeLineBackground)
+            .border(1.dp, VibeTheme.colors.accentPrimary.copy(alpha = 0.5f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .background(badgeColor.copy(alpha = 0.22f), RoundedCornerShape(3.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = badgeText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = badgeColor
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = item.label,
+                style = VibeCodeTypography.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = VibeTheme.colors.textPrimary
+                )
             )
         }
     }

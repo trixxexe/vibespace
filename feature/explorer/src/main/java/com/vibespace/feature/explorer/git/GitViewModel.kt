@@ -25,12 +25,16 @@ data class GitUiState(
     val showBranchDialog: Boolean = false,
     val showCommitDialog: Boolean = false,
     val showRemoteDialog: Boolean = false,
+    val showCloneDialog: Boolean = false,
     val showIdentityDialog: Boolean = false,
     val authorNameInput: String = "",
     val authorEmailInput: String = "",
     val remoteUrlInput: String = "",
     val remoteUsernameInput: String = "",
     val remoteTokenInput: String = "",
+    val cloneUrlInput: String = "",
+    val cloneUsernameInput: String = "",
+    val cloneTokenInput: String = "",
     val pendingDiscardPath: String? = null,
     val errorMessage: String? = null
 )
@@ -92,13 +96,13 @@ class GitViewModel(
         _uiState.update { it.copy(pendingDiscardPath = null) }
     }
 
-    fun confirmDiscardChanges() {
+    fun confirmDiscardChanges(onSuccess: (() -> Unit)? = null) {
         val path = _uiState.value.pendingDiscardPath ?: return
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(pendingDiscardPath = null, errorMessage = null) }
             when (val result = gitManager.discardChanges(path)) {
                 is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
-                else -> Unit
+                else -> onSuccess?.invoke()
             }
         }
     }
@@ -114,10 +118,19 @@ class GitViewModel(
             _uiState.update { it.copy(isCommitting = true, errorMessage = null) }
             when (val result = gitManager.commit(message)) {
                 is VibeResult.Success -> {
-                    _uiState.update { it.copy(commitMessage = "", isCommitting = false) }
+                    _uiState.update { it.copy(commitMessage = "", isCommitting = false, syncMessage = "Committed ${result.data.shortId}") }
                 }
                 is VibeResult.Error -> {
-                    _uiState.update { it.copy(errorMessage = result.message, isCommitting = false) }
+                    val needsIdentity = result.message.contains("Configure your Git author name and email", ignoreCase = true)
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = result.message,
+                            isCommitting = false,
+                            showIdentityDialog = if (needsIdentity) true else it.showIdentityDialog,
+                            authorNameInput = if (needsIdentity && it.authorNameInput.isBlank()) "VibeSpace Developer" else it.authorNameInput,
+                            authorEmailInput = if (needsIdentity && it.authorEmailInput.isBlank()) "developer@vibespace.dev" else it.authorEmailInput
+                        )
+                    }
                 }
                 else -> {
                     _uiState.update { it.copy(isCommitting = false) }
@@ -150,8 +163,17 @@ class GitViewModel(
         runAction(closeBranchDialog = true) { gitManager.createBranch(name) }
     }
 
-    fun checkoutBranch(name: String) {
-        runAction(closeBranchDialog = true) { gitManager.checkoutBranch(name) }
+    fun checkoutBranch(name: String, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch(dispatchers.io) {
+            when (val result = gitManager.checkoutBranch(name)) {
+                is VibeResult.Success -> {
+                    _uiState.update { it.copy(errorMessage = null, showBranchDialog = false) }
+                    onSuccess?.invoke()
+                }
+                is VibeResult.Error -> _uiState.update { it.copy(errorMessage = result.message) }
+                else -> Unit
+            }
+        }
     }
 
     fun toggleBranchDialog(show: Boolean) {
@@ -166,8 +188,8 @@ class GitViewModel(
         _uiState.update {
             it.copy(
                 showIdentityDialog = show,
-                authorNameInput = if (show) it.status.authorName.orEmpty() else it.authorNameInput,
-                authorEmailInput = if (show) it.status.authorEmail.orEmpty() else it.authorEmailInput,
+                authorNameInput = if (show) it.status.authorName?.ifBlank { "VibeSpace Developer" } ?: "VibeSpace Developer" else it.authorNameInput,
+                authorEmailInput = if (show) it.status.authorEmail?.ifBlank { "developer@vibespace.dev" } ?: "developer@vibespace.dev" else it.authorEmailInput,
                 errorMessage = null
             )
         }
@@ -222,6 +244,51 @@ class GitViewModel(
         }
     }
 
+    fun toggleCloneDialog(show: Boolean) {
+        _uiState.update {
+            it.copy(
+                showCloneDialog = show,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun updateCloneUrl(value: String) { _uiState.update { it.copy(cloneUrlInput = value) } }
+    fun updateCloneUsername(value: String) { _uiState.update { it.copy(cloneUsernameInput = value) } }
+    fun updateCloneToken(value: String) { _uiState.update { it.copy(cloneTokenInput = value) } }
+
+    fun cloneRepository(onCloneComplete: ((String) -> Unit)? = null) {
+        val state = _uiState.value
+        if (state.cloneUrlInput.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Please enter or paste a Git repository URL.") }
+            return
+        }
+        viewModelScope.launch(dispatchers.io) {
+            _uiState.update { it.copy(isSyncing = true, errorMessage = null, syncMessage = null) }
+            when (val result = gitManager.cloneRepository(
+                url = state.cloneUrlInput,
+                username = state.cloneUsernameInput.ifBlank { null },
+                passwordOrToken = state.cloneTokenInput.ifBlank { null }
+            )) {
+                is VibeResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isSyncing = false,
+                            showCloneDialog = false,
+                            cloneTokenInput = "",
+                            syncMessage = result.data
+                        )
+                    }
+                    onCloneComplete?.invoke(result.data)
+                }
+                is VibeResult.Error -> {
+                    _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }
+                }
+                else -> _uiState.update { it.copy(isSyncing = false) }
+            }
+        }
+    }
+
     fun push() {
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
@@ -237,12 +304,13 @@ class GitViewModel(
         }
     }
 
-    fun pull() {
+    fun pull(onPullComplete: (() -> Unit)? = null) {
         viewModelScope.launch(dispatchers.io) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
             when (val result = gitManager.pull()) {
                 is VibeResult.Success -> {
                     _uiState.update { it.copy(isSyncing = false, syncMessage = result.data) }
+                    onPullComplete?.invoke()
                 }
                 is VibeResult.Error -> {
                     _uiState.update { it.copy(isSyncing = false, errorMessage = result.message) }

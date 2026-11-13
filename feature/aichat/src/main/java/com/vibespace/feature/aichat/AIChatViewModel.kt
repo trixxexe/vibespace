@@ -101,11 +101,12 @@ class AIChatViewModel(
         }
     }
 
-    fun configureApiKey(apiKey: String, providerId: String = "gemini", model: String = "gemini-3.8-flash") {
+    fun configureApiKey(apiKey: String, providerId: String = "gemini", model: String = "gemini-2.5-flash", customEndpoint: String = "") {
         val config = AIConfiguration(
                 providerId = providerId,
                 apiKey = apiKey.trim(),
-                model = model.trim()
+                model = model.trim(),
+                customEndpoint = customEndpoint.trim()
         )
         viewModelScope.launch(dispatchers.io) {
             when (val result = persistConfiguration(config)) {

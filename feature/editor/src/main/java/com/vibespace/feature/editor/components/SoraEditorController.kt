@@ -46,9 +46,15 @@ class SoraEditorController {
             val line = cursor.leftLine
             val col = cursor.leftColumn
             text.insert(line, col, symbol)
-            val caret = positionAt(sourceBefore.substring(0, startOffset) + symbol, startOffset + symbol.length)
+            val caretOffset = if (symbol.endsWith("()") && symbol.length > 2) {
+                startOffset + symbol.length - 1
+            } else {
+                startOffset + symbol.length
+            }
+            val caret = positionAt(sourceBefore.substring(0, startOffset) + symbol, caretOffset)
             editor.setSelection(caret.first, caret.second)
         }
+        (editor.tag as? EditorBinding)?.recordEmission(editor.text.toString())
         editor.requestFocus()
     }
 
@@ -74,8 +80,15 @@ class SoraEditorController {
         val end = positionAt(source, endOffset)
         text.delete(start.first, start.second, end.first, end.second)
         text.insert(start.first, start.second, completion)
-        val caret = positionAt(source.substring(0, startOffset) + completion, startOffset + completion.length)
+        val caretOffset = if (completion.endsWith("()") && completion.length > 2) {
+            startOffset + completion.length - 1
+        } else {
+            startOffset + completion.length
+        }
+        val caret = positionAt(source.substring(0, startOffset) + completion, caretOffset)
         editor.setSelection(caret.first, caret.second)
+        (editor.tag as? EditorBinding)?.recordEmission(editor.text.toString())
+        editor.requestFocus()
     }
 
     /**
@@ -117,6 +130,7 @@ class SoraEditorController {
         val editor = editorRef?.get() ?: return
         if (editor.canUndo()) {
             editor.undo()
+            (editor.tag as? EditorBinding)?.recordEmission(editor.text.toString())
         }
     }
 
@@ -127,6 +141,7 @@ class SoraEditorController {
         val editor = editorRef?.get() ?: return
         if (editor.canRedo()) {
             editor.redo()
+            (editor.tag as? EditorBinding)?.recordEmission(editor.text.toString())
         }
     }
 

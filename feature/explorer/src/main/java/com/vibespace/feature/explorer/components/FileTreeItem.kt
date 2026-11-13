@@ -47,6 +47,7 @@ fun FileTreeItem(
     onRenameClick: (() -> Unit)? = null,
     onDuplicateClick: (() -> Unit)? = null,
     onCopyPathClick: (() -> Unit)? = null,
+    onExportClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val indentPadding = (level * 16 + 8).dp
@@ -149,6 +150,15 @@ fun FileTreeItem(
                         onClick = {
                             showMenu = false
                             onDuplicateClick()
+                        }
+                    )
+                }
+                if (onExportClick != null && file.isFile) {
+                    DropdownMenuItem(
+                        text = { Text("Export to Storage") },
+                        onClick = {
+                            showMenu = false
+                            onExportClick()
                         }
                     )
                 }

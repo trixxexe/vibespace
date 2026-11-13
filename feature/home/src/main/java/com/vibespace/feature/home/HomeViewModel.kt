@@ -22,7 +22,8 @@ class HomeViewModel(
     private val workspaceManager: WorkspaceManager,
     private val recentProjectsRepository: RecentProjectsRepository? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
-    private val editorEngine: EditorEngine? = null
+    private val editorEngine: EditorEngine? = null,
+    private val gitManager: com.vibespace.core.workspace.git.GitManager? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
@@ -64,6 +65,68 @@ class HomeViewModel(
                 withContext(dispatchers.main) {
                     _uiState.update { it.copy(errorMessage = res.message) }
                 }
+            }
+        }
+    }
+
+    fun cloneGitRepository(
+        repoUrl: String,
+        username: String? = null,
+        token: String? = null,
+        onCloneReady: (Project, String) -> Unit
+    ) {
+        val manager = gitManager
+        if (manager == null) {
+            _uiState.update { it.copy(errorMessage = "Git manager is not available.") }
+            return
+        }
+        val cleanUrl = repoUrl.trim()
+        if (cleanUrl.isEmpty()) {
+            _uiState.update { it.copy(errorMessage = "Please enter or paste a repository URL.") }
+            return
+        }
+        val repoName = cleanUrl.trimEnd('/')
+            .substringAfterLast('/')
+            .removeSuffix(".git")
+            .ifBlank { "ClonedRepo" }
+
+        viewModelScope.launch(dispatchers.io) {
+            if (!saveOpenDocumentsBeforeProjectChange()) return@launch
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val projectId = IdGenerator.shortId("git")
+            val project = Project(
+                id = projectId,
+                name = repoName,
+                rootUri = "vibe://projects/$projectId"
+            )
+            when (val openRes = workspaceManager.openProject(project)) {
+                is VibeResult.Success -> {
+                    when (val cloneRes = manager.cloneRepository(cleanUrl, username?.ifBlank { null }, token?.ifBlank { null })) {
+                        is VibeResult.Success -> {
+                            recentProjectsRepository?.addRecentProject(openRes.data)
+                            withContext(dispatchers.main) {
+                                _uiState.update { it.copy(isLoading = false) }
+                                onCloneReady(openRes.data, cloneRes.data)
+                            }
+                        }
+                        is VibeResult.Error -> {
+                            withContext(dispatchers.main) {
+                                _uiState.update { it.copy(isLoading = false, errorMessage = cloneRes.message) }
+                            }
+                        }
+                        else -> {
+                            withContext(dispatchers.main) {
+                                _uiState.update { it.copy(isLoading = false) }
+                            }
+                        }
+                    }
+                }
+                is VibeResult.Error -> {
+                    withContext(dispatchers.main) {
+                        _uiState.update { it.copy(isLoading = false, errorMessage = openRes.message) }
+                    }
+                }
+                else -> Unit
             }
         }
     }

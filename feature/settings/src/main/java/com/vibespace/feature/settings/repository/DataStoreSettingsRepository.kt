@@ -84,10 +84,10 @@ class DataStoreSettingsRepository(
                         } else ""
 
                         val aiProviderId = preferences[PreferencesKeys.AI_PROVIDER_ID] ?: "gemini"
-                        val savedAiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-3.8-flash"
+                        val savedAiModel = preferences[PreferencesKeys.AI_MODEL] ?: "gemini-2.5-flash"
                         val aiModel = if (
-                            aiProviderId == "gemini" && savedAiModel in setOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro")
-                        ) "gemini-3.8-flash" else savedAiModel
+                            aiProviderId == "gemini" && savedAiModel.startsWith("gemini-3.")
+                        ) "gemini-2.5-flash" else savedAiModel
 
                         // Auto-migrate legacy plaintext key to encrypted format ONLY after successful encryption
                         if (rawApiKey.isNotBlank() && !rawApiKey.startsWith("enc:")) {

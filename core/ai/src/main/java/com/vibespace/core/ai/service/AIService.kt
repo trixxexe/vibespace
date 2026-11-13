@@ -102,6 +102,7 @@ class AIService(
             val assistant = AIMessage(id = IdGenerator.shortId("msg"), role = AIRole.ASSISTANT, content = "")
             val response = StringBuilder()
             _messages.value = requestMessages
+            var streamFailure: Throwable? = null
             try {
                 provider.streamResponse(request).collect { chunk ->
                     response.append(chunk.delta)
@@ -112,9 +113,34 @@ class AIService(
                     _messages.value = requestMessages
                     throw IOException("The AI provider completed without returning any response text.")
                 }
-            } catch (failure: Throwable) {
+            } catch (failure: kotlinx.coroutines.CancellationException) {
                 _messages.value = previousMessages
                 throw failure
+            } catch (failure: Throwable) {
+                if (response.isEmpty()) {
+                    streamFailure = failure
+                } else {
+                    _messages.value = previousMessages
+                    throw failure
+                }
+            }
+
+            if (streamFailure != null) {
+                when (val fallback = provider.generateResponse(request)) {
+                    is VibeResult.Success -> {
+                        val content = fallback.data.message.content
+                        if (content.isBlank()) {
+                            _messages.value = previousMessages
+                            throw streamFailure
+                        }
+                        _messages.value = requestMessages + assistant.copy(content = content)
+                        emit(AIResponseChunk(delta = content, isComplete = true))
+                    }
+                    else -> {
+                        _messages.value = previousMessages
+                        throw streamFailure
+                    }
+                }
             }
         }
     }.flowOn(dispatchers.default)

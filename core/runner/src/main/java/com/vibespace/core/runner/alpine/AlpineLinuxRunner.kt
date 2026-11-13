@@ -159,6 +159,12 @@ class AlpineLinuxRunner(
 
     init {
         val rootfsDir = getRootfsDir()
+        if (rootfsDir.exists()) {
+            runCatching {
+                repairCriticalRootfsLinks(rootfsDir)
+                ensureBinariesExecutable()
+            }
+        }
         _installationState.value = when {
             rootfsDir.exists() && isRootfsComplete(rootfsDir) && hasExecutableProot() -> {
                 AlpineInstallationState.Installed(detectInstalledPackages(rootfsDir))
@@ -311,15 +317,18 @@ class AlpineLinuxRunner(
         if (!isAvailable()) throw IllegalStateException("Install Alpine Linux before starting a language server.")
         if (!workspaceDirectory.isDirectory) throw IllegalStateException("The language server workspace directory is unavailable.")
         if (!isLanguageServerInstalled(languageId)) throw IllegalStateException("The $languageId language server is not installed. Install language servers from the terminal panel first.")
+        val rootfsDir = getRootfsDir()
+        ensureBinariesExecutable()
+        repairCriticalRootfsLinks(rootfsDir)
         val executable = when (languageId.lowercase()) {
             "python" -> listOf("/usr/bin/pylsp")
             "javascript", "typescript" -> listOf("/usr/bin/typescript-language-server", "--stdio")
             else -> throw IllegalArgumentException("No managed language server is available for '$languageId'.")
         }
         val hostTmpDir = File(getBaseDir(), "tmp").apply { mkdirs() }
-        val command = listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", getRootfsDir().absolutePath) +
+        val command = listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", rootfsDir.absolutePath) +
             listOf("-b", "/dev:/dev", "-b", "/proc:/proc", "-b", "${hostTmpDir.absolutePath}:/tmp", "-b", "${workspaceDirectory.canonicalPath}:/workspace", "-w", "/workspace") + executable
-        return ProcessBuilder(command).directory(getRootfsDir()).apply {
+        return ProcessBuilder(command).directory(rootfsDir).apply {
             sanitizeAndroidEnvironment(environment())
             environment().putAll(buildProotEnvironment())
         }.start()
@@ -328,27 +337,30 @@ class AlpineLinuxRunner(
     /** Start a real interactive shell through util-linux script (PTY) or direct fallback shell. */
     fun startInteractiveShell(workspaceDirectory: File?): Process {
         if (!isAvailable()) throw IllegalStateException("Install the Alpine runtime before starting its terminal.")
-        val script = File(getRootfsDir(), "usr/bin/script")
+        val rootfsDir = getRootfsDir()
+        ensureBinariesExecutable()
+        repairCriticalRootfsLinks(rootfsDir)
+        val script = File(rootfsDir, "usr/bin/script")
         val hostTmpDir = File(getBaseDir(), "tmp").apply { mkdirs() }
         val binds = mutableListOf("-b", "/dev:/dev", "-b", "/proc:/proc", "-b", "${hostTmpDir.absolutePath}:/tmp")
         val containerDirectory = workspaceDirectory?.takeIf { it.isDirectory }?.let { workspace ->
             binds += listOf("-b", "${workspace.canonicalPath}:/workspace")
-            File(getRootfsDir(), "workspace").mkdirs()
+            File(rootfsDir, "workspace").mkdirs()
             "/workspace"
         } ?: "/root"
-        val shellCmd = if (File(getRootfsDir(), "bin/bash").exists()) "/bin/bash --norc --noprofile -i" else "/bin/sh -i"
+        val shellCmd = if (File(rootfsDir, "bin/bash").exists()) "/bin/bash --norc --noprofile -i" else "/bin/sh -i"
         val command = if (script.exists()) {
-            listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", getRootfsDir().absolutePath) +
+            listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", rootfsDir.absolutePath) +
                 binds + listOf(
                     "-w", containerDirectory,
                     "/bin/sh", "-c",
                     "if /usr/bin/script -q -f -c 'true' /dev/null >/dev/null 2>&1; then exec /usr/bin/script -q -f -c \"$shellCmd\" /dev/null; else exec $shellCmd; fi"
                 )
         } else {
-            listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", getRootfsDir().absolutePath) +
+            listOf(prootFile().absolutePath, "--link2symlink", "-0", "-r", rootfsDir.absolutePath) +
                 binds + listOf("-w", containerDirectory, "/bin/sh", "-c", "exec $shellCmd")
         }
-        return ProcessBuilder(command).directory(getRootfsDir()).redirectErrorStream(true).apply {
+        return ProcessBuilder(command).directory(rootfsDir).redirectErrorStream(true).apply {
             sanitizeAndroidEnvironment(environment())
             environment().putAll(
                 buildProotEnvironment(
@@ -499,6 +511,51 @@ class AlpineLinuxRunner(
     }
 
     private fun repairCriticalRootfsLinks(rootfsDir: File) {
+        // Ensure essential rootfs directories exist and have proper permissions
+        listOf("tmp", "var/tmp", "root", "workspace", "etc", "dev", "proc", "sys", "bin", "usr/bin", "sbin", "lib").forEach { rel ->
+            File(rootfsDir, rel).apply {
+                mkdirs()
+                setReadable(true, false)
+                setWritable(true, true)
+                setExecutable(true, false)
+            }
+        }
+
+        // Ensure critical interpreters, shells, package managers, and dynamic linkers are executable
+        val criticalBinaries = listOf(
+            "bin/busybox",
+            "bin/sh",
+            "bin/ash",
+            "bin/bash",
+            "sbin/apk",
+            "usr/bin/env",
+            "usr/bin/python3.12",
+            "usr/bin/python3",
+            "usr/bin/python",
+            "usr/bin/node",
+            "usr/bin/npm",
+            "usr/bin/npx",
+            "usr/bin/pylsp",
+            "usr/bin/typescript-language-server",
+            "usr/bin/script",
+            "usr/bin/git"
+        )
+        criticalBinaries.forEach { rel ->
+            val f = File(rootfsDir, rel)
+            if (f.isFile) {
+                f.setReadable(true, false)
+                f.setExecutable(true, false)
+            }
+        }
+
+        // Ensure musl dynamic linker (/lib/ld-musl-*.so.1) is executable
+        File(rootfsDir, "lib").listFiles()?.forEach { libFile ->
+            if (libFile.isFile && (libFile.name.startsWith("ld-musl-") || libFile.name.startsWith("libc.musl-"))) {
+                libFile.setReadable(true, false)
+                libFile.setExecutable(true, false)
+            }
+        }
+
         val python312 = File(rootfsDir, "usr/bin/python3.12")
         val python3 = File(rootfsDir, "usr/bin/python3")
         val python = File(rootfsDir, "usr/bin/python")
@@ -524,6 +581,7 @@ class AlpineLinuxRunner(
         }
         val busybox = File(rootfsDir, "bin/busybox")
         val sh = File(rootfsDir, "bin/sh")
+        val ash = File(rootfsDir, "bin/ash")
         if (busybox.isFile) {
             busybox.setReadable(true, false)
             busybox.setExecutable(true, false)
@@ -535,6 +593,20 @@ class AlpineLinuxRunner(
                     sh.setExecutable(true, false)
                 }
             }
+            if (!ash.exists() || !ash.isFile) {
+                runCatching {
+                    Files.deleteIfExists(ash.toPath())
+                    busybox.copyTo(ash, overwrite = true)
+                    ash.setReadable(true, false)
+                    ash.setExecutable(true, false)
+                }
+            }
+        }
+
+        // Ensure DNS resolv.conf exists so apk/pip/npm work out of the box
+        val resolvConf = File(rootfsDir, "etc/resolv.conf")
+        if (!resolvConf.isFile || resolvConf.length() == 0L) {
+            runCatching { configureRootfsDns(rootfsDir) }
         }
     }
 
@@ -1007,6 +1079,8 @@ class AlpineLinuxRunner(
         }
 
         val rootfsDir = getRootfsDir()
+        ensureBinariesExecutable()
+        repairCriticalRootfsLinks(rootfsDir)
         val prootFile = prootFile()
         val hostWorkingDirectory = File(workingDirectory)
         val canBindProject = hostWorkingDirectory.isDirectory

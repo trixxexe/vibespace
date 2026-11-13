@@ -200,11 +200,12 @@ fun AIChatScreen(
                 var keyInput by remember { mutableStateOf("") }
                 var selectedProvider by remember { mutableStateOf("gemini") }
                 val defaultModels = mapOf(
-                    "gemini" to "gemini-3.8-flash",
+                    "gemini" to "gemini-2.5-flash",
                     "openai" to "gpt-4o-mini",
-                    "anthropic" to "claude-3-7-sonnet",
+                    "anthropic" to "claude-3-7-sonnet-latest",
                     "deepseek" to "deepseek-chat",
-                    "groq" to "llama-3.3-70b-versatile"
+                    "groq" to "llama-3.3-70b-versatile",
+                    "openrouter" to "anthropic/claude-3.7-sonnet"
                 )
                 Column(modifier = Modifier.padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -213,7 +214,7 @@ fun AIChatScreen(
                         Text("Connect Your API Key (BYOK)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = VibeTheme.colors.textPrimary)
                     }
                     Text(
-                        text = "Connect a provider to send prompts with optional active-file context. Your key is stored encrypted on this device.",
+                        text = "Connect Gemini, OpenAI, Claude, DeepSeek, Groq, or OpenRouter. Keys are encrypted on-device.",
                         style = MaterialTheme.typography.bodySmall,
                         color = VibeTheme.colors.textSecondary,
                         modifier = Modifier.padding(vertical = 4.dp)
@@ -222,7 +223,14 @@ fun AIChatScreen(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        listOf("gemini" to "Gemini", "openai" to "OpenAI", "anthropic" to "Claude", "deepseek" to "DeepSeek", "groq" to "Groq").forEach { (id, label) ->
+                        listOf(
+                            "gemini" to "Gemini",
+                            "openai" to "OpenAI",
+                            "anthropic" to "Claude",
+                            "deepseek" to "DeepSeek",
+                            "groq" to "Groq",
+                            "openrouter" to "OpenRouter"
+                        ).forEach { (id, label) ->
                             val isSelected = selectedProvider == id
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
@@ -256,7 +264,7 @@ fun AIChatScreen(
                         Button(
                             onClick = {
                                 if (keyInput.isNotBlank()) {
-                                    val model = defaultModels[selectedProvider] ?: "gemini-3.8-flash"
+                                    val model = defaultModels[selectedProvider] ?: "gemini-2.5-flash"
                                     viewModel.configureApiKey(keyInput, selectedProvider, model)
                                 }
                             },

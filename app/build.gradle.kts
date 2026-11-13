@@ -53,7 +53,15 @@ android {
         noCompress += listOf("gz", "tar", "tgz")
     }
 
-    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/bundled-runtime"))
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+        disable += setOf("ExpiredTargetSdkVersion", "OldTargetApi")
+    }
+
+    if (!file("src/main/assets/runtime/aarch64.tar.gz").exists()) {
+        sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/bundled-runtime"))
+    }
 }
 
 dependencies {

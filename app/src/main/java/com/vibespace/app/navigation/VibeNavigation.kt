@@ -116,22 +116,35 @@ fun VibeNavigation(
     NavHost(
         navController = navController,
         startDestination = startDestination,
+        enterTransition = { androidx.compose.animation.EnterTransition.None },
+        exitTransition = { androidx.compose.animation.ExitTransition.None },
+        popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+        popExitTransition = { androidx.compose.animation.ExitTransition.None },
         modifier = modifier
     ) {
         composable(VibeDestination.Home.route) {
             HomeScreen(
                 viewModel = homeViewModel,
                 onNavigateToEditor = {
-                    navController.navigate(VibeDestination.Editor.route)
+                    navController.navigate(VibeDestination.Editor.route) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToSettings = {
-                    navController.navigate(VibeDestination.Settings.route)
+                    navController.navigate(VibeDestination.Settings.route) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToExtensions = {
-                    navController.navigate(VibeDestination.Extensions.route)
+                    navController.navigate(VibeDestination.Extensions.route) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToOnboarding = {
-                    navController.navigate(VibeDestination.Onboarding.route)
+                    settingsViewModel.setOnboardingStep(0)
+                    navController.navigate(VibeDestination.Onboarding.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -214,12 +227,14 @@ fun VibeNavigation(
                     }
                 },
                 currentTheme = when (settingsState.settings.themeMode) {
+                    com.vibespace.feature.settings.repository.ThemeMode.BLUE_VSC -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.BLUE_VSC
                     com.vibespace.feature.settings.repository.ThemeMode.LIGHT -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.LIGHT
                     com.vibespace.feature.settings.repository.ThemeMode.SYSTEM -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.SYSTEM
                     else -> com.vibespace.feature.home.onboarding.OnboardingThemeMode.DARK
                 },
                 onSelectTheme = { onboardingMode ->
                     val themeMode = when (onboardingMode) {
+                        com.vibespace.feature.home.onboarding.OnboardingThemeMode.BLUE_VSC -> com.vibespace.feature.settings.repository.ThemeMode.BLUE_VSC
                         com.vibespace.feature.home.onboarding.OnboardingThemeMode.LIGHT -> com.vibespace.feature.settings.repository.ThemeMode.LIGHT
                         com.vibespace.feature.home.onboarding.OnboardingThemeMode.SYSTEM -> com.vibespace.feature.settings.repository.ThemeMode.SYSTEM
                         else -> com.vibespace.feature.settings.repository.ThemeMode.DARK
@@ -243,16 +258,25 @@ fun VibeNavigation(
                 searchViewModel = searchViewModel,
                 gitViewModel = gitViewModel,
                 onNavigateToHome = {
-                    navController.navigate(VibeDestination.Home.route)
+                    val popped = navController.popBackStack(VibeDestination.Home.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(VibeDestination.Home.route) {
+                            launchSingleTop = true
+                        }
+                    }
                 },
                 onNavigateToSettings = {
-                    navController.navigate(VibeDestination.Settings.route)
+                    navController.navigate(VibeDestination.Settings.route) {
+                        launchSingleTop = true
+                    }
                 },
                 onToggleLineNumbers = {
                     settingsViewModel.toggleLineNumbers(!settingsState.settings.showLineNumbers)
                 },
                 onNavigateToExtensions = {
-                    navController.navigate(VibeDestination.Extensions.route)
+                    navController.navigate(VibeDestination.Extensions.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -261,7 +285,17 @@ fun VibeNavigation(
             SettingsScreen(
                 viewModel = settingsViewModel,
                 onNavigateBack = {
-                    navController.popBackStack()
+                    if (!navController.popBackStack()) {
+                        navController.navigate(VibeDestination.Home.route) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onOpenGuide = {
+                    settingsViewModel.setOnboardingStep(0)
+                    navController.navigate(VibeDestination.Onboarding.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -270,7 +304,11 @@ fun VibeNavigation(
             com.vibespace.feature.settings.extensions.ExtensionsScreen(
                 viewModel = extensionsViewModel,
                 onNavigateBack = {
-                    navController.popBackStack()
+                    if (!navController.popBackStack()) {
+                        navController.navigate(VibeDestination.Home.route) {
+                            launchSingleTop = true
+                        }
+                    }
                 }
             )
         }

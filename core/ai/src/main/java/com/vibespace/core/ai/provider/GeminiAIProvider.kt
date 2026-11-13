@@ -32,7 +32,7 @@ import java.net.SocketTimeoutException
  */
 class GeminiAIProvider(
     var apiKey: String = "",
-    var activeModel: String = "gemini-3.8-flash",
+    var activeModel: String = "gemini-2.5-flash",
     private val httpTransport: ((url: String, method: String, headers: Map<String, String>, body: String) -> Pair<Int, String>)? = null,
     private val dispatchers: DispatcherProvider = DefaultDispatcherProvider(),
     internal val streamEndpointOverride: String? = null,
@@ -41,20 +41,35 @@ class GeminiAIProvider(
 
     override val providerId: String = "gemini"
     override val displayName: String = "Google Gemini"
-    override val supportedModels: List<String> = listOf("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash")
+    override val supportedModels: List<String> = listOf(
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash"
+    )
     override val isConfigured: Boolean get() = apiKey.isNotBlank()
+
+    private fun resolveEffectiveModel(): String {
+        val trimmed = activeModel.trim()
+        if (httpTransport == null && streamTransport == null && streamEndpointOverride == null && trimmed.startsWith("gemini-3.")) {
+            return "gemini-2.5-flash"
+        }
+        return trimmed
+    }
 
     override suspend fun generateResponse(request: AIRequest): VibeResult<AIResponse> {
         if (!isConfigured) {
             return VibeResult.Error("No Gemini API key configured. Please enter your Google Gemini API key in Settings or AI Chat.")
         }
 
-        if (!activeModel.matches(Regex("[A-Za-z0-9._-]+"))) {
+        val effectiveModel = resolveEffectiveModel()
+        if (!effectiveModel.matches(Regex("[A-Za-z0-9._-]+"))) {
             return VibeResult.Error("Invalid Gemini model identifier.")
         }
 
         return try {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$activeModel:generateContent"
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$effectiveModel:generateContent"
             val requestBody = buildRequestBody(request)
 
             val headers = mapOf(
@@ -88,8 +103,9 @@ class GeminiAIProvider(
 
     override fun streamResponse(request: AIRequest): Flow<AIResponseChunk> = flow {
         if (!isConfigured) throw IOException("No Gemini API key configured.")
-        if (!activeModel.matches(Regex("[A-Za-z0-9._-]+"))) throw IOException("Invalid Gemini model identifier.")
-        val endpoint = streamEndpointOverride ?: "https://generativelanguage.googleapis.com/v1beta/models/$activeModel:streamGenerateContent?alt=sse"
+        val effectiveModel = resolveEffectiveModel()
+        if (!effectiveModel.matches(Regex("[A-Za-z0-9._-]+"))) throw IOException("Invalid Gemini model identifier.")
+        val endpoint = streamEndpointOverride ?: "https://generativelanguage.googleapis.com/v1beta/models/$effectiveModel:streamGenerateContent?alt=sse"
         val endpointUri = runCatching { java.net.URI(endpoint) }.getOrNull()
         val host = endpointUri?.host?.lowercase()
         val localHttp = endpointUri?.scheme.equals("http", ignoreCase = true) &&
@@ -127,7 +143,7 @@ class GeminiAIProvider(
             instanceFollowRedirects = false
             requestMethod = "POST"
             connectTimeout = 15_000
-            readTimeout = 1_000
+            readTimeout = 15_000
             doOutput = true
             headers.forEach { (name, value) -> setRequestProperty(name, value) }
         }

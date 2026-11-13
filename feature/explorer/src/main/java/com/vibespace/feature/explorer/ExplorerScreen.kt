@@ -1,5 +1,9 @@
 package com.vibespace.feature.explorer
 
+import android.provider.OpenableColumns
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,9 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vibespace.core.common.notification.VibeNotificationHelper
 import com.vibespace.core.designsystem.components.VibeDialog
 import com.vibespace.core.designsystem.components.VibeEmptyState
 import com.vibespace.core.designsystem.components.VibeIcons
@@ -43,7 +49,7 @@ fun ExplorerScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
+    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
     var showNewFileDialog by remember { mutableStateOf(false) }
@@ -55,6 +61,56 @@ fun ExplorerScreen(
     var fileToDelete by remember { mutableStateOf<VirtualFile?>(null) }
     var fileToRename by remember { mutableStateOf<VirtualFile?>(null) }
     var renameNewName by remember { mutableStateOf("") }
+    var filePendingExport by remember { mutableStateOf<VirtualFile?>(null) }
+
+    val importFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                var resolvedName = "imported_file.txt"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIdx >= 0) {
+                            resolvedName = cursor.getString(nameIdx) ?: resolvedName
+                        }
+                    }
+                }
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null) {
+                    viewModel.importExternalFile(resolvedName, bytes, onFileImported = onOpenFile)
+                    Toast.makeText(context, "Imported $resolvedName into project", Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { err ->
+                Toast.makeText(context, "Import failed: ${err.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val exportFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { targetUri ->
+        val sourceFile = filePendingExport
+        filePendingExport = null
+        if (targetUri != null && sourceFile != null) {
+            viewModel.readFileBytesForExport(sourceFile.uri) { bytes ->
+                runCatching {
+                    context.contentResolver.openOutputStream(targetUri)?.use { out ->
+                        out.write(bytes)
+                    }
+                    VibeNotificationHelper.notify(
+                        context = context,
+                        title = "File Exported to Storage",
+                        message = "Saved ${sourceFile.name} to device storage."
+                    )
+                    Toast.makeText(context, "Exported ${sourceFile.name} to storage", Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                    Toast.makeText(context, "Export failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     if (showNewFileDialog) {
         VibeDialog(
@@ -190,6 +246,18 @@ fun ExplorerScreen(
             }
 
             IconButton(
+                onClick = { importFileLauncher.launch(arrayOf("*/*")) },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = VibeIcons.FolderOpen,
+                    contentDescription = "Import File from Storage",
+                    tint = VibeTheme.colors.textSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            IconButton(
                 onClick = { viewModel.refreshFiles() },
                 modifier = Modifier.size(28.dp),
                 enabled = uiState.currentProject != null
@@ -220,7 +288,7 @@ fun ExplorerScreen(
             VibeEmptyState(
                 icon = VibeIcons.File,
                 title = "Empty Directory",
-                subtitle = "Click '+' to create a file in this project.",
+                subtitle = "Click '+' to create a file or import one from device storage.",
                 actionButtonText = "New File",
                 onActionClick = { showNewFileDialog = true }
             )
@@ -250,6 +318,10 @@ fun ExplorerScreen(
                             },
                             onDuplicateClick = {
                                 viewModel.duplicateFile(node.file.uri)
+                            },
+                            onExportClick = {
+                                filePendingExport = node.file
+                                exportFileLauncher.launch(node.file.name)
                             },
                             onCopyPathClick = {
                                 val path = node.file.path ?: node.file.name

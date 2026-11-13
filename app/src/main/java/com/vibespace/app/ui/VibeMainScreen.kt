@@ -1,8 +1,6 @@
 package com.vibespace.app.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -117,6 +115,19 @@ fun VibeMainScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var isCommandPaletteVisible by remember { mutableStateOf(false) }
+
+    // Ensure pressing Back inside the IDE never exits the app:
+    // Close active overlays/drawers first, then navigate back to the Home dashboard.
+    BackHandler(enabled = true) {
+        when {
+            isCommandPaletteVisible -> isCommandPaletteVisible = false
+            isAiChatVisible -> isAiChatVisible = false
+            isSearchVisible -> isSearchVisible = false
+            !isTablet && drawerState.isOpen -> scope.launch { drawerState.close() }
+            isTerminalVisible -> isTerminalVisible = false
+            else -> onNavigateToHome()
+        }
+    }
 
     val rootModifier = modifier
         .fillMaxSize()
@@ -294,7 +305,8 @@ fun VibeMainScreen(
                 ) {
                     com.vibespace.feature.explorer.git.GitSourceControlPanel(
                         viewModel = gitViewModel,
-                        onClose = { isSourceControlVisible = false }
+                        onClose = { isSourceControlVisible = false },
+                        onWorkspaceFilesChanged = { explorerViewModel.refreshFiles() }
                     )
                 }
             }
@@ -482,7 +494,8 @@ fun VibeMainScreen(
                     } else if (gitViewModel != null) {
                         com.vibespace.feature.explorer.git.GitSourceControlPanel(
                             viewModel = gitViewModel,
-                            onClose = { scope.launch { drawerState.close() } }
+                            onClose = { scope.launch { drawerState.close() } },
+                            onWorkspaceFilesChanged = { explorerViewModel.refreshFiles() }
                         )
                     }
                 }
@@ -592,12 +605,8 @@ fun VibeMainScreen(
                     )
                 }
 
-                // Collapsible Terminal on Phone
-                AnimatedVisibility(
-                    visible = isTerminalVisible,
-                    enter = slideInVertically { it },
-                    exit = slideOutVertically { it }
-                ) {
+                // Snappy Collapsible & Resizable Terminal on Phone (no laggy slide animation)
+                if (isTerminalVisible) {
                     TerminalPanel(
                         viewModel = terminalViewModel,
                         onClosePanel = { isTerminalVisible = false },

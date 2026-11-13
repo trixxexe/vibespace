@@ -234,4 +234,51 @@ class ExplorerViewModel(
             }
         }
     }
+
+    fun importExternalFile(
+        fileName: String,
+        bytes: ByteArray,
+        onFileImported: ((VirtualFile) -> Unit)? = null
+    ) {
+        val cleanName = fileName.trim().substringAfterLast('/').ifBlank { "imported_file.txt" }
+        viewModelScope.launch(dispatchers.io) {
+            val targetParent = ensureCurrentProjectRootUri()
+            when (val created = workspaceManager.createFile(targetParent, cleanName)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    workspaceManager.writeBytes(created.data.uri, bytes)
+                    _uiState.update { it.copy(selectedFileUri = created.data.uri, errorMessage = null) }
+                    refreshFiles()
+                    gitManager?.refreshStatus()
+                    if (onFileImported != null) {
+                        kotlinx.coroutines.withContext(dispatchers.main) {
+                            onFileImported(created.data)
+                        }
+                    }
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(errorMessage = created.message) }
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    fun readFileBytesForExport(
+        fileUri: String,
+        onBytesReady: (ByteArray) -> Unit
+    ) {
+        viewModelScope.launch(dispatchers.io) {
+            when (val result = workspaceManager.readBytes(fileUri)) {
+                is com.vibespace.core.common.result.VibeResult.Success -> {
+                    kotlinx.coroutines.withContext(dispatchers.main) {
+                        onBytesReady(result.data)
+                    }
+                }
+                is com.vibespace.core.common.result.VibeResult.Error -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                }
+                else -> Unit
+            }
+        }
+    }
 }
