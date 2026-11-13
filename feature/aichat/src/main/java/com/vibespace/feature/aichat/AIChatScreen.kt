@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -199,14 +201,22 @@ fun AIChatScreen(
             ) {
                 var keyInput by remember { mutableStateOf("") }
                 var selectedProvider by remember { mutableStateOf("gemini") }
-                val defaultModels = mapOf(
-                    "gemini" to "gemini-2.5-flash",
-                    "openai" to "gpt-4o-mini",
-                    "anthropic" to "claude-3-7-sonnet-latest",
-                    "deepseek" to "deepseek-chat",
-                    "groq" to "llama-3.3-70b-versatile",
-                    "openrouter" to "anthropic/claude-3.7-sonnet"
-                )
+                val providerModels = remember {
+                    mapOf(
+                        "gemini" to listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"),
+                        "openai" to listOf("gpt-4o-mini", "gpt-4o", "o3-mini"),
+                        "anthropic" to listOf("claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"),
+                        "deepseek" to listOf("deepseek-chat", "deepseek-reasoner"),
+                        "groq" to listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"),
+                        "openrouter" to listOf("anthropic/claude-3.7-sonnet", "google/gemini-2.5-flash", "openai/gpt-4o-mini", "deepseek/deepseek-chat")
+                    )
+                }
+                var selectedModel by remember(selectedProvider) {
+                    mutableStateOf(providerModels[selectedProvider]?.firstOrNull() ?: "gemini-2.5-flash")
+                }
+                var isModelMenuExpanded by remember { mutableStateOf(false) }
+                val isKeyEntered = keyInput.isNotBlank()
+
                 Column(modifier = Modifier.padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(VibeIcons.Key, contentDescription = null, tint = VibeTheme.colors.accentPrimary, modifier = Modifier.size(16.dp))
@@ -236,7 +246,10 @@ fun AIChatScreen(
                                 shape = RoundedCornerShape(4.dp),
                                 color = if (isSelected) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.panelBackground,
                                 border = BorderStroke(1.dp, if (isSelected) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
-                                modifier = Modifier.clickable { selectedProvider = id }
+                                modifier = Modifier.clickable {
+                                    selectedProvider = id
+                                    selectedModel = providerModels[id]?.firstOrNull() ?: "gemini-2.5-flash"
+                                }
                             ) {
                                 Text(
                                     text = label,
@@ -247,34 +260,142 @@ fun AIChatScreen(
                             }
                         }
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = keyInput,
-                            onValueChange = { keyInput = it },
-                            placeholder = { Text("Paste $selectedProvider API Key...", style = MaterialTheme.typography.bodySmall) },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Button(
-                            onClick = {
-                                if (keyInput.isNotBlank()) {
-                                    val model = defaultModels[selectedProvider] ?: "gemini-2.5-flash"
-                                    viewModel.configureApiKey(keyInput, selectedProvider, model)
-                                }
-                            },
-                            enabled = keyInput.isNotBlank(),
+
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        placeholder = { Text("Paste $selectedProvider API Key...", style = MaterialTheme.typography.bodySmall) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Grey box under API key that lights up and transforms into a Model Dropdown Menu when key is entered
+                    val availableModels = providerModels[selectedProvider].orEmpty()
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Surface(
                             shape = RoundedCornerShape(6.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = VibeTheme.colors.accentPrimary),
-                            modifier = Modifier.height(48.dp)
+                            color = if (isKeyEntered) {
+                                VibeTheme.colors.accentPrimary.copy(alpha = 0.15f)
+                            } else {
+                                VibeTheme.colors.panelBackground.copy(alpha = 0.6f)
+                            },
+                            border = BorderStroke(
+                                width = if (isKeyEntered) 1.5.dp else 1.dp,
+                                color = if (isKeyEntered) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = isKeyEntered) {
+                                    isModelMenuExpanded = true
+                                }
                         ) {
-                            Text("Activate", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = VibeIcons.AI,
+                                        contentDescription = null,
+                                        tint = if (isKeyEntered) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = if (isKeyEntered) "Model: $selectedModel" else "Enter API key above to select a model",
+                                            style = if (isKeyEntered) {
+                                                VibeCodeTypography.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            } else {
+                                                MaterialTheme.typography.bodySmall
+                                            },
+                                            color = if (isKeyEntered) VibeTheme.colors.textPrimary else VibeTheme.colors.textMuted
+                                        )
+                                        if (isKeyEntered) {
+                                            Text(
+                                                text = "Tap to choose from ${availableModels.size} available models",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = VibeTheme.colors.accentPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                                Icon(
+                                    imageVector = if (isModelMenuExpanded) VibeIcons.ArrowUp else VibeIcons.ArrowDown,
+                                    contentDescription = "Select Model",
+                                    tint = if (isKeyEntered) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
+
+                        DropdownMenu(
+                            expanded = isModelMenuExpanded && isKeyEntered,
+                            onDismissRequest = { isModelMenuExpanded = false },
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .background(VibeTheme.colors.panelBackground)
+                        ) {
+                            availableModels.forEach { modelOption ->
+                                val isCurrent = selectedModel == modelOption
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = modelOption,
+                                                style = VibeCodeTypography.copy(
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                                ),
+                                                color = if (isCurrent) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary
+                                            )
+                                            if (isCurrent) {
+                                                Icon(
+                                                    imageVector = VibeIcons.Checkmark,
+                                                    contentDescription = "Selected",
+                                                    tint = VibeTheme.colors.accentPrimary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedModel = modelOption
+                                        isModelMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            if (keyInput.isNotBlank()) {
+                                viewModel.configureApiKey(keyInput.trim(), selectedProvider, selectedModel)
+                            }
+                        },
+                        enabled = isKeyEntered,
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = VibeTheme.colors.accentPrimary),
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                    ) {
+                        Text("Activate $selectedModel", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             }

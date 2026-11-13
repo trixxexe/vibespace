@@ -32,6 +32,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -911,6 +913,18 @@ private fun StepPreferencesAndFinish(
 ) {
     val context = LocalContext.current
     var selectedProvider by remember { mutableStateOf("gemini") }
+    val providerModels = remember {
+        mapOf(
+            "gemini" to listOf("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"),
+            "openai" to listOf("gpt-4o-mini", "gpt-4o", "o3-mini"),
+            "anthropic" to listOf("claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"),
+            "deepseek" to listOf("deepseek-chat", "deepseek-reasoner")
+        )
+    }
+    var selectedModel by remember(selectedProvider) {
+        mutableStateOf(providerModels[selectedProvider]?.firstOrNull() ?: "gemini-2.5-flash")
+    }
+    var isModelDropdownExpanded by remember { mutableStateOf(false) }
     var apiKeyInput by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -1114,6 +1128,121 @@ private fun StepPreferencesAndFinish(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Grey box under API key that lights up and transforms into a Model Dropdown Menu when key is entered
+                    val isKeyEntered = apiKeyInput.isNotBlank()
+                    val availableModels = providerModels[selectedProvider].orEmpty()
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isKeyEntered) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            } else {
+                                VibeTheme.colors.gutterBackground.copy(alpha = 0.65f)
+                            },
+                            border = BorderStroke(
+                                width = if (isKeyEntered) 1.5.dp else 1.dp,
+                                color = if (isKeyEntered) MaterialTheme.colorScheme.primary else VibeTheme.colors.borderSubtle
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = isKeyEntered) {
+                                    isModelDropdownExpanded = true
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = VibeIcons.AI,
+                                        contentDescription = null,
+                                        tint = if (isKeyEntered) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = if (isKeyEntered) "Model: $selectedModel" else "Enter API Key above to unlock model selector",
+                                            style = if (isKeyEntered) {
+                                                VibeCodeTypography.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            } else {
+                                                MaterialTheme.typography.bodySmall
+                                            },
+                                            color = if (isKeyEntered) VibeTheme.colors.textPrimary else VibeTheme.colors.textMuted
+                                        )
+                                        Text(
+                                            text = if (isKeyEntered) {
+                                                "Tap to select from ${availableModels.size} available models"
+                                            } else {
+                                                "Dropdown menu activates once an API key is provided"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isKeyEntered) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = if (isModelDropdownExpanded) VibeIcons.ArrowUp else VibeIcons.ArrowDown,
+                                    contentDescription = "Select Model",
+                                    tint = if (isKeyEntered) MaterialTheme.colorScheme.primary else VibeTheme.colors.textMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = isModelDropdownExpanded && isKeyEntered,
+                            onDismissRequest = { isModelDropdownExpanded = false },
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .background(VibeTheme.colors.panelBackground)
+                        ) {
+                            availableModels.forEach { modelOption ->
+                                val isCurrent = selectedModel == modelOption
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = modelOption,
+                                                style = VibeCodeTypography.copy(
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                                ),
+                                                color = if (isCurrent) MaterialTheme.colorScheme.primary else VibeTheme.colors.textPrimary
+                                            )
+                                            if (isCurrent) {
+                                                Icon(
+                                                    imageVector = VibeIcons.Checkmark,
+                                                    contentDescription = "Selected",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedModel = modelOption
+                                        isModelDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     if (saveError != null) {
                         Text(
                             text = saveError.orEmpty(),
@@ -1149,17 +1278,11 @@ private fun StepPreferencesAndFinish(
                             }
                             isSaving = true
                             saveError = null
-                            val defaultModel = when (selectedProvider) {
-                                "openai" -> "gpt-4o-mini"
-                                "anthropic" -> "claude-3-7-sonnet-latest"
-                                "deepseek" -> "deepseek-chat"
-                                else -> "gemini-2.5-flash"
-                            }
                             try {
                                 val saveResult = onConfigureAi?.invoke(
                                     selectedProvider,
                                     apiKeyInput.trim(),
-                                    defaultModel
+                                    selectedModel
                                 ) ?: VibeResult.Error("AI settings are unavailable. Clear the key to continue without AI.")
                                 when (saveResult) {
                                     is VibeResult.Success -> onFinish()

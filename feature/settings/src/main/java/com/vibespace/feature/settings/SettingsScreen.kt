@@ -30,6 +30,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -754,49 +756,174 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Model Selection
+                        // Model Selection Box (Grey box when key is empty; lights up & transforms into a Dropdown Menu when API key is entered)
                         Text(
-                            text = "MODEL",
+                            text = "MODEL SELECTION",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = VibeTheme.colors.textMuted
+                            color = if (inputKey.isNotBlank()) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         val suggestedModels = providerModels[selectedProvider].orEmpty()
-                        if (suggestedModels.isNotEmpty()) {
-                            Row(
+                        val isModelUnlocked = inputKey.isNotBlank()
+                        var isModelDropdownExpanded by remember { mutableStateOf(false) }
+                        var showCustomModelInput by remember { mutableStateOf(false) }
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isModelUnlocked) {
+                                    VibeTheme.colors.accentPrimary.copy(alpha = 0.14f)
+                                } else {
+                                    VibeTheme.colors.gutterBackground.copy(alpha = 0.65f)
+                                },
+                                border = BorderStroke(
+                                    width = if (isModelUnlocked) 1.5.dp else 1.dp,
+                                    color = if (isModelUnlocked) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(bottom = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    .clickable(enabled = isModelUnlocked) {
+                                        isModelDropdownExpanded = true
+                                    }
                             ) {
-                                suggestedModels.forEach { modelOption ->
-                                    val isCurrentModel = selectedModel == modelOption
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = if (isCurrentModel) VibeTheme.colors.accentPrimary.copy(alpha = 0.2f) else VibeTheme.colors.gutterBackground,
-                                        border = BorderStroke(1.dp, if (isCurrentModel) VibeTheme.colors.accentPrimary else VibeTheme.colors.borderSubtle),
-                                        modifier = Modifier.clickable { selectedModel = modelOption }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Text(
-                                            text = modelOption,
-                                            style = VibeCodeTypography.copy(fontSize = 11.sp, fontWeight = if (isCurrentModel) FontWeight.Bold else FontWeight.Normal),
-                                            color = if (isCurrentModel) VibeTheme.colors.accentPrimary else VibeTheme.colors.textSecondary,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        Icon(
+                                            imageVector = VibeIcons.AI,
+                                            contentDescription = null,
+                                            tint = if (isModelUnlocked) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted,
+                                            modifier = Modifier.size(18.dp)
                                         )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = if (isModelUnlocked) {
+                                                    selectedModel.ifBlank { suggestedModels.firstOrNull() ?: "gemini-2.5-flash" }
+                                                } else {
+                                                    "Enter API Key above to unlock available models"
+                                                },
+                                                style = if (isModelUnlocked) {
+                                                    VibeCodeTypography.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                                } else {
+                                                    MaterialTheme.typography.bodySmall
+                                                },
+                                                color = if (isModelUnlocked) VibeTheme.colors.textPrimary else VibeTheme.colors.textMuted
+                                            )
+                                            Text(
+                                                text = if (isModelUnlocked) {
+                                                    "Tap to open dropdown (${suggestedModels.size} ${selectedProvider.uppercase()} models available)"
+                                                } else {
+                                                    "Model dropdown activates automatically once your key is entered"
+                                                },
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (isModelUnlocked) VibeTheme.colors.accentPrimary else VibeTheme.colors.textMuted.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    }
+
+                                    if (isModelUnlocked) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = VibeTheme.colors.accentPrimary.copy(alpha = 0.2f)
+                                            ) {
+                                                Text(
+                                                    text = "SELECT",
+                                                    style = VibeCodeTypography.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                    color = VibeTheme.colors.accentPrimary,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(
+                                                imageVector = if (isModelDropdownExpanded) VibeIcons.ArrowUp else VibeIcons.ArrowDown,
+                                                contentDescription = "Select Model",
+                                                tint = VibeTheme.colors.accentPrimary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
+
+                            DropdownMenu(
+                                expanded = isModelDropdownExpanded && isModelUnlocked,
+                                onDismissRequest = { isModelDropdownExpanded = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.88f)
+                                    .background(VibeTheme.colors.panelBackground)
+                            ) {
+                                suggestedModels.forEach { modelOption ->
+                                    val isCurrentModel = selectedModel == modelOption
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = modelOption,
+                                                    style = VibeCodeTypography.copy(
+                                                        fontSize = 12.sp,
+                                                        fontWeight = if (isCurrentModel) FontWeight.Bold else FontWeight.Normal
+                                                    ),
+                                                    color = if (isCurrentModel) VibeTheme.colors.accentPrimary else VibeTheme.colors.textPrimary
+                                                )
+                                                if (isCurrentModel) {
+                                                    Icon(
+                                                        imageVector = VibeIcons.Checkmark,
+                                                        contentDescription = "Selected",
+                                                        tint = VibeTheme.colors.accentPrimary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedModel = modelOption
+                                            showCustomModelInput = false
+                                            isModelDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "Custom Model ID…",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = VibeTheme.colors.accentSecondary
+                                        )
+                                    },
+                                    onClick = {
+                                        showCustomModelInput = true
+                                        isModelDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
 
-                        OutlinedTextField(
-                            value = selectedModel,
-                            onValueChange = { selectedModel = it.trim() },
-                            placeholder = { Text(if (selectedProvider == "gemini") "gemini-2.5-flash" else "gpt-4o-mini") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (isModelUnlocked && (showCustomModelInput || (selectedModel.isNotBlank() && selectedModel !in suggestedModels))) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = selectedModel,
+                                onValueChange = { selectedModel = it.trim() },
+                                placeholder = { Text(if (selectedProvider == "gemini") "gemini-2.5-flash" else "gpt-4o-mini") },
+                                label = { Text("Custom Model ID") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         if (selectedProvider != "gemini") {
                             Spacer(modifier = Modifier.height(10.dp))
